@@ -1,8 +1,8 @@
 {
   "name": "cifog-lab",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Interactive classroom labs for learning Blender concepts.",
-  "scripts": { "start": "node server.mjs", "test": "node --test tests/graph.test.mjs tests/unfold.test.mjs tests/workbench.test.mjs tests/fold.test.mjs" }
+  "description": "Interactive classroom labs for learning Blender concepts and programming.",
+  "scripts": { "start": "node server.mjs", "test": "node --test tests/graph.test.mjs tests/unfold.test.mjs tests/workbench.test.mjs tests/fold.test.mjs tests/csharp.test.mjs" }
 }

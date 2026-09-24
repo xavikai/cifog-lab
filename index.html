@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#191b1e">
-  <meta name="description" content="CIFOG Lab: hands-on browser experiments for learning 3D materials and visual design.">
+  <meta name="description" content="CIFOG Lab: hands-on browser experiments for learning 3D materials, UV mapping and programming.">
   <title>CIFOG Lab · Learn by experimenting</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./home.css">
@@ -22,7 +22,7 @@
       <div class="hero-copy">
         <p class="eyebrow"><span class="live-dot"></span> CIFOG / INTERACTIVE STUDIES</p>
         <h1 id="hero-title">Learn by<br><em>changing things.</em></h1>
-        <p class="hero-intro">Small interactive labs to explore what happens when you change a material, a texture or a connection. Open one, experiment, and bring the result back to class.</p>
+        <p class="hero-intro">Small interactive labs to explore what happens when you change a material, a texture, a connection or a line of code. Open one, experiment, and bring the result back to class.</p>
         <a class="primary-link" href="#labs">Explore the labs <span aria-hidden="true">↘</span></a>
       </div>
       <div class="hero-visual" aria-hidden="true">
@@ -45,6 +45,14 @@
         <article class="lab-card uv-card">
           <div class="card-visual uv-visual" aria-hidden="true"><div class="uv-net"><i class="uv-tile uv-front">F</i><i class="uv-tile uv-left">L</i><i class="uv-tile uv-right">R</i><i class="uv-tile uv-top">T</i><i class="uv-tile uv-bottom">D</i><i class="uv-tile uv-back">B</i></div><span class="uv-decor">3D → 2D</span></div>
           <div class="card-content"><div class="card-topline"><span class="lab-number">02 / UV MAPPING</span><span class="available"><span></span> AVAILABLE</span></div><h3>UV Unwrap Lab</h3><p>Work in a Blender-style UV Editing workspace: select edges, press U to Mark Seam and Unwrap, and find the same face in the 3D Viewport and the UV map.</p><div class="card-bottom"><span>Seams · UV islands · Blender 5.2 concepts</span><a href="./labs/uv-unwrapping/" aria-label="Open UV Unwrap Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+        </article>
+        <article class="lab-card code-card">
+          <div class="card-visual code-visual" aria-hidden="true"><pre class="code-snippet"><b>for</b> (<b>int</b> x = 0; x &lt; 4; x++)
+{
+    drone.<i>MoveTo</i>(x, 0);
+    drone.<i>Place</i>(Color.Red);
+}</pre><div class="voxels"><span class="vx v1"></span><span class="vx v2"></span><span class="vx v3"></span><span class="vx v4"></span></div><span class="uv-decor">CODE → 3D</span></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">03 / PROGRAMMING · C#</span><span class="available"><span></span> AVAILABLE</span></div><h3>Code Lab</h3><p>Program a drone in C# that builds voxel sculptures. Run it line by line and watch variables, loops and conditions change the world.</p><div class="card-bottom"><span>Variables · loops · if/else · ready for Unity</span><a href="./labs/csharp/" aria-label="Open Code Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
         </article>
       </div>
       <p class="collection-note">The collection can grow with future CIFOG lessons. Each lab has its own page and keeps its own experiments.</p>
