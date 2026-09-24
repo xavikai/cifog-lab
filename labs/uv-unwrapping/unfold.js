@@ -21,7 +21,9 @@ const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
 const multiply=(a,n)=>[a[0]*n,a[1]*n];
 const project=(vector,face)=>add(multiply(face.U,dot(vector,face.u)),multiply(face.V,dot(vector,face.v)));
 
-export function buildLayout(cuts){
+const faceSize=(id,size)=>[Math.abs(FACES[id].u[0])*size[0]+Math.abs(FACES[id].u[1])*size[1]+Math.abs(FACES[id].u[2])*size[2],Math.abs(FACES[id].v[0])*size[0]+Math.abs(FACES[id].v[1])*size[1]+Math.abs(FACES[id].v[2])*size[2]];
+const halfExtent=(face)=>[Math.abs(face.U[0])*face.size[0]+Math.abs(face.V[0])*face.size[1],Math.abs(face.U[1])*face.size[0]+Math.abs(face.V[1])*face.size[1]].map(n=>n/2);
+export function buildLayout(cuts,size=[2,2,2]){
  const unknown=[...cuts].filter(k=>!EDGES.some(e=>e.key===k));if(unknown.length)throw new Error(`Unknown cube edge: ${unknown[0]}`);
  const linked=EDGES.filter(e=>!cuts.has(e.key));
  const adjacency=Object.fromEntries(FACE_ORDER.map(id=>[id,[]]));
@@ -30,7 +32,7 @@ export function buildLayout(cuts){
  for(const root of FACE_ORDER){
   if(visited.has(root))continue;
   const component={root,ids:[]};components.push(component);
-  faces[root]={id:root,parent:null,center:[0,0],U:[1,0],V:[0,1]};
+  faces[root]={id:root,parent:null,center:[0,0],U:[1,0],V:[0,1],size:faceSize(root,size)};
   visited.add(root);const queue=[root];
   for(let at=0;at<queue.length;at++){
    const a=queue[at],fa=faces[a],basisA=FACES[a];component.ids.push(a);
@@ -39,12 +41,14 @@ export function buildLayout(cuts){
     const basisB=FACES[b],t=cross(basisA.n,basisB.n),p=project(basisB.n,{...basisA,...fa}),T=project(t,{...basisA,...fa});
     const U=add(multiply(T,dot(basisB.u,t)),multiply(p,-dot(basisB.u,basisA.n)));
     const V=add(multiply(T,dot(basisB.v,t)),multiply(p,-dot(basisB.v,basisA.n)));
-    faces[b]={id:b,parent:a,center:add(fa.center,multiply(p,2)),U,V,side:[dot(basisB.n,basisA.u),dot(basisB.n,basisA.v)],axis:[dot(t,basisA.u),dot(t,basisA.v),0]};
+    const parentExtent=halfExtent(fa),childSize=faceSize(b,size),childExtent=halfExtent({U,V,size:childSize});
+    const distance=Math.abs(p[0])*(parentExtent[0]+childExtent[0])+Math.abs(p[1])*(parentExtent[1]+childExtent[1]);
+    faces[b]={id:b,parent:a,center:add(fa.center,multiply(p,distance)),U,V,size:childSize,side:[dot(basisB.n,basisA.u),dot(basisB.n,basisA.v)],axis:[dot(t,basisA.u),dot(t,basisA.v),0]};
     visited.add(b);queue.push(b);
    }
   }
  }
- const boxes=components.map(component=>{const xs=component.ids.map(id=>faces[id].center[0]),ys=component.ids.map(id=>faces[id].center[1]);const minX=Math.min(...xs)-1,maxX=Math.max(...xs)+1,minY=Math.min(...ys)-1,maxY=Math.max(...ys)+1;return{component,minX,minY,width:maxX-minX,height:maxY-minY};});
+ const boxes=components.map(component=>{const minX=Math.min(...component.ids.map(id=>faces[id].center[0]-halfExtent(faces[id])[0])),maxX=Math.max(...component.ids.map(id=>faces[id].center[0]+halfExtent(faces[id])[0])),minY=Math.min(...component.ids.map(id=>faces[id].center[1]-halfExtent(faces[id])[1])),maxY=Math.max(...component.ids.map(id=>faces[id].center[1]+halfExtent(faces[id])[1]));return{component,minX,minY,width:maxX-minX,height:maxY-minY};});
  const rowLimit=Math.max(...boxes.map(box=>box.width),Math.sqrt(boxes.reduce((sum,box)=>sum+box.width*box.height,0))*1.65);
  let cursorX=0,rowY=0,rowHeight=0,overlap=false;
  for(const box of boxes){
@@ -52,8 +56,11 @@ export function buildLayout(cuts){
   const shift=[cursorX-box.minX,rowY-box.minY];box.component.shift=shift;
   box.component.ids.forEach(id=>{faces[id].center=add(faces[id].center,shift);});
   cursorX+=box.width+1;rowHeight=Math.max(rowHeight,box.height);
-  if(new Set(box.component.ids.map(id=>faces[id].center.join(','))).size!==box.component.ids.length)overlap=true;
+  for(let i=0;i<box.component.ids.length;i++)for(let j=i+1;j<box.component.ids.length;j++){
+   const a=faces[box.component.ids[i]],b=faces[box.component.ids[j]],ea=halfExtent(a),eb=halfExtent(b);
+   if(Math.abs(a.center[0]-b.center[0])<ea[0]+eb[0]-1e-6&&Math.abs(a.center[1]-b.center[1])<ea[1]+eb[1]-1e-6)overlap=true;
+  }
  }
- const all=Object.values(faces),bounds={minX:Math.min(...all.map(f=>f.center[0]-1)),maxX:Math.max(...all.map(f=>f.center[0]+1)),minY:Math.min(...all.map(f=>f.center[1]-1)),maxY:Math.max(...all.map(f=>f.center[1]+1))};
+ const all=Object.values(faces),bounds={minX:Math.min(...all.map(f=>f.center[0]-halfExtent(f)[0])),maxX:Math.max(...all.map(f=>f.center[0]+halfExtent(f)[0])),minY:Math.min(...all.map(f=>f.center[1]-halfExtent(f)[1])),maxY:Math.max(...all.map(f=>f.center[1]+halfExtent(f)[1]))};
  return {valid:!cycle&&!overlap,cycle,overlap,faces,components,bounds,seams:cuts.size,hinges:linked.length};
 }

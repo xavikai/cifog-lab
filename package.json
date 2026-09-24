@@ -4,5 +4,5 @@
   "private": true,
   "type": "module",
   "description": "Interactive classroom labs for learning Blender concepts.",
-  "scripts": { "start": "node server.mjs", "test": "node --test tests/graph.test.mjs tests/unfold.test.mjs" }
+  "scripts": { "start": "node server.mjs", "test": "node --test tests/graph.test.mjs tests/unfold.test.mjs tests/workbench.test.mjs" }
 }
