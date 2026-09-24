@@ -2,6 +2,9 @@
 
 A home for small interactive activities that support CIFOG classroom presentations. The entry page lists the available labs. Each activity lives in its own folder so the collection can grow without changing existing links.
 
+- Live collection: https://xavikai.github.io/cifog-lab/
+- Material Lab: https://xavikai.github.io/cifog-lab/labs/materials/
+
 ## Available lab
 
 **Material Lab** (`labs/materials/`) is an interactive editor in English based on a focused subset of Blender 5.2 nodes. Students can connect Texture Coordinate, Mapping, Image Texture, Normal Map, Principled BSDF and Material Output; adjust materials; switch preview shapes; and try short guided experiments on roughness, normal maps and repeating textures.
