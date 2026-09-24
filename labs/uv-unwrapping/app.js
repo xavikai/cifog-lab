@@ -8,13 +8,14 @@ const ns='http://www.w3.org/2000/svg';
 const S=(tag,attrs={})=>{const node=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
 const V3=values=>new THREE.Vector3(...values);
 const dot2=(a,b)=>a[0]*b[0]+a[1]*b[1];
-const state={model:'cube',cuts:{cube:defaultCuts('cube'),chair:defaultCuts('chair')},activePart:'cube',selected:'cube:F',selectedEdge:null,layout:null,charts:[],invalid:null,fold:1,stretchDisplay:'none'};
+const state={model:'cube',cuts:{cube:defaultCuts('cube'),chair:defaultCuts('chair')},activePart:'cube',selected:'cube:F',selectedEdge:null,layout:null,charts:[],invalid:null,fold:1,stretchDisplay:'none',needsUnwrap:false};
 const host=$('#viewer'),svgFaces=$('#uv-faces'),edgeList=$('#edge-list');
 let renderer,scene,camera,controls,rig,rigRoots=[],hinges=[],chairGroup,flatScale=1,dirty=true,animation=0,previewReady=false;
 const cubeFaceMeshes={},chairFaceMeshes={},cubeEdges=[],chairEdges=[],cubeHits=[],chairHits=[];
 const cubeView=new THREE.Vector3(4.2,3,5.4),chairView=new THREE.Vector3(5,4.3,6.3),flatView=new THREE.Vector3(0,0,8.4);
 
 function setStatus(message,warning=false){$('#lesson-status').textContent=message;$('.status-box').classList.toggle('warning',warning);}
+function setMappingHint(message){$('#mapping-hint').textContent=message;}
 function currentPart(){return MODELS[state.model].find(part=>part.id===state.activePart);}
 function currentCuts(){return state.cuts[state.model].get(state.activePart);}
 function selectedChart(){return state.charts.find(chart=>chart.faces.some(face=>face.key===state.selected));}
@@ -109,7 +110,7 @@ function updateSurfaceColors(metrics){
  dirty=true;
 }
 function selectFace(key,announce=true){
- state.selected=key;const [partId]=key.split(':');if(state.model==='chair'&&partId!==state.activePart){state.activePart=partId;state.selectedEdge=null;$('#part-select').value=partId;renderEdgeList();updateEdgeStyles();}
+ state.selected=key;const [partId]=key.split(':');if(state.model==='chair'&&partId!==state.activePart){state.activePart=partId;state.selectedEdge=null;$('#part-select').value=partId;renderEdgeList();updateEdgeStyles();setMappingHint('Click an edge on this chair part, or choose one from the list below.');}
  renderMap();if(announce)setStatus(`${faceLabel(key)} is highlighted in both views. Faces joined by blue edges share a UV island.`);
 }
 
@@ -118,19 +119,21 @@ function renderEdgeList(){
 }
 function selectEdge(key,partId=state.activePart){
  state.activePart=partId;if(state.model==='chair')$('#part-select').value=partId;
- state.selectedEdge=key;renderEdgeList();updateEdgeStyles();setStatus(`${currentPart().name}: ${edgeName(EDGES.find(edge=>edge.key===key))} selected. Press U for Mark Seam or Clear Seam.`);
+ state.selectedEdge=key;renderEdgeList();updateEdgeStyles();setMappingHint(currentCuts().has(key)?'This edge is a seam. Clear it to join the faces, then Unwrap.':'This edge is joined. Mark Seam to cut it, then Unwrap.');setStatus(`${currentPart().name}: ${edgeName(EDGES.find(edge=>edge.key===key))} selected. Use Mark Seam or Clear Seam above.`);
 }
 function updateEdgeStyles(){
  const cuts=currentCuts();for(const button of edgeList.querySelectorAll('button')){const cut=cuts.has(button.dataset.edge);button.classList.toggle('cut',cut);button.classList.toggle('selected-edge',state.selectedEdge===button.dataset.edge);button.setAttribute('aria-pressed',String(state.selectedEdge===button.dataset.edge));button.title=`${cut?'Marked seam':'Joined edge'} · ${button.textContent}`;}
  $('#seam-count').textContent=`${cuts.size} of 12 seams marked on ${currentPart().name}`;
- $('#selected-edge-label').textContent=state.selectedEdge?`${currentPart().name} · ${edgeName(EDGES.find(edge=>edge.key===state.selectedEdge))}`:'Select an edge in 3D or below';
+ $('#selected-edge-label').textContent=state.selectedEdge?`${currentPart().name} · ${edgeName(EDGES.find(edge=>edge.key===state.selectedEdge))} — ${cuts.has(state.selectedEdge)?'marked seam':'joined edge'}`:'No edge selected';
+ $('#mark-seam').disabled=!state.selectedEdge||cuts.has(state.selectedEdge);$('#clear-seam').disabled=!state.selectedEdge||!cuts.has(state.selectedEdge);
+ $('#unwrap-action').classList.toggle('needs-unwrap',state.needsUnwrap);
  for(const item of cubeEdges){item.mesh.material.color.set(state.model==='cube'&&state.selectedEdge===item.key?'#ffbf00':state.cuts.cube.get('cube').has(item.key)?'#fb6b65':'#79a6ed');item.mesh.material.opacity=1;}
  for(const item of chairEdges){item.mesh.material.color.set(state.model==='chair'&&item.part===state.activePart&&state.selectedEdge===item.key?'#ffbf00':state.cuts.chair.get(item.part).has(item.key)?'#fb6b65':'#79a6ed');item.mesh.material.opacity=item.part===state.activePart?1:.25;}
  const active=state.model==='cube'?Object.entries(PRESETS).find(([,preset])=>preset.size===cuts.size&&[...preset].every(key=>cuts.has(key)))?.[0]:null;
  document.querySelectorAll('[data-preset]').forEach(button=>{button.classList.toggle('active',button.dataset.preset===active);button.setAttribute('aria-pressed',String(button.dataset.preset===active));});dirty=true;
 }
 function unwrap(message){
- animation++;const result=buildCharts(state.model,state.cuts[state.model]);state.charts=result.charts;state.invalid=result.invalid;
+ animation++;state.needsUnwrap=false;const result=buildCharts(state.model,state.cuts[state.model]);state.charts=result.charts;state.invalid=result.invalid;
  if(!state.invalid)packCharts(state.charts,{margin:.32});
  if(state.model==='cube'){
   state.layout=buildLayout(currentCuts());if(state.layout.valid&&previewReady){makeCubeRig(state.layout);$('#fold').disabled=false;$('#animate').disabled=false;}else{$('#fold').disabled=true;$('#animate').disabled=true;}
@@ -138,12 +141,13 @@ function unwrap(message){
  }
  const fallback=state.model==='cube'?'cube:F':'seat:T';if(!state.charts.some(chart=>chart.faces.some(face=>face.key===state.selected)))state.selected=fallback;
  updateEdgeStyles();renderMap();
- if(state.invalid){const {part,layout}=state.invalid;setStatus(layout.cycle?`${part.name} is still closed. Mark another seam, then Unwrap.`:`${part.name} would overlap in 2D. Change the seams, then Unwrap.`,true);}
- else setStatus(message||`Unwrapped into ${state.charts.length} island${state.charts.length===1?'':'s'}. Select a face to trace it between 3D and 2D.`);
+ if(state.invalid){const {part,layout}=state.invalid;setMappingHint('This net cannot lie flat yet. Mark another seam, then Unwrap.');setStatus(layout.cycle?`${part.name} is still closed. Mark another seam, then Unwrap.`:`${part.name} would overlap in 2D. Change the seams, then Unwrap.`,true);}
+ else{setMappingHint('UV map updated. Select another edge to keep experimenting.');setStatus(message||`Unwrapped into ${state.charts.length} island${state.charts.length===1?'':'s'}. Select a face to trace it between 3D and 2D.`);}
 }
 function markSelected(mark){
- if(!state.selectedEdge){setStatus('Select an edge in the 3D view or edge list first.',true);return;}
- const cuts=currentCuts();mark?cuts.add(state.selectedEdge):cuts.delete(state.selectedEdge);updateEdgeStyles();setStatus(`${mark?'Marked':'Cleared'} seam on ${currentPart().name}: ${edgeName(EDGES.find(edge=>edge.key===state.selectedEdge))}. Choose Unwrap to update the UV map.`);
+ if(!state.selectedEdge){setMappingHint('First click an edge on the 3D object, or choose one from the list below.');setStatus('Select an edge in the 3D view or edge list first.',true);return;}
+ const cuts=currentCuts();if(cuts.has(state.selectedEdge)===mark){setMappingHint(mark?'This edge is already marked as a seam.':'This edge is already joined.');return;}
+ mark?cuts.add(state.selectedEdge):cuts.delete(state.selectedEdge);state.needsUnwrap=true;updateEdgeStyles();setMappingHint(`${mark?'Seam marked':'Seam cleared'}. Now choose Unwrap to update the UV map.`);setStatus(`${mark?'Marked':'Cleared'} seam on ${currentPart().name}: ${edgeName(EDGES.find(edge=>edge.key===state.selectedEdge))}. Choose Unwrap to update the UV map.`);
 }
 function runCommand(command){
  closeMenu();
@@ -156,6 +160,9 @@ function runCommand(command){
 function closeMenu(){const menu=$('#u-menu');menu.hidden=true;$('#u-trigger').setAttribute('aria-expanded','false');}
 $('#u-trigger').addEventListener('click',()=>{const menu=$('#u-menu');menu.hidden=!menu.hidden;$('#u-trigger').setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)menu.querySelector('button')?.focus();});
 $('#u-menu').addEventListener('click',event=>{const button=event.target.closest('[data-command]');if(button)runCommand(button.dataset.command);});
+$('#mark-seam').addEventListener('click',()=>markSelected(true));
+$('#clear-seam').addEventListener('click',()=>markSelected(false));
+$('#unwrap-action').addEventListener('click',()=>unwrap());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeMenu();return;}if(event.key.toLowerCase()==='u'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName)){event.preventDefault();$('#u-trigger').click();}});
 document.addEventListener('click',event=>{if(!event.target.closest('.u-menu-wrap'))closeMenu();});
 $('#average-scale').addEventListener('click',()=>{if(state.invalid)return;averageIslandScale(state.charts);renderMap();setStatus('Average Island Scale: each island now has the same relative texture density. The preview was refitted; in Blender you can use Pack Islands afterward.');});
@@ -165,7 +172,7 @@ $('#stretch-u').addEventListener('input',event=>{const chart=selectedChart();if(
 $('#reset-stretch').addEventListener('click',()=>{const chart=selectedChart();if(!chart)return;chart.stretchU=1;chart.stretchV=1;packCharts(state.charts,{margin:.09});renderMap();setStatus('Selected island shape restored.');});
 document.querySelectorAll('[data-preset]').forEach(button=>button.addEventListener('click',()=>{state.cuts.cube.set('cube',new Set(PRESETS[button.dataset.preset]));state.selectedEdge=null;unwrap();}));
 document.querySelectorAll('[data-model]').forEach(button=>button.addEventListener('click',()=>switchModel(button.dataset.model)));
-$('#part-select').addEventListener('change',event=>{state.activePart=event.target.value;state.selectedEdge=null;renderEdgeList();updateEdgeStyles();setStatus(`${currentPart().name} selected. Choose an edge to mark or clear its seam.`);});
+$('#part-select').addEventListener('change',event=>{state.activePart=event.target.value;state.selectedEdge=null;renderEdgeList();updateEdgeStyles();setMappingHint('Click an edge on this chair part, or choose one from the list below.');setStatus(`${currentPart().name} selected. Choose an edge to mark or clear its seam.`);});
 $('#animate').addEventListener('click',()=>animateTo(state.fold>.5?0:1));
 $('#fold').addEventListener('input',event=>{animation++;updateFold(Number(event.target.value)/100);});
 
@@ -179,7 +186,7 @@ function switchModel(model){
  chairEdges.forEach(item=>item.mesh.visible=model==='chair');chairHits.forEach(item=>item.visible=model==='chair');
  if(camera&&controls){controls.enabled=true;controls.target.set(0,model==='cube'?0:1.45,0);camera.position.copy(model==='cube'?cubeView:chairView);controls.update();}
  const select=$('#part-select');if(model==='chair'){select.replaceChildren(...MODELS.chair.map(part=>{const option=document.createElement('option');option.value=part.id;option.textContent=part.name;return option;}));select.value='seat';}
- renderEdgeList();unwrap(model==='cube'?'Cube ready. Select an edge and press U.':'Chair ready. Its six separate box parts create UV islands of very different physical sizes.');dirty=true;
+ renderEdgeList();unwrap(model==='cube'?'Cube ready. Select an edge, then use Mark Seam or Clear Seam above.':'Chair ready. Its six separate box parts create UV islands of very different physical sizes.');dirty=true;
 }
 
 function makeCube3D(){
@@ -232,7 +239,7 @@ function start3D(){
   });
   renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();$('#canvas-hint').textContent='The 3D view paused. Reload this page to restore it.';$('#canvas-hint').hidden=false;});
   new ResizeObserver(()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();dirty=true;}).observe(host);
-  previewReady=true;$('#canvas-hint').hidden=true;renderEdgeList();unwrap('Select an edge, press U to mark a seam, then Unwrap to update the UV map.');selectFace('cube:F',false);
+  previewReady=true;$('#canvas-hint').hidden=true;renderEdgeList();unwrap('Select an edge, then use Mark Seam or Clear Seam above. Choose Unwrap to update the UV map.');setMappingHint('Click an edge on the 3D object, or choose one from the list below.');selectFace('cube:F',false);
   function frame(){requestAnimationFrame(frame);if(document.hidden)return;controls.update();if(dirty){renderer.render(scene,camera);dirty=false;}}frame();
  }catch(error){previewReady=false;$('#canvas-hint').textContent='3D preview unavailable in this browser. The UV layout and edge tools still work.';console.error('3D preview failed',error);renderEdgeList();unwrap();}
 }
