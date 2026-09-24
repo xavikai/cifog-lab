@@ -1,8 +1,8 @@
 {
-  "name": "cifog-material-lab",
-  "version": "0.1.0",
+  "name": "cifog-lab",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "An interactive materials lab for teaching Blender concepts.",
-  "scripts": { "start": "node server.mjs", "test": "node --test tests/graph.test.mjs" }
+  "description": "Interactive classroom labs for learning Blender concepts.",
+  "scripts": { "start": "node server.mjs", "test": "node --test tests/graph.test.mjs tests/unfold.test.mjs" }
 }

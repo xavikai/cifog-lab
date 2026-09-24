@@ -4,10 +4,13 @@ A home for small interactive activities that support CIFOG classroom presentatio
 
 - Live collection: https://xavikai.github.io/cifog-lab/
 - Material Lab: https://xavikai.github.io/cifog-lab/labs/materials/
+- UV Unwrap Lab: https://xavikai.github.io/cifog-lab/labs/uv-unwrapping/
 
 ## Available lab
 
 **Material Lab** (`labs/materials/`) is an interactive editor in English based on a focused subset of Blender 5.2 nodes. Students can connect Texture Coordinate, Mapping, Image Texture, Normal Map, Principled BSDF and Material Output; adjust materials; switch preview shapes; and try short guided experiments on roughness, normal maps and repeating textures.
+
+**UV Unwrap Lab** (`labs/uv-unwrapping/`) uses a paper cube to show how seams open a 3D surface into one or more 2D UV islands. Students can select matching faces in both views, mark or clear any of the twelve cube edges, choose starting layouts, and animate the same six faces between the cube and their flat arrangement. U and V are shown as coordinates across a square image area. A closed loop or overlapping layout is explained rather than silently presented as a valid net.
 
 Open a lab from the home page. To add another lab later, create a new `labs/<name>/` folder with its own `index.html` and add its card to the root `index.html`. The root page, existing lab and shared `vendor/` library can then remain in place.
 
@@ -25,12 +28,13 @@ Visit `http://127.0.0.1:5197/`. The local server resolves folder URLs to their `
 npm test
 ```
 
-The tests cover graph connections and Mapping transformations.
+The tests cover material graph connections, Mapping transformations and valid or conflicting cube nets.
 
 ## Structure
 
 - `index.html`, `home.css`: collection home page.
 - `labs/materials/`: Material Lab interface, preview, graph and texture assets.
+- `labs/uv-unwrapping/`: UV Unwrap Lab, cube net solver and 3D folding animation.
 - `vendor/`: pinned Three.js 0.180.0 modules and MIT license shared by labs.
 - `docs/teaching-notes.md`: lesson sequence and teaching notes for Material Lab.
 - `server.mjs`: local preview server only.
@@ -57,3 +61,5 @@ For scalar maps the browser renderer samples its standard roughness and metalnes
 - Blender node reference: https://docs.blender.org/manual/en/5.2/render/shader_nodes/shader/principled.html
 
 The project is not affiliated with the Blender Foundation. CIFOG identifies the classroom context supplied by the teacher.
+
+The UV lesson follows the [Blender 5.2 manual on seams](https://docs.blender.org/manual/en/5.2/modeling/meshes/uv/unwrapping/seams.html). It deliberately models a rigid paper cube. Blender's unwrap operator can handle more complex meshes and may distort or pack islands differently.
