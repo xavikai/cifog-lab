@@ -45,9 +45,9 @@ const K=(keys,label)=>`<span>${keys.map(key=>`<kbd>${key}</kbd>`).join('')} ${la
 function updateStatusKeys(){
  let html;
  if(state.mode==='object')html=K(['Tab'],'Edit Mode')+K(['S'],'Scale')+K(['Ctrl','A'],'Apply')+K(['Drag'],'Orbit')+K(['Wheel'],'Zoom');
- else if(state.hoverEdge&&state.selectMode==='edge')html=state.tool==='seam'?K(['LMB'],isSeam(state.hoverEdge)?'Clear this seam':'Mark this seam')+K(['Shift','LMB'],'Add to selection'):K(['LMB'],'Select edge')+K(['Shift','LMB'],'Add / remove')+K(['RMB'],'Context menu')+K(['U'],'UV menu');
- else if(state.hoverFace&&state.selectMode==='face')html=K(['LMB'],'Select face')+K(['Shift','LMB'],'Add / remove')+K(['RMB'],'Context menu')+K(['U'],'UV menu');
- else html=K(['LMB'],'Select')+K(['Drag'],'Orbit')+K(['A'],'All')+K(['Alt','A'],'None')+K(['U'],'UV menu')+K(['Ctrl','E'],'Edge menu')+K(['Tab'],'Mode')+K(['2','3'],'Edge / Face');
+ else if(state.hoverEdge&&state.selectMode==='edge')html=state.tool==='seam'?K(['LMB'],isSeam(state.hoverEdge)?'Clear this seam':'Mark this seam')+K(['Shift','LMB'],'Add to selection'):K(['LMB'],'Select edge')+K(['Shift','LMB'],'Add / remove')+K(['RMB'],'Context menu')+K(['U'],'UV menu · 3D Viewport');
+ else if(state.hoverFace&&state.selectMode==='face')html=K(['LMB'],'Select face')+K(['Shift','LMB'],'Add / remove')+K(['RMB'],'Context menu')+K(['U'],'UV menu · 3D Viewport');
+ else html=K(['LMB'],'Select')+K(['Drag'],'Orbit')+K(['A'],'All')+K(['Alt','A'],'None')+K(['U'],'UV menu · 3D Viewport')+K(['Ctrl','E'],'Edge menu')+K(['Tab'],'Mode')+K(['2','3'],'Edge / Face');
  $('#status-keys').innerHTML=html;
 }
 function seamTargets(mark){
@@ -181,7 +181,7 @@ const sep={sep:true};
 const item=(label,action,opts={})=>({label,action,...opts});
 function markItems(){return [item('Mark Seam',()=>setSeams(true),{disabled:!seamTargets(true).some(key=>!isSeam(key)),hint:state.selectMode==='face'?'Cut around the selected faces':'Cut the selected edges'}),item('Clear Seam',()=>setSeams(false),{disabled:!seamTargets(false).some(isSeam),hint:'Join the selected edges again'})];}
 const MENUS={
- uv:()=>({title:'UV',items:[item('Unwrap',()=>unwrap(),{hint:'Open the surface at the marked seams'}),item('Smart UV Project',null,{disabled:true,hint:'Not in this lab'}),item('Lightmap Pack',null,{disabled:true}),item('Follow Active Quads',null,{disabled:true}),sep,item('Cube Projection',()=>unwrap('Cube Projection ignores your seams: every box side becomes its own island. Change a seam to go back to a seam-based Unwrap.','cube'),{hint:'Ignores seams — one island per side'}),item('Cylinder Projection',null,{disabled:true}),item('Sphere Projection',null,{disabled:true}),sep,...markItems(),sep,item('Reset Seams',resetSeams,{hint:'Lab: back to the starting layout'})]}),
+ uv:()=>({title:'UV Mapping · 3D Viewport',items:[item('Unwrap',()=>unwrap(),{hint:'Open the surface at the marked seams'}),item('Smart UV Project',null,{disabled:true,hint:'Not in this lab'}),item('Lightmap Pack',null,{disabled:true}),item('Follow Active Quads',null,{disabled:true}),sep,item('Cube Projection',()=>unwrap('Cube Projection ignores your seams: every box side becomes its own island. Change a seam to go back to a seam-based Unwrap.','cube'),{hint:'Ignores seams — one island per side'}),item('Cylinder Projection',null,{disabled:true}),item('Sphere Projection',null,{disabled:true}),sep,...markItems(),sep,item('Reset Seams',resetSeams,{hint:'Lab: back to the starting layout'})]}),
  edge:()=>({title:'Edge',items:[item('Extrude Edges',null,{disabled:true}),item('Bevel Edges',null,{disabled:true}),sep,...markItems(),sep,item('Mark Sharp',null,{disabled:true}),item('Clear Sharp',null,{disabled:true})]}),
  context:()=>({title:state.selectMode==='edge'?'Edge Context Menu':'Face Context Menu',items:[...markItems(),sep,item('Select All',selectAll,{key:'A'}),item('Select None',()=>deselectAll(),{key:'Alt A'})]}),
  select:()=>({title:'Select',items:[item('All',selectAll,{key:'A'}),item('None',()=>deselectAll(),{key:'Alt A'}),sep,item('Edge Select',()=>setSelectMode('edge'),{key:'2',check:state.selectMode==='edge'}),item('Face Select',()=>setSelectMode('face'),{key:'3',check:state.selectMode==='face'})]}),
