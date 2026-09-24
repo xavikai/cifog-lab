@@ -40,7 +40,7 @@ test('starters: create/fix/complete need work, observe/predict run as given', ()
     const c = compile(ch.starter, { mode: ch.mode });
     if (ch.type === 'observe' || ch.type === 'predict') { assert.equal(runHeadless(ch, ch.starter).error, null, ch.id); continue; }
     if (ch.type === 'complete') { assert.ok(c.errors.some(e => e.message === 'Fill in the blank ___'), ch.id); continue; }
-    if (['1-3', '2-3', '0-7', 'n-5', 't-7', 'l-7'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
+    if (['1-3', '2-3', '0-7', 'n-5', 't-7', 'l-7', 'm-6', 'm-8'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
     assert.equal(c.ok, true, `${ch.id}: ${c.errors.map(e => e.message)}`);
     if (!ch.sandbox) assert.equal(runHeadless(ch, ch.starter, 3).ok, false, ch.id);
   }
@@ -207,4 +207,69 @@ test('strings: length, positions from 0, char, methods and runtime errors', () =
   assert.equal(err('"x".Length()'), 'CS1955');
   const oob = compile('"abc"[3]', { mode: 'calc' });
   assert.throws(() => new Runner(oob.ast, new World()).runToEnd(), e => e.exception === 'IndexOutOfRangeException');
+});
+
+// ─── Methods ────────────────────────────────────────────────────────────────
+test('methods: calls with parameters, return values, nesting and recursion', () => {
+  assert.deepEqual(out(`Console.WriteLine(Area(3, 4));
+Console.WriteLine(Square(Square(2)) + 1);
+Console.WriteLine(Fact(5));
+Hi("Ada");
+int Area(int w, int d) { return w * d; }
+int Square(int n) => n * n;
+int Fact(int n)
+{
+    if (n <= 1) return 1;
+    return n * Fact(n - 1);
+}
+void Hi(string name) { Console.WriteLine($"Hi {name}"); }`), ['12', '17', '120', 'Hi Ada']);
+});
+
+test('methods: a parameter is a copy, and a method has its own variables', () => {
+  assert.deepEqual(out(`int x = 5;
+Change(x);
+Console.WriteLine(x);
+void Change(int x) { x = 100; Console.WriteLine(x); }`), ['100', '5']);
+});
+
+test('methods: && only calls the right side when needed, return leaves loops', () => {
+  assert.deepEqual(out(`bool b = false && Loud();
+Console.WriteLine(First());
+bool Loud() { Console.WriteLine("called"); return true; }
+int First()
+{
+    for (int i = 0; i < 10; i++)
+    {
+        if (i == 3) return i;
+    }
+    return -1;
+}`), ['3']);
+});
+
+test('methods: compiler errors for common mistakes', () => {
+  assert.deepEqual(errors('int F(int a) { int b = a; }\nF(1);'), ['CS0161']);
+  assert.deepEqual(errors('void F() { return 3; }\nF();'), ['CS0127']);
+  assert.deepEqual(errors('int F() { return; }\nF();'), ['CS0126']);
+  assert.deepEqual(errors('F(1, 2);\nvoid F(int a) { }'), ['CS1501']);
+  assert.deepEqual(errors('F("3");\nvoid F(int a) { }'), ['CS1503']);
+  assert.deepEqual(errors('F();\nConsole.WriteLine(r);\nvoid F() { int r = 1; }'), ['CS0103']);
+  assert.deepEqual(errors('int n = 1;\nF();\nvoid F() { Console.WriteLine(n); }'), ['LAB']);
+  assert.deepEqual(errors('int x = F;\nint F() { return 1; }'), ['CS0428']);
+  assert.deepEqual(errors('void F() { }\nvoid F() { }\nF();'), ['CS0128']);
+  assert.deepEqual(errors('int v = Show();\nvoid Show() { }'), ['CS0029']);
+  const w = compile('void Unused() { }\nint F() { return 1; Console.WriteLine(2); }\nF();').warnings.map(x => x.code);
+  assert.deepEqual(w.sort(), ['CS0162', 'CS8321']);
+});
+
+test('methods: stepping yields call and return events with the call depth', () => {
+  const c = compile('Tower(2);\nvoid Tower(int h)\n{\n    drone.Build(h);\n}');
+  const r = new Runner(c.ast, new World());
+  const evs = [...r.run()].map(e => `${e.kind}:${e.line}:${e.depth}`);
+  assert.deepEqual(evs, ['line:1:0', 'call:2:1', 'line:4:1', 'return:1:0']);
+});
+
+test('methods: endless recursion stops with a StackOverflowException', () => {
+  const c = compile('F(0);\nvoid F(int n) { F(n + 1); }');
+  const r = new Runner(c.ast, new World());
+  assert.throws(() => r.runToEnd(), e => e.exception === 'StackOverflowException');
 });

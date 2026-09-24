@@ -40,6 +40,9 @@ export const API = [
   { level: 8, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
   { level: 8, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
   { level: 8, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
+  { level: 9, code: 'void Tower(int height)\n{\n    \n}', text: 'Declares a method: a name for a group of instructions. <code>void</code>: it gives nothing back. <code>int height</code>: a parameter. Write methods below the main program.' },
+  { level: 9, code: 'Tower(3);', text: 'Calls the method: its instructions run with <code>height = 3</code>, then the program carries on with the next line.' },
+  { level: 9, code: 'int Area(int w, int d)\n{\n    return w * d;\n}', text: 'A method that gives back a value: write its type instead of <code>void</code> and end with <code>return</code>. The call is replaced by the value.' },
 ];
 
 export const LEVELS = [
@@ -982,7 +985,197 @@ else
     ],
   },
   {
-    id: 9, name: 'Free build', concept: 'Sandbox',
+    id: 9, name: 'Methods', concept: 'Reuse',
+    intro: 'A method gives a name to a group of instructions. Write it once, then call it as many times as you need.',
+    challenges: [
+      {
+        id: 'm-1', type: 'observe', title: 'Write once, use many times',
+        goal: 'Follow the program with Step Into (F11): watch it jump into Tower and come back.',
+        brief: '<p>A <b>method</b> is a new instruction that you invent. <code>void Tower(int height)</code> <b>declares</b> it: <code>void</code> means it gives nothing back, <code>Tower</code> is its name (PascalCase) and <code>int height</code> is a <b>parameter</b>: a variable that gets its value from each call.</p><p><code>Tower(2);</code> <b>calls</b> it: the program jumps into the method with <code>height = 2</code>, runs it, and comes back to the next line. <b>Step Into</b> follows it inside; <b>Step</b> runs the whole call at once. Watch the Memory panel: each call gets its own frame.</p>',
+        hint: 'Use Step Into (F11) to go inside the method and Step (F10) to run a call in one go.',
+        starter: `// The main program: three calls.
+Tower(2);
+Tower(4);
+Tower(3);
+
+// The method: written once, below the main program.
+void Tower(int height)
+{
+    Console.WriteLine("Tower of " + height);
+    drone.Build(height, Color.Blue);
+}
+`,
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 8, viewHeight: 5, target: {} }),
+      },
+      {
+        id: 'm-2', type: 'predict', title: 'Written, but never called',
+        goal: 'Predict what the Console will print.',
+        brief: '<p>This program declares a method called <code>Hello</code>. Read it carefully: what does the computer actually run?</p>',
+        starter: `Console.WriteLine("Start");
+Console.WriteLine("End");
+
+void Hello()
+{
+    Console.WriteLine("Hello!");
+}
+`,
+        question: {
+          prompt: 'What will the Console print?',
+          options: ['Start, End', 'Start, Hello!, End', 'Hello!, Start, End'], answer: 'Start, End',
+          actual: ({ output }) => output.join(', '),
+          explain: 'Declaring a method only teaches the computer a new instruction. It runs only when something calls it: Hello();. The compiler even warns you about it (CS8321).',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'm-3', type: 'create', title: 'Stop copying',
+        goal: 'Build four houses (2 White blocks + a Red roof) using a method House().',
+        brief: '<p>The code for one house is written twice, and you need <b>four</b>. Copying works, but every copy is a place for mistakes. Put the four lines of one house inside a method called <code>House</code>, then call it four times.</p>',
+        hint: 'void House() { the four lines } and above it: House(); four times.',
+        starter: `// One house, then another… Make a method instead.
+drone.Place(Color.White);
+drone.Place(Color.White);
+drone.Place(Color.Red);
+drone.Move(Direction.Right);
+
+drone.Place(Color.White);
+drone.Place(Color.White);
+drone.Place(Color.Red);
+drone.Move(Direction.Right);
+`,
+        solution: `House();
+House();
+House();
+House();
+
+void House()
+{
+    drone.Place(Color.White);
+    drone.Place(Color.White);
+    drone.Place(Color.Red);
+    drone.Move(Direction.Right);
+}`,
+        requires: [{ feature: 'method', label: 'Write a method' }, { maxStatements: 8, label: 'At most 8 instructions' }],
+        setup: () => ({ size: 6, viewHeight: 4, target: fill((x, z) => z === 0 && x < 4 ? ['White', 'White', 'Red'] : null) }),
+      },
+      {
+        id: 'm-4', type: 'predict', title: 'A copy, not the original',
+        goal: 'Predict what the Console will print.',
+        brief: '<p>The method <code>LoseOne</code> takes <code>lives</code> and subtracts 1. After the call, the main program prints its own <code>lives</code>. Use <b>Step Into</b> and watch the Memory panel after you predict.</p>',
+        starter: `int lives = 3;
+LoseOne(lives);
+Console.WriteLine(lives);
+
+void LoseOne(int lives)
+{
+    lives = lives - 1;
+}
+`,
+        question: {
+          prompt: 'What will the Console print?',
+          options: ['3', '2', 'An error'], answer: '3',
+          actual: ({ output }) => output[0],
+          explain: 'The parameter lives is a new box inside LoseOne that gets a copy of the value 3. Changing the copy does not change the original: the Memory panel shows two boxes called lives, one in each frame. To send a value back, a method uses return.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'm-5', type: 'complete', title: 'Give it back',
+        goal: 'Complete Area so the Console prints 8 and 10, and the tower is 6 blocks high.',
+        brief: '<p>Some methods <b>calculate</b> something and give it back. Instead of <code>void</code> they have a type (<code>int Area</code>), and they end with <code>return value;</code>. Where the method was called, the call is replaced by that value: <code>Area(4, 2)</code> becomes <code>8</code>. Step over a call and read the panel on the right.</p>',
+        hint: 'return width * depth;',
+        starter: `int area = Area(4, 2);
+Console.WriteLine(area);
+Console.WriteLine(Area(3, 3) + 1);
+drone.Build(Area(2, 3));
+
+int Area(int width, int depth)
+{
+    return ___;
+}
+`,
+        solution: `int area = Area(4, 2);
+Console.WriteLine(area);
+Console.WriteLine(Area(3, 3) + 1);
+drone.Build(Area(2, 3));
+
+int Area(int width, int depth)
+{
+    return width * depth;
+}`,
+        expectOutput: ['8', '10'],
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 8, viewHeight: 6, target: { '0,0': repeat('White', 6) } }),
+      },
+      {
+        id: 'm-6', type: 'fix', title: 'Printing is not returning',
+        goal: 'Make the Console print only 30 (5 doubled plus 10 doubled).',
+        brief: '<p><code>Double</code> should give back twice its number, but it only <b>prints</b> something. Printing shows a value to a person; <code>return</code> gives it to the program. There is also a small logic mistake.</p>',
+        hint: 'Replace Console.WriteLine(…) with return …; and double means n * 2.',
+        starter: `int total = Double(5) + Double(10);
+Console.WriteLine(total);
+
+int Double(int n)
+{
+    Console.WriteLine(n + 2);
+}
+`,
+        solution: `int total = Double(5) + Double(10);
+Console.WriteLine(total);
+
+int Double(int n)
+{
+    return n * 2;
+}`,
+        expectOutput: ['30'],
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'm-7', type: 'parsons', title: 'Build a wall method',
+        goal: 'A Blue wall of 4 in the first row and a Red wall of 3 in the second.',
+        brief: '<p>A method can have <b>several parameters</b>, separated by commas: <code>Wall(int length, Color color)</code>. Each call gives the values in the same order: <code>Wall(4, Color.Blue)</code>. Put the lines in order; one of them is not needed.</p>',
+        hint: 'The main program comes first: Wall, MoveTo, Wall. Then the method: its header, {, the loop, }.',
+        parsons: {
+          lines: ['Wall(4, Color.Blue);', 'drone.MoveTo(0, 1);', 'Wall(3, Color.Red);', 'void Wall(int length, Color color)', '{', 'for (int i = 0; i < length; i++)', '{', 'drone.Place(color);', 'drone.Move(Direction.Right);', '}', '}'],
+          distractors: ['drone.Place(Color.Blue);'],
+        },
+        setup: () => ({ size: 6, viewHeight: 3, target: fill((x, z) => z === 0 && x < 4 ? ['Blue'] : z === 1 && x < 3 ? ['Red'] : null) }),
+      },
+      {
+        id: 'm-8', type: 'create', title: 'A street of houses',
+        goal: 'Write House(int walls): a column of White walls with a Red roof, then one step right.',
+        brief: '<p>The main program is ready: four houses with 1, 2, 3 and 4 walls. Write the method <code>House</code> below it. It needs a <b>parameter</b> for the number of walls and a <b>loop</b> to place them.</p>',
+        hint: 'void House(int walls) { for (int i = 0; i < walls; i++) { drone.Place(Color.White); } then the Red roof and drone.Move(Direction.Right); }',
+        starter: `House(1);
+House(2);
+House(3);
+House(4);
+
+// Write the method House(int walls) here.
+`,
+        solution: `House(1);
+House(2);
+House(3);
+House(4);
+
+void House(int walls)
+{
+    for (int i = 0; i < walls; i++)
+    {
+        drone.Place(Color.White);
+    }
+    drone.Place(Color.Red);
+    drone.Move(Direction.Right);
+}`,
+        requires: [{ feature: 'method', label: 'Write a method' }, { maxStatements: 8, label: 'At most 8 instructions' }],
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 8, viewHeight: 5, target: fill((x, z) => z === 0 && x < 4 ? [...repeat('White', x + 1), 'Red'] : null) }),
+      },
+    ],
+  },
+  {
+    id: 10, name: 'Free build', concept: 'Sandbox',
     intro: 'No goal: experiment with everything you have learned.',
     challenges: [
       {

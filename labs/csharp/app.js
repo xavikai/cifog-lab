@@ -63,12 +63,14 @@ function renderCode() {
   const ev = S.event, active = S.mode === 'running' || S.mode === 'paused';
   const r = S.runner, notes = r?.notes, counts = r?.lineCounts;
   const fresh = r?.log.at(-1)?.line;
+  const waiting = new Set(active ? (r?.frames || []).map(f => f.callLine) : []);
   let code = '', gut = '';
   lines.forEach((l, i) => {
     const n = i + 1;
     let cls = 'ln';
     const isCur = active && ev && ev.line === n;
     if (isCur) cls += ev.kind === 'cond' ? (ev.value ? ' current-cond-true' : ' current-cond-false') : ' current';
+    else if (waiting.has(n)) cls += ' waiting';
     if (S.errorLines.has(n)) cls += ' error';
     if (n === fresh && active) cls += ' fresh';
     const note = notes?.get(n), res = r?.resultsByLine?.get(n);
@@ -330,14 +332,30 @@ function renderMemory() {
   const scopes = r?.scopes || [];
   if (!scopes.length) html += '<p class="empty">Variables appear here while the program runs. Each one is a box with a <b>type</b>, a <b>name</b> and a <b>value</b>.</p>';
   else {
-    const scopeHtml = i => {
-      if (i >= scopes.length) return '';
-      const s = scopes[i], vars = [...s.vars.values()];
+    // Each method call gets its own frame; the newest (running) frame is drawn on top.
+    const frames = [];
+    scopes.forEach((s, i) => { if (i === 0 || s.kind === 'method') frames.push([]); frames.at(-1).push(s); });
+    const scopeHtml = (list, i, frameTop) => {
+      if (i >= list.length) return '';
+      const s = list[i], vars = [...s.vars.values()];
       const rows = vars.map(v => varRow(v.type, v.name, v.value, { changed: r.changed.has(v), assigned: v.assigned })).join('');
-      const empty = !rows && i === 0 ? '<p class="empty">No variables yet.</p>' : '';
-      return `<div class="scope"><div class="scope-head"><span>${esc(s.label)}</span><span>${i === 0 ? 'scope' : 'inner scope'}</span></div>${rows}${empty}${scopeHtml(i + 1)}</div>`;
+      const empty = !rows && i === 0 ? `<p class="empty">${s.kind === 'method' ? 'No parameters or variables.' : 'No variables yet.'}</p>` : '';
+      let right = i === 0 ? 'scope' : 'inner scope';
+      if (i === 0 && frames.length > 1) right = frameTop.active ? (s.kind === 'method' ? 'method · running' : 'running') : tr('waiting · line {n}', { n: frameTop.waitLine });
+      const label = s.kind === 'method' ? `<b class="frame-name" data-no-i18n>${esc(s.label)}</b>` : esc(s.label);
+      return `<div class="scope${i === 0 && s.kind === 'method' ? ' method' : ''}"><div class="scope-head"><span>${label}</span><span>${esc(right)}</span></div>${rows}${empty}${scopeHtml(list, i + 1, frameTop)}</div>`;
     };
-    html += scopeHtml(0);
+    if (frames.length === 1) html += scopeHtml(frames[0], 0, { active: true });
+    else {
+      // With a call stack, the frames come first and the drone goes below them.
+      const droneHtml = html; html = '';
+      html += `<div class="stack-label">${esc(t('CALL STACK · newest on top'))}</div>`;
+      for (let k = frames.length - 1; k >= 0; k--) {
+        const active = k === frames.length - 1;
+        html += `<div class="frame${active ? ' active' : ' waiting'}">${scopeHtml(frames[k], 0, { active, waitLine: frames[k + 1]?.[0].callLine })}</div>`;
+      }
+      html += droneHtml;
+    }
   }
   const mem = $('#memory');
   mem.innerHTML = html;
@@ -355,6 +373,17 @@ function renderNow() {
   if (ev.kind === 'line' && lastRes?.steps && S.challenge.mode === 'calc') {
     const st = lastRes.steps;
     el.innerHTML = `<span class="label">${esc(tr('LINE {n} · HOW IT WAS WORKED OUT', { n: lastRes.line }))}</span><div class="eval">${st.map((p, i) => i === st.length - 1 ? `<span class="${lastRes.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>')}</div><div class="outcome">${esc(tr('Next: line {n}', { n: ev.line }))}</div>`;
+    return;
+  }
+  if (ev.kind === 'call') {
+    el.innerHTML = `<span class="label">${esc(tr('METHOD CALL · LINE {n}', { n: ev.callLine }))}</span><code data-no-i18n>${esc(ev.text)}</code><div class="outcome">${esc(tr('The program jumps from line {a} into the method {m}. Its parameters get the values from the call.', { a: ev.callLine, m: ev.method }))}</div>`;
+    return;
+  }
+  if (ev.kind === 'return') {
+    const msg = ev.type === 'void'
+      ? tr('{m} has finished. The program goes back to line {n} and carries on.', { m: ev.method, n: ev.line })
+      : tr('{m} gives back {v}. On line {n}, that value takes the place of the call.', { m: ev.method, v: literal(ev.value, ev.type), n: ev.line });
+    el.innerHTML = `<span class="label">${esc(tr('BACK TO LINE {n}', { n: ev.line }))}</span><code data-no-i18n>${esc(ev.type === 'void' ? ev.text : `${ev.text} → ${literal(ev.value, ev.type)}`)}</code><div class="outcome">${esc(msg)}</div>`;
     return;
   }
   if (ev.kind === 'cond') {
@@ -380,6 +409,7 @@ function renderControls() {
   $('#run').classList.toggle('paused', running);
   $('#stop').disabled = !(running || paused);
   const ch = S.challenge, parsons = ch.type === 'parsons';
+  $('#step-into').hidden = !(ch.level.id >= LV.Methods);
   ta.readOnly = running || paused || readOnlyType(ch) || parsons;
   const note = $('#editing-note');
   let html = '';
@@ -690,12 +720,21 @@ function run() {
   S.mode = 'running';
   loop();
 }
-function step() {
+// Step (F10) steps over method calls, like Visual Studio; Step Into (F11) follows the program into them.
+function step(into = false) {
   if (S.challenge.type === 'classify') return;
   if (needsPrediction()) return;
   if (S.mode === 'running') { S.mode = 'paused'; clearTimer(); renderAll(); return; }
-  if (S.mode !== 'paused') { if (!build()) return; S.mode = 'paused'; }
-  if (advance()) renderAll();
+  if (S.mode !== 'paused') { if (!build()) return; S.mode = 'paused'; if (advance()) renderAll(); return; }
+  const d0 = S.event?.depth ?? 0;
+  if (!advance()) return;
+  if (!into) {
+    for (let n = 0; (S.event.depth ?? 0) > d0 && n < 100000; n++) {
+      if (!advance()) return;
+      if (hitBreakpoint()) break;
+    }
+  }
+  renderAll();
 }
 function stop(silent = false) {
   clearTimer();
@@ -780,12 +819,14 @@ function showResult(kind, title, text, next) {
 }
 
 $('#run').onclick = run;
-$('#step').onclick = step;
+$('#step').onclick = () => step(false);
+$('#step-into').onclick = () => step(true);
 $('#stop').onclick = () => stop();
 document.addEventListener('keydown', e => {
   if (e.key === 'F5' && e.shiftKey) { e.preventDefault(); stop(); }
   else if (e.key === 'F5' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); run(); }
-  else if (e.key === 'F10') { e.preventDefault(); step(); }
+  else if (e.key === 'F10') { e.preventDefault(); step(false); }
+  else if (e.key === 'F11') { e.preventDefault(); step(true); }
 });
 const speed = $('#speed');
 function applySpeed() {

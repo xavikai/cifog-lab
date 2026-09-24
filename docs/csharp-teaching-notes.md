@@ -104,10 +104,27 @@ Now `;` and method calls appear: `Console.WriteLine("Hello!");` — who (`Consol
 2. **The frame** — `||` combines conditions. Ask what `&&` would build instead (only the corners? nothing?).
 3. **Read the floor** — the floor is random; students must read `drone.Ground` and chain `else if`. Hard-coded positions fail the extra worlds.
 
+## Level 9 · Methods
+
+Methods are written as local functions below the main program (`void Tower(int h) { … }`), which is valid C# without `class Program`. Classes come in the second Code Lab. Inside a method, only its parameters, its own variables and `drone` are visible; using a variable of the main program gives a lab message that suggests passing it as a parameter (the same rule a `static` local function follows, and closer to how methods work in Unity).
+
+- **Step (F10)** runs a whole call in one go; **Step Into (F11)** follows the program inside. After each call the program comes back to the calling line and the Execution panel says what the method gave back.
+- **Memory** shows the **call stack**: each call gets its own frame with its parameters, the newest on top; the frames below are waiting at the line that made the call (also marked in blue in the editor). In recursion, one frame per call.
+- New compiler checks: CS0161 (not all code paths return a value), CS0127/CS0126 (return with or without a value), CS1501/CS1503 (wrong number or type of arguments), CS0428 (method name without brackets) and the warnings CS8321 (declared but never used) and CS0162 (unreachable code after `return`). Endless recursion stops with a StackOverflowException.
+
+1. **Write once, use many times** (observe) — declare vs call, parameter, frames in Memory.
+2. **Written, but never called** (predict) — declaring a method does not run it.
+3. **Stop copying** (create) — turn copied code into `House()`; at most 8 instructions.
+4. **A copy, not the original** (predict) — a parameter is a copy: two boxes called `lives`, one per frame.
+5. **Give it back** (complete) — `int Area(…)` and `return`; the call is replaced by its value.
+6. **Printing is not returning** (fix) — `Console.WriteLine` inside a method is not `return` (CS0161), plus a logic mistake.
+7. **Build a wall method** (order) — two parameters, `Wall(int length, Color color)`.
+8. **A street of houses** (create) — a parameter plus a loop inside the method.
+
 ## Free build
 
 A sandbox with a pyramid made from three nested loops and the conditional operator. Good for open-ended tasks: a spiral staircase, a hollow tower, a gradient of colors.
 
 ## Next levels (planned)
 
-Methods with parameters and `return` (call stack visible), arrays and `foreach` (heightmaps), classes and objects, and a bridge to Unity with `Update()`, `Vector3` and a `MonoBehaviour`-like structure.
+Code Lab 01 continues with arrays (a strip of boxes with indices, towers from `int[]`) and a closing project, "From block to city". Code Lab 02 (objects, towards Unity) will cover classes and objects, references and `null`, `List<T>` and `foreach`, `struct` vs `class`, `Update()`/`deltaTime` and light inheritance.

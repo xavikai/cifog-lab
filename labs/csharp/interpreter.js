@@ -1,6 +1,7 @@
 // A small, teaching-oriented C# interpreter.
 // It understands a focused subset of C# (top-level statements, local variables,
-// if/else, while, do/while, for, break/continue, expressions and the lab API)
+// if/else, while, do/while, for, break/continue, methods (local functions with
+// parameters and return), expressions and the lab API)
 // and runs programs step by step so the interface can show what happens.
 
 export const COLORS = ['None', 'White', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'Black'];
@@ -181,7 +182,7 @@ const EXPECT = {
 };
 
 class Parser {
-  constructor(tokens) { this.toks = tokens; this.p = 0; }
+  constructor(tokens) { this.toks = tokens; this.p = 0; this.depth = 0; this.inMethod = false; }
   get tok() { return this.toks[this.p]; }
   peek(n = 1) { return this.toks[Math.min(this.p + n, this.toks.length - 1)]; }
   prev() { return this.toks[this.p - 1] || this.toks[0]; }
@@ -216,9 +217,71 @@ class Parser {
     return t.t === 'id' && n.t === 'id';
   }
 
+  isMethodStart() {
+    const t = this.tok, n = this.peek(), n2 = this.peek(2);
+    if (this.is('void') || this.is('static')) return true;
+    const typeLike = (t.t === 'kw' && TYPE_KEYWORDS.has(t.v) && t.v !== 'var') || t.t === 'id';
+    return typeLike && n.t === 'id' && n2.t === 'op' && n2.v === '(';
+  }
+
+  methodDecl() {
+    const start = this.tok;
+    if (this.depth > 0 || this.inMethod) this.fail('LAB', 'In this lab, methods are written at the top level of the program, not inside { }.', start, 'Move the method below the main program, outside any { }.');
+    if (this.eat('static')) { /* a static local function: allowed, same meaning here */ }
+    const typeTok = this.tok;
+    if (!(typeTok.t === 'id' || (typeTok.t === 'kw' && (TYPE_KEYWORDS.has(typeTok.v) || typeTok.v === 'void')))) this.fail('CS1001', 'Identifier expected', typeTok, 'A method starts with the type of value it gives back (void if none), then its name: void Tower(int h)');
+    if (typeTok.v === 'var') this.fail('CS0825', "The contextual keyword 'var' may only appear within a local variable declaration", typeTok, 'Write the real type the method gives back: int, string… or void.');
+    this.p++;
+    const nameTok = this.tok;
+    if (nameTok.t !== 'id') {
+      if (nameTok.t === 'kw') this.fail('CS1041', `Identifier expected; '${nameTok.v}' is a keyword`, nameTok, `${nameTok.v} is a reserved word in C#. Choose another name for your method.`);
+      this.fail('CS1001', 'Identifier expected', nameTok, 'After the type, write the name of the method: void Tower(int h)');
+    }
+    this.p++;
+    this.expect('(');
+    const params = [];
+    if (!this.is(')')) {
+      do {
+        const pt = this.tok;
+        if (!(pt.t === 'id' || (pt.t === 'kw' && TYPE_KEYWORDS.has(pt.v)))) this.fail('CS1001', 'Identifier expected', pt, 'Each parameter needs a type and a name: int h');
+        if (pt.v === 'var') this.fail('CS0825', "The contextual keyword 'var' may only appear within a local variable declaration", pt, 'Parameters need a real type: int h, not var h.');
+        this.p++;
+        const pn = this.tok;
+        if (pn.t !== 'id') {
+          if (pn.t === 'kw') this.fail('CS1041', `Identifier expected; '${pn.v}' is a keyword`, pn, `${pn.v} is a reserved word in C#. Choose another name.`);
+          this.fail('CS1001', 'Identifier expected', pn, `After the type, write a name for the parameter: ${pt.v} value`);
+        }
+        this.p++;
+        params.push({ varType: pt.v, name: pn.v, line: pn.line, col: pn.col });
+      } while (this.eat(','));
+    }
+    const close = this.expect(')');
+    this.inMethod = true;
+    let body;
+    if (this.is('=>')) {
+      const arrow = this.tok; this.p++;
+      const value = this.expression();
+      this.expect(';');
+      const ret = typeTok.v === 'void' ? this.node('ExprStmt', { expr: value }, value) : this.node('Return', { value }, arrow);
+      body = this.node('Block', { body: [ret], endLine: arrow.line, arrow: true }, arrow);
+    } else {
+      if (this.is(';')) this.fail('CS1514', '{ expected', this.tok, 'A method needs a body: the instructions go between { and }.');
+      body = this.block();
+    }
+    this.inMethod = false;
+    return this.node('MethodDecl', { returnType: typeTok.v, name: nameTok.v, params, body, nameLine: nameTok.line, nameCol: nameTok.col, headerEnd: close.line }, start);
+  }
+
   statement() {
     const t = this.tok;
     if (this.is('{')) return this.block();
+    if (this.isMethodStart()) return this.methodDecl();
+    if (this.is('return')) {
+      this.p++;
+      const value = this.is(';') ? null : this.expression();
+      this.expect(';');
+      return this.node('Return', { value }, t);
+    }
     if (this.is(';')) { this.p++; return this.node('Empty', {}, t); }
     if (t.t === 'kw') {
       switch (t.v) {
@@ -242,10 +305,12 @@ class Parser {
 
   block() {
     const open = this.expect('{'), body = [];
+    this.depth++;
     while (!this.is('}')) {
       if (this.tok.t === 'eof') this.fail('CS1513', '} expected', open, `The { on line ${open.line} is never closed.`);
       body.push(this.statement());
     }
+    this.depth--;
     const close = this.expect('}');
     return this.node('Block', { body, endLine: close.line }, open);
   }
@@ -466,14 +531,55 @@ export const STRING_METHODS = {
 };
 const methodNames = cls => Object.keys(METHODS).filter(k => k.startsWith(cls + '.')).map(k => k.split('.')[1]);
 
+// Sub-expressions of an expression node, in evaluation order.
+function kidsOf(e) {
+  const out = [];
+  for (const k of ['object', 'left', 'right', 'arg', 'expr', 'index', 'test', 'a', 'b', 'callee']) if (e[k] && typeof e[k] === 'object') out.push(e[k]);
+  if (e.args) out.push(...e.args);
+  if (e.type === 'Interp') for (const p of e.parts) if (typeof p !== 'string') out.push(p);
+  return out;
+}
+// Does this expression contain a call to one of the student's own methods?
+export const hasUserCall = e => !!e && (!!e.userCall || !!e.hasUserCall || (e.type === 'Member' && hasUserCall(e.object)));
+export const signature = m => `${m.name}(${m.params.map(p => p.varType).join(', ')})`;
+
+// Names declared inside a statement list (used for friendlier "does not exist" hints).
+function declaredNames(stmts, out = new Map()) {
+  const visit = s => {
+    if (!s || typeof s !== 'object') return;
+    if (s.type === 'MethodDecl') return;
+    if (s.type === 'VarDecl') for (const d of s.decls) if (!out.has(d.name)) out.set(d.name, d.line);
+    for (const k of ['body', 'cons', 'alt', 'init', 'update']) {
+      const v = s[k];
+      if (Array.isArray(v)) v.forEach(visit); else if (v && typeof v === 'object' && v.type) visit(v);
+    }
+  };
+  stmts.forEach(visit);
+  return out;
+}
+// Can execution run past the end of this statement? (for CS0161 and CS0162)
+function alwaysReturns(s) {
+  if (!s) return false;
+  switch (s.type) {
+    case 'Return': return true;
+    case 'Block': return s.body.some(alwaysReturns);
+    case 'If': return !!s.alt && alwaysReturns(s.cons) && alwaysReturns(s.alt);
+  }
+  return false;
+}
+
 // ─── Checker (what the C# compiler verifies before running) ──────────────────
 class Checker {
   constructor() {
     this.errors = []; this.warnings = [];
     this.scopes = [];
     this.loops = 0;
-    this.stats = { features: new Set(), declTypes: new Set(), statements: 0, methods: new Set(), numbers: [] };
+    this.stats = { features: new Set(), declTypes: new Set(), statements: 0, methods: new Set(), numbers: [], userMethods: new Set(), calls: new Map(), returns: 0 };
     this.reportedUnassigned = new Set();
+    this.userMethods = new Map();
+    this.method = null;       // the method being checked (null = main program)
+    this.mainNames = new Map();
+    this.methodLocals = new Map(); // name → method name, for hints in the main program
   }
   error(code, message, at, hint = '') {
     if (this.errors.some(e => e.line === at.line && e.code === code && e.message === message)) return;
@@ -483,14 +589,60 @@ class Checker {
   allNames() { return this.scopes.flatMap(s => [...s.keys()]); }
 
   program(ast) {
+    // Methods can be called before the line where they are written (like C# local functions).
+    const decls = ast.body.filter(s => s.type === 'MethodDecl');
+    this.mainNames = declaredNames(ast.body.filter(s => s.type !== 'MethodDecl'));
+    for (const m of decls) {
+      if (this.userMethods.has(m.name) || m.name === 'drone') {
+        this.error('CS0128', `A local variable or function named '${m.name}' is already defined in this scope`, { line: m.nameLine, col: m.nameCol }, `There is already a method called ${m.name}. Give each method its own name.`);
+        continue;
+      }
+      if (STATIC_CLASSES.includes(m.name)) { this.error('LAB', `'${m.name}' is already used by C#. Choose another name for your method.`, { line: m.nameLine, col: m.nameCol }); continue; }
+      m.resolvedReturn = m.returnType === 'void' ? 'void' : this.resolveType(m.returnType, m);
+      for (const p of m.params) p.resolvedType = this.resolveType(p.varType, p);
+      this.userMethods.set(m.name, m);
+      this.stats.userMethods.add(m.name);
+      this.stats.features.add('method');
+      for (const [n] of declaredNames(m.body.body)) if (!this.methodLocals.has(n)) this.methodLocals.set(n, m.name);
+      for (const p of m.params) if (!this.methodLocals.has(p.name)) this.methodLocals.set(p.name, m.name);
+    }
     this.scopes.push(new Map());
     let A = new Set();
-    for (const s of ast.body) A = this.stmt(s, A);
+    for (const s of ast.body) if (s.type !== 'MethodDecl') A = this.stmt(s, A);
     this.scopes.pop();
+    for (const m of decls) if (this.userMethods.get(m.name) === m) this.methodBody(m);
+    for (const m of decls) if (this.userMethods.get(m.name) === m && !this.stats.calls.has(m.name))
+      this.warnings.push(new CSharpError({ code: 'CS8321', message: `The local function '${m.name}' is declared but never used`, line: m.nameLine, col: m.nameCol, hint: `Writing a method does not run it. Call it with ${m.name}(${m.params.map(p => p.name).join(', ')});` }));
+  }
+  methodBody(m) {
+    const saved = { scopes: this.scopes, loops: this.loops };
+    this.method = m; this.loops = 0;
+    const params = new Map();
+    let A = new Set();
+    for (const p of m.params) {
+      if (params.has(p.name)) { this.error('CS0100', `The parameter name '${p.name}' is a duplicate`, p, 'Each parameter needs a different name.'); continue; }
+      if (p.name === 'drone') { this.error('CS0136', `A local or parameter named 'drone' cannot be declared in this scope because that name is used in an enclosing local scope to define a local or parameter`, p, 'drone is already the name of your drone.'); continue; }
+      const v = { name: p.name, type: p.resolvedType, line: p.line, param: true };
+      params.set(p.name, v); A.add(v);
+    }
+    this.scopes = [params];
+    this.block(m.body, A);
+    if (m.resolvedReturn && m.resolvedReturn !== 'void' && !alwaysReturns(m.body))
+      this.error('CS0161', `'${signature(m)}': not all code paths return a value`, { line: m.nameLine, col: m.nameCol }, `${m.name} promises to give back a value of type ${m.resolvedReturn}, so every way through it must end with return …;`);
+    this.scopes = saved.scopes; this.loops = saved.loops; this.method = null;
   }
   block(s, A) {
     this.scopes.push(new Map());
-    for (const st of s.body) A = this.stmt(st, A);
+    let warned = false;
+    for (let i = 0; i < s.body.length; i++) {
+      const st = s.body[i];
+      A = this.stmt(st, A);
+      if (!warned && i < s.body.length - 1 && alwaysReturns(st) && s.body[i + 1].type !== 'MethodDecl') {
+        warned = true;
+        const nx = s.body[i + 1];
+        this.warnings.push(new CSharpError({ code: 'CS0162', message: 'Unreachable code detected', line: nx.line, col: nx.col, hint: 'return leaves the method straight away: the lines after it never run.' }));
+      }
+    }
     this.scopes.pop();
     return A;
   }
@@ -530,6 +682,8 @@ class Checker {
         return new Set([...a1].filter(v => a2.has(v)));
       }
       case 'While': case 'Do': case 'For': return this.loop(s, A);
+      case 'MethodDecl': return A;
+      case 'Return': return this.returnStmt(s, A);
       case 'Break': case 'Continue':
         if (!this.loops) this.error('CS0139', `No enclosing loop out of which to break or continue`, s, `${s.type.toLowerCase()} only works inside a loop.`);
         return A;
@@ -556,6 +710,26 @@ class Checker {
     }
     this.loops--;
     return out;
+  }
+
+  returnStmt(s, A) {
+    this.stats.features.add('return');
+    this.stats.returns++;
+    const m = this.method;
+    if (!m) {
+      if (s.value) this.type(s.value, A);
+      this.error('LAB', 'return is used inside a method, to finish it and give back a value.', s, 'The main program simply ends after its last line.');
+      return A;
+    }
+    const want = m.resolvedReturn;
+    if (want === 'void') {
+      if (s.value) { this.type(s.value, A); this.error('CS0127', `Since '${signature(m)}' returns void, a return keyword must not be followed by an object expression`, s, `${m.name} is void: it does not give anything back. Write just return; or change void to the type you want to return.`); }
+      return A;
+    }
+    if (!s.value) { this.error('CS0126', `An object of a type convertible to '${want}' is required`, s, `${m.name} must give back a value of type ${want}: return value;`); return A; }
+    const t = this.type(s.value, A);
+    if (t && want) this.convertible(s.value, t, want);
+    return A;
   }
 
   cond(e, A) {
@@ -657,10 +831,17 @@ class Checker {
     let hint = '';
     if (name === 'True' || name === 'False') hint = `In C#, ${name.toLowerCase()} is written in lowercase.`;
     else if (['Move', 'MoveTo', 'Place', 'Build'].includes(name)) hint = `${name} belongs to the drone. Write drone.${name}(...).`;
+    else if (name === 'WriteLine') hint = 'WriteLine belongs to the Console. Write Console.WriteLine(...).';
     else if (['Red', 'Blue', 'Green', 'Yellow', 'White', 'Orange', 'Purple', 'Black'].includes(name)) hint = `Colors are written Color.${name}.`;
     else if (DIRECTIONS.includes(name)) hint = `Directions are written Direction.${name}.`;
+    else if (this.method && this.mainNames.has(name)) {
+      this.error('LAB', `'${name}' belongs to the main program, not to ${this.method.name}`, e, `A method only sees its parameters and its own variables. Pass ${name} in as a parameter: ${this.method.name}(…, int ${name}).`);
+      return;
+    }
+    else if (!this.method && this.methodLocals.has(name)) hint = `${name} only exists inside the method ${this.methodLocals.get(name)}. To get a value out of a method, use return.`;
+    else if (this.method && this.methodLocals.has(name) && this.methodLocals.get(name) !== this.method.name) hint = `${name} only exists inside the method ${this.methodLocals.get(name)}. Each method has its own variables.`;
     else {
-      const s = suggest(name, [...this.allNames(), 'drone', ...STATIC_CLASSES]);
+      const s = suggest(name, [...this.allNames(), ...this.userMethods.keys(), 'drone', ...STATIC_CLASSES]);
       hint = s ? `Did you mean ${s}? Names in C# are case-sensitive.` : `Create it first, for example: int ${name} = 0;`;
     }
     this.error('CS0103', `The name '${name}' does not exist in the current context`, e, hint);
@@ -670,7 +851,7 @@ class Checker {
     return e.type === 'Ident' && STATIC_CLASSES.includes(e.name) && !this.lookup(e.name) ? e.name : null;
   }
 
-  type(e, A) { const t = this.infer(e, A); e.ty = t; return t; }
+  type(e, A) { const t = this.infer(e, A); e.ty = t; e.hasUserCall = !!e.userCall || kidsOf(e).some(hasUserCall); return t; }
   infer(e, A) {
     switch (e.type) {
       case 'Num': this.stats.numbers.push(e.value); return e.ty;
@@ -691,6 +872,7 @@ class Checker {
         if (e.name === 'drone' && !this.lookup('drone')) return 'Drone';
         if (this.staticClass(e)) { this.error('CS0119', `'${e.name}' is a type, which is not valid in the given context`, e, e.name === 'Color' ? 'Choose one color: Color.Red' : ''); return null; }
         const v = this.lookup(e.name);
+        if (!v && this.userMethods.has(e.name)) { this.error('CS0428', `Cannot convert method group '${e.name}' to non-delegate type`, e, `${e.name} is a method. To run it, add brackets: ${e.name}(…)`); return null; }
         if (!v) { this.unknownName(e); return null; }
         if (!A.has(v)) this.unassigned(e, v);
         return v.type;
@@ -786,13 +968,46 @@ class Checker {
     return null;
   }
 
+  userCall(e, m, types) {
+    this.stats.calls.set(m.name, (this.stats.calls.get(m.name) || 0) + 1);
+    this.stats.features.add('call');
+    if (this.method) this.stats.features.add('callInMethod');
+    if (this.method === m) this.stats.features.add('recursion');
+    e.method = 'user'; e.decl = m; e.userCall = true;
+    const ret = m.resolvedReturn ?? null;
+    if (types.length !== m.params.length) {
+      this.error('CS1501', `No overload for method '${m.name}' takes ${types.length} arguments`, e,
+        m.params.length ? `${m.name} needs ${m.params.length} value${m.params.length === 1 ? '' : 's'}: ${m.name}(${m.params.map(p => `${p.varType} ${p.name}`).join(', ')}).` : `${m.name} has no parameters: call it with empty brackets, ${m.name}().`);
+      return ret;
+    }
+    types.forEach((t, i) => {
+      const want = m.params[i].resolvedType;
+      if (!t || !want || implicitOK(t, want)) return;
+      let hint = `Parameter ${m.params[i].name} of ${m.name} is of type ${want}.`;
+      if (want === 'Color' && t === 'string') hint = 'Write colors as Color.Red, not "Red". ' + hint;
+      else if (isNum(want) && t === 'string') hint = 'Numbers are written without quotes. ' + hint;
+      else if (want === 'int' && isNum(t)) hint = 'Use (int) to convert it. ' + hint;
+      this.error('CS1503', `Argument ${i + 1}: cannot convert from '${t}' to '${want}'`, e.args[i], hint);
+    });
+    return ret;
+  }
+
   call(e, A) {
     const argTypes = () => e.args.map(a => this.type(a, A));
     const c = e.callee;
     if (c.type === 'Ident') {
-      argTypes();
-      if (this.lookup(c.name)) { this.error('CS0149', 'Method name expected', c, `${c.name} is a variable, not a method.`); return null; }
-      this.unknownName(c); return null;
+      if (this.lookup(c.name)) { argTypes(); this.error('CS0149', 'Method name expected', c, `${c.name} is a variable, not a method.`); return null; }
+      const m = this.userMethods.get(c.name);
+      if (!m) {
+        argTypes();
+        const s = suggest(c.name, [...this.userMethods.keys()]);
+        if (s) { this.error('CS0103', `The name '${c.name}' does not exist in the current context`, c, `Did you mean ${s}? Names in C# are case-sensitive.`); return null; }
+        const other = suggest(c.name, [...this.allNames(), 'drone', ...STATIC_CLASSES]);
+        if (['Move', 'MoveTo', 'Place', 'Build', 'WriteLine'].includes(c.name) || other) { this.unknownName(c); return null; }
+        this.error('CS0103', `The name '${c.name}' does not exist in the current context`, c, `There is no method called ${c.name} yet. Declare it below the main program: void ${c.name}(…) { … }`);
+        return null;
+      }
+      return this.userCall(e, m, argTypes());
     }
     if (c.type !== 'Member') { argTypes(); this.error('CS0149', 'Method name expected', c); return null; }
     let key, owner = this.staticClass(c.object);
@@ -912,8 +1127,9 @@ export function showStatement(s) {
 }
 
 // ─── Runner (executes step by step) ──────────────────────────────────────────
-class Signal { constructor(kind) { this.kind = kind; } }
+class Signal { constructor(kind, value) { this.kind = kind; this.value = value; } }
 const BREAK = new Signal('break'), CONTINUE = new Signal('continue');
+const MAX_DEPTH = 100;
 
 export class Runner {
   constructor(ast, world, { maxSteps = 20000, calcTowers = false } = {}) {
@@ -929,6 +1145,9 @@ export class Runner {
     this.log = [];
     this.changed = new Set();
     this.uid = 0;
+    this.memo = new Map();   // values of the student's own method calls, for the expression being evaluated
+    this.depth = 0;          // how many method calls are running (0 = main program)
+    this.frames = [];        // call stack: { name, text, callLine }
   }
 
   // Generator: yields one event per visible step.
@@ -937,6 +1156,7 @@ export class Runner {
     // Memory panel still shows the variables at the moment of the error.
     this.pushScope('Program', 1, 'program');
     for (const s of this.ast.body) {
+      if (s.type === 'MethodDecl') continue;
       const sig = yield* this.exec(s);
       if (sig) break;
     }
@@ -944,9 +1164,16 @@ export class Runner {
   }
   runToEnd() { for (const _ of this.run()); return this; }
 
-  pushScope(label, line, kind) { this.scopes.push({ id: ++this.uid, label, line, kind, vars: new Map(), iteration: 0 }); }
+  pushScope(label, line, kind) { const sc = { id: ++this.uid, label, line, kind, vars: new Map(), iteration: 0 }; this.scopes.push(sc); return sc; }
   popScope() { this.scopes.pop(); }
-  lookup(name) { for (let i = this.scopes.length - 1; i >= 0; i--) { const v = this.scopes[i].vars.get(name); if (v) return v; } throw new Error('Unknown variable ' + name); }
+  // A method only sees its own frame: the search stops at the scope where the method call started.
+  lookup(name) {
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      const v = this.scopes[i].vars.get(name); if (v) return v;
+      if (this.scopes[i].kind === 'method') break;
+    }
+    throw new Error('Unknown variable ' + name);
+  }
 
   tick(line, count = true) {
     this.line = line;
@@ -962,7 +1189,70 @@ export class Runner {
     this.log.push({ line, text: summary, step: this.steps });
     if (this.log.length > 200) this.log.shift();
   }
-  at(s, count = true) { this.tick(s.line, count); return { kind: 'line', line: s.line }; }
+  at(s, count = true) { this.tick(s.line, count); return { kind: 'line', line: s.line, depth: this.depth }; }
+
+  // Runs the student's own method calls inside an expression (step by step),
+  // storing their results so the normal evaluation can use them.
+  *pre(e) {
+    if (!e || !hasUserCall(e)) return;
+    if (e.type === 'Call' && e.method === 'user') {
+      for (const a of e.args) yield* this.pre(a);
+      const args = e.args.map(a => this.eval(a));
+      this.memo.set(e, yield* this.invoke(e, args));
+      return;
+    }
+    if (e.type === 'Binary' && (e.op === '&&' || e.op === '||')) {
+      yield* this.pre(e.left);
+      const l = this.eval(e.left);
+      if (e.op === '&&' ? l : !l) yield* this.pre(e.right);
+      return;
+    }
+    if (e.type === 'Cond') {
+      yield* this.pre(e.test);
+      yield* this.pre(this.eval(e.test) ? e.a : e.b);
+      return;
+    }
+    for (const k of kidsOf(e)) yield* this.pre(k);
+  }
+  *preStmt(s) {
+    switch (s.type) {
+      case 'VarDecl': for (const d of s.decls) if (d.init) yield* this.pre(d.init); return;
+      case 'Assign': yield* this.pre(s.value); return;
+      case 'ExprStmt': yield* this.pre(s.expr); return;
+      case 'Return': if (s.value) yield* this.pre(s.value); return;
+    }
+  }
+
+  *invoke(call, args) {
+    const m = call.decl, callLine = this.line;
+    const text = `${m.name}(${args.map((a, i) => literal(a, m.params[i].resolvedType)).join(', ')})`;
+    if (this.depth >= MAX_DEPTH) throw this.runtimeError('StackOverflowException', 'Stack overflow: too many method calls inside each other.', `${m.name} keeps calling itself and never stops. A method that calls itself needs a case where it returns without calling again.`);
+    const scope = this.pushScope(text, m.line, 'method');
+    scope.method = m.name; scope.callLine = callLine; scope.returnType = m.resolvedReturn;
+    this.frames.push({ name: m.name, text, callLine, scope });
+    this.depth++;
+    m.params.forEach((p, i) => {
+      const v = { name: p.name, type: p.resolvedType, value: undefined, assigned: false, line: p.line, id: ++this.uid, param: true };
+      scope.vars.set(p.name, v);
+      this.set(v, args[i]);
+    });
+    this.tick(m.line);
+    const paramText = m.params.map((p, i) => `${p.name} = ${literal(scope.vars.get(p.name).value, p.resolvedType)}`).join(', ');
+    this.note(m.line, `called ${text}${paramText ? ` · ${paramText}` : ''}`, `line ${callLine} calls ${text}${paramText ? `: ${paramText}` : ''}`);
+    yield { kind: 'call', line: m.line, depth: this.depth, method: m.name, text, callLine };
+    let value, sig;
+    for (const st of m.body.body) { sig = yield* this.exec(st); if (sig) break; }
+    if (sig && sig.kind === 'return') value = sig.value;
+    this.depth--;
+    this.frames.pop();
+    this.popScope();
+    this.line = callLine;
+    this.tick(callLine, false);
+    const shown = m.resolvedReturn === 'void' ? `${text} finished` : `${text} gave back ${literal(value, m.resolvedReturn)}`;
+    this.note(callLine, shown, `back on line ${callLine}: ${shown}`);
+    yield { kind: 'return', line: callLine, depth: this.depth, method: m.name, text, value, type: m.resolvedReturn };
+    return value;
+  }
 
   runtimeError(exception, message, hint = '') {
     return new CSharpError({ kind: 'runtime', exception, message, line: this.line, hint });
@@ -984,9 +1274,23 @@ export class Runner {
       }
       case 'VarDecl': case 'Assign': case 'IncDec': case 'ExprStmt':
         yield this.at(s);
+        yield* this.preStmt(s);
+        this.line = s.line;
         this.simple(s);
         return;
+      case 'MethodDecl': return;
+      case 'Return': {
+        yield this.at(s);
+        yield* this.preStmt(s);
+        this.line = s.line;
+        const m = this.frames.at(-1);
+        const type = s.value ? (m?.scope.returnType || s.value.ty) : null;
+        const value = s.value ? this.convert(this.eval(s.value), type) : undefined;
+        this.note(s.line, s.value ? `return ${literal(value, type)}` : 'return → leave the method', s.value ? `${show(s.value)} is ${literal(value, type)}: give it back to line ${m?.callLine}` : 'return: leave the method');
+        return new Signal('return', value);
+      }
       case 'If': {
+        yield* this.pre(s.test);
         const v = this.cond(s.test, s.line);
         yield this.condEvent(s, s.test, v, v ? 'true → run the if block' : s.alt ? 'false → run the else part' : 'false → skip the if block');
         if (v) return yield* this.exec(s.cons, `if (line ${s.line})`);
@@ -996,12 +1300,14 @@ export class Runner {
       case 'While': {
         let n = 0;
         for (;;) {
+          yield* this.pre(s.test);
           const v = this.cond(s.test, s.line);
           yield this.condEvent(s, s.test, v, v ? `true → loop turn ${n + 1}` : `false → the loop ends after ${n} turn${n === 1 ? '' : 's'}`);
           if (!v) break;
           n++;
           const sig = yield* this.exec(s.body, `while · turn ${n}`);
           if (sig === BREAK) break;
+          if (sig && sig.kind === 'return') return sig;
         }
         return;
       }
@@ -1011,6 +1317,8 @@ export class Runner {
           n++;
           const sig = yield* this.exec(s.body, `do · turn ${n}`);
           if (sig === BREAK) break;
+          if (sig && sig.kind === 'return') return sig;
+          yield* this.pre(s.test);
           const v = this.cond(s.test, s.whileLine);
           yield this.condEvent({ line: s.whileLine }, s.test, v, v ? 'true → repeat' : `false → the loop ends after ${n} turn${n === 1 ? '' : 's'}`);
           if (!v) break;
@@ -1019,9 +1327,10 @@ export class Runner {
       }
       case 'For': {
         this.pushScope(`for (line ${s.line})`, s.line, 'for');
-        if (s.init) { yield { ...this.at(s, false), phase: 'init' }; this.simple(s.init, s.line); }
+        if (s.init) { yield { ...this.at(s, false), phase: 'init' }; yield* this.preStmt(s.init); this.simple(s.init, s.line); }
         let n = 0;
         for (;;) {
+          if (s.test) yield* this.pre(s.test);
           const v = s.test ? this.cond(s.test, s.line) : true;
           yield this.condEvent(s, s.test, v, v ? `true → loop turn ${n + 1}` : `false → the loop ends after ${n} turn${n === 1 ? '' : 's'}`);
           if (!v) break;
@@ -1029,7 +1338,8 @@ export class Runner {
           this.scopes.at(-1).iteration = n;
           const sig = yield* this.exec(s.body, `for · turn ${n}`);
           if (sig === BREAK) break;
-          if (s.update) { yield { ...this.at(s, false), phase: 'update' }; this.simple(s.update, s.line); }
+          if (sig && sig.kind === 'return') { this.popScope(); return sig; }
+          if (s.update) { yield { ...this.at(s, false), phase: 'update' }; yield* this.preStmt(s.update); this.simple(s.update, s.line); }
         }
         this.popScope();
         return;
@@ -1099,7 +1409,7 @@ export class Runner {
       text = steps.join('  →  ');
     }
     this.note(s.line, `${value ? '✓' : '✗'} ${test ? show(test, e => literal(this.eval(e), e.ty)) : 'true'} is ${value}`, `${test ? show(test) : 'true'} is ${value}: ${outcome.split('→ ')[1] || outcome}`);
-    return { kind: 'cond', line: s.line, value, text, outcome };
+    return { kind: 'cond', line: s.line, value, text, outcome, depth: this.depth };
   }
 
   convert(v, type) {
@@ -1147,6 +1457,7 @@ export class Runner {
       }
       case 'ExprStmt': {
         const e = s.expr;
+        if (e.type === 'Call' && e.method === 'user') return; // the call already explained itself
         const result = this.eval(e, true);
         this.note(line, result || showStatement(s));
         return;
@@ -1207,7 +1518,13 @@ export class Runner {
         if (e.name === 'Length') { this.lastText = { text: o, from: 0, to: o.length, count: true }; return o.length; }
         return undefined;
       }
-      case 'Call': return this.callMethod(e, statement);
+      case 'Call':
+        if (e.method === 'user') {
+          if (!this.memo.has(e)) throw new Error('Method call evaluated before it ran');
+          const v = this.memo.get(e);
+          return statement ? (e.decl.resolvedReturn === 'void' ? `called ${show(e)}` : `${show(e)} → ${literal(v, e.decl.resolvedReturn)}`) : v;
+        }
+        return this.callMethod(e, statement);
       case 'Unary': {
         const v = this.eval(e.arg);
         if (e.op === '!') return !v;

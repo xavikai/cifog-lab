@@ -242,3 +242,11 @@ dialog::backdrop{background:#0b0c0ecc}dialog h2{font-size:1.6rem;letter-spacing:
   .speed{margin-left:0}.app-footer{height:auto;padding:12px 16px;flex-direction:column;align-items:flex-start;gap:4px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* Methods: call stack and waiting caller lines */
+.ln.waiting{background:#2a3a5222;box-shadow:inset 3px 0 #5f86c4}
+.stack-label{font-size:.6rem;font-weight:700;letter-spacing:1.1px;color:#8f98a4;text-transform:uppercase;margin:2px 2px 6px}
+.frame{margin-bottom:6px}.frame.waiting{opacity:.62}.frame.waiting .scope{border-style:dashed}
+.frame.active>.scope.method{border-color:#5f86c4;background:#1c2330;box-shadow:0 0 0 1px #5f86c455}
+.scope.method .scope-head{color:#9db8e3}.frame-name{font-family:var(--mono,monospace);text-transform:none;letter-spacing:0;font-size:.72rem;color:#cfe0ff}
+#step-into[hidden]{display:none}
