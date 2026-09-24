@@ -12,6 +12,9 @@ const $$=selector=>[...document.querySelectorAll(selector)];
 const ns='http://www.w3.org/2000/svg';
 const S=(tag,attrs={})=>{const node=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
 const V3=values=>new THREE.Vector3(...values);
+// Blender is Z-up; the Three.js preview is Y-up.
+const blenderToWorld=([x,y,z])=>new THREE.Vector3(x,z,y);
+const worldToBlender=vector=>[vector.x,vector.z,vector.y];
 const dot2=(a,b)=>a[0]*b[0]+a[1]*b[1];
 // Edge keys carry their part: "cube|F-T", "seat|B-L". Face keys: "cube:F".
 const ek=(part,edge)=>`${part}|${edge}`;
@@ -25,7 +28,7 @@ const state={
  hoverEdge:null,hoverFace:null,
  charts:[],invalid:null,fold:1,stretch:'none',listPart:'cube',staleReason:'',
  // Mesh data (what Unwrap reads) and Object scale (what you see) are kept apart, as in Blender.
- mesh:{cube:structuredClone(MODELS.cube),chair:structuredClone(MODELS.chair)},objScale:{cube:[1,1,1],chair:[1,1,1]}
+ mesh:{cube:structuredClone(MODELS.cube),chair:structuredClone(MODELS.chair)},objScale:{cube:[1,1,1],chair:[1,1,1]},objLocation:{cube:[0,0,0],chair:[0,0,0]}
 };
 const pointer={area:null,x:innerWidth/2,y:innerHeight/2};
 
@@ -44,10 +47,10 @@ function message(text,warning=false){const el=$('#status-msg');el.textContent=te
 const K=(keys,label)=>`<span>${keys.map(key=>`<kbd>${key}</kbd>`).join('')} ${label}</span>`;
 function updateStatusKeys(){
  let html;
- if(state.mode==='object')html=K(['Tab'],'Edit Mode')+K(['S'],'Scale')+K(['Ctrl','A'],'Apply')+K(['Drag'],'Orbit')+K(['Wheel'],'Zoom');
+ if(state.mode==='object')html=K(['LMB'],'Select')+K(['G'],'Move')+K(['Alt','G'],'Clear Location')+K(['S'],'Scale')+K(['Ctrl','A'],'Apply')+K(['MMB'],'Orbit')+K(['Shift','MMB'],'Pan')+K(['Wheel'],'Zoom');
  else if(state.hoverEdge&&state.selectMode==='edge')html=state.tool==='seam'?K(['LMB'],isSeam(state.hoverEdge)?'Clear this seam':'Mark this seam')+K(['Shift','LMB'],'Add to selection'):K(['LMB'],'Select edge')+K(['Shift','LMB'],'Add / remove')+K(['RMB'],'Context menu')+K(['U'],'UV menu · 3D Viewport');
  else if(state.hoverFace&&state.selectMode==='face')html=K(['LMB'],'Select face')+K(['Shift','LMB'],'Add / remove')+K(['RMB'],'Context menu')+K(['U'],'UV menu · 3D Viewport');
- else html=K(['LMB'],'Select')+K(['Drag'],'Orbit')+K(['A'],'All')+K(['Alt','A'],'None')+K(['U'],'UV menu · 3D Viewport')+K(['Ctrl','E'],'Edge menu')+K(['Tab'],'Mode')+K(['2','3'],'Edge / Face');
+ else html=K(['LMB'],'Select')+K(['MMB'],'Orbit')+K(['Shift','MMB'],'Pan')+K(['Wheel'],'Zoom')+K(['A'],'All')+K(['Alt','A'],'None')+K(['U'],'UV menu · 3D Viewport')+K(['Ctrl','E'],'Edge menu')+K(['Tab'],'Mode')+K(['2','3'],'Edge / Face');
  $('#status-keys').innerHTML=html;
 }
 function seamTargets(mark){
@@ -127,6 +130,7 @@ function setSelectMode(mode,announce=true){
 }
 function setMode(mode){
  if(state.mode===mode)return;
+ if(moveModal)finishMove(false);
  if(mode==='edit')state.objectSelected=true;
  state.mode=mode;state.hoverEdge=null;state.hoverFace=null;closeMenu();
  message(mode==='edit'?(nonUniform()?'Edit Mode. Careful: the object scale is still not applied, so Unwrap will stretch the texture.':'Edit Mode: you can now select edges and faces.'):'Object Mode: transform the whole object here (S to scale, Ctrl A to apply). Seams and UVs are edited in Edit Mode (Tab).',mode==='edit'&&nonUniform());
@@ -188,8 +192,8 @@ const MENUS={
  context:()=>({title:state.selectMode==='edge'?'Edge Context Menu':'Face Context Menu',items:[...markItems(),sep,item('Select All',selectAll,{key:'A'}),item('Select None',()=>deselectAll(),{key:'Alt A'})]}),
  select:()=>({title:'Select',items:[item('All',selectAll,{key:'A'}),item('None',()=>deselectAll(),{key:'Alt A'}),sep,item('Edge Select',()=>setSelectMode('edge'),{key:'2',check:state.selectMode==='edge'}),item('Face Select',()=>setSelectMode('face'),{key:'3',check:state.selectMode==='face'})]}),
  'uv-editor':()=>({title:'UV',items:[item('Unwrap',()=>unwrap(),{key:'U'}),sep,item('Pack Islands',packIslands,{key:'Ctrl P',disabled:!!state.invalid}),item('Average Islands Scale',averageScale,{key:'Ctrl A',disabled:!!state.invalid}),sep,item('Live Unwrap',()=>setLive(!state.live),{check:state.live,hint:'Re-unwrap every time a seam changes'})]}),
- object:()=>({title:'Object',items:[item('Apply ›  Scale',applyScale,{key:'Ctrl A',disabled:!scaled(),hint:'Bake the scale into the mesh data'}),item('Scale',startScaleModal,{key:'S',hint:'Then X / Y / Z, a number, Enter'}),sep,item('Reset Object',resetObject,{hint:'Lab: original mesh, scale 1'})]}),
- apply:()=>({title:'Apply',items:[item('Location',null,{disabled:true}),item('Rotation',null,{disabled:true}),item('Scale',applyScale,{disabled:!scaled(),hint:'Mesh data gets the real proportions; scale becomes 1'}),item('All Transforms',applyScale,{disabled:!scaled()})]}),
+ object:()=>({title:'Object',items:[item('Move',startMoveModal,{key:'G',disabled:!state.objectSelected,hint:'Move freely or constrain to X / Y / Z'}),item('Clear Location',()=>setObjectLocation([0,0,0]),{key:'Alt G',disabled:!state.objectSelected}),item('Scale',startScaleModal,{key:'S',disabled:!state.objectSelected,hint:'Then X / Y / Z, a number, Enter'}),sep,item('Apply ›  Scale',applyScale,{key:'Ctrl A',disabled:!state.objectSelected||!scaled(),hint:'Bake the scale into the mesh data'}),item('Reset Object',resetObject,{hint:'Lab: original mesh, location and scale'})]}),
+ apply:()=>({title:'Apply',items:[item('Location',null,{disabled:true}),item('Rotation',null,{disabled:true}),item('Scale',applyScale,{disabled:!state.objectSelected||!scaled(),hint:'Mesh data gets the real proportions; scale becomes 1'}),item('All Transforms',applyScale,{disabled:!state.objectSelected||!scaled()})]}),
  'uv-context':()=>({title:'UV Context Menu',items:[item('Unwrap',()=>unwrap(),{key:'U'}),item('Pack Islands',packIslands,{key:'Ctrl P',disabled:!!state.invalid}),item('Average Islands Scale',averageScale,{key:'Ctrl A',disabled:!!state.invalid})]})
 };
 const keyName={uv:'U',edge:'Ctrl E',apply:'Ctrl A'};
@@ -231,6 +235,7 @@ let renderer,scene,camera,controls,dirty=true,animation=0,previewReady=false;
 const objectGroups={},edgeGroups={},faceMeshes={cube:{},chair:{}},edgeObjects=new Map(),hitMeshes={cube:[],chair:[]};
 const views={cube:new THREE.Vector3(4.2,3,5.4),chair:new THREE.Vector3(5,4.3,6.3)};
 const targetY={cube:0,chair:1.45},flatSpan={cube:4.4,chair:5};
+const viewTargets={cube:new THREE.Vector3(0,0,0),chair:new THREE.Vector3(0,1.45,0)};
 
 // One texture for the whole object, painted from the UV map. The 3D faces
 // sample it through their UVs, exactly like an image texture in Blender.
@@ -301,6 +306,14 @@ function placeEdges(model){
  }
  dirty=true;
 }
+function placeObject(model){
+ const location=blenderToWorld(state.objLocation[model]).multiplyScalar(state.fold);
+ objectGroups[model]?.position.copy(location);
+ edgeGroups[model]?.position.copy(location);
+ objectGroups[model]?.updateMatrixWorld(true);
+ edgeGroups[model]?.updateMatrixWorld(true);
+ dirty=true;
+}
 // (Re)build an object from its current mesh data — also used by Apply Scale.
 function buildModel(model){
  for(const group of [objectGroups[model],edgeGroups[model]])if(group){scene.remove(group);group.traverse(item=>{if(item.geometry&&item.geometry!==cylinder)item.geometry.dispose();if(item.material&&item.material.map!==uvTexture)item.material.dispose?.();});}
@@ -313,6 +326,7 @@ function buildModel(model){
  }
  placeEdges(model);
  const visible=state.model===model;objectGroups[model].visible=edgeGroups[model].visible=visible;
+ placeObject(model);
 }
 const foldReady=()=>previewReady&&!state.invalid&&state.charts.length>0;
 function updateFold(amount){
@@ -327,10 +341,13 @@ function updateFold(amount){
   for(const [key,mesh] of Object.entries(faceMeshes[model])){const [partId,id]=key.split(':');mesh.matrix.copy(matrices.get(key)||facePose(byId[partId],id));mesh.matrixWorldNeedsUpdate=true;}
   group.updateMatrixWorld(true);
  }
+ placeObject(model);
  if(camera&&controls){
   const flat=new THREE.Vector3(0,targetY[model],flatSpan[model]*2);
-  if(amount<.999)camera.position.copy(flat).lerp(views[model],amount);
-  controls.enabled=amount>.97;controls.target.set(0,targetY[model],0);controls.update();
+  controls.enabled=true;controls.enableRotate=amount>=.999;
+  if(amount<.999){camera.position.copy(flat).lerp(views[model],amount);controls.target.set(0,targetY[model],0);}
+  else{camera.position.copy(views[model]);controls.target.copy(viewTargets[model]);}
+  controls.update();
  }
  updateScene();
 }
@@ -375,6 +392,11 @@ function updateScene(){
  * ------------------------------------------------------------------ */
 const nonUniform=(model=state.model)=>{const s=state.objScale[model];return Math.max(...s)-Math.min(...s)>1e-6;};
 const scaled=(model=state.model)=>state.objScale[model].some(s=>Math.abs(s-1)>1e-6);
+function setObjectLocation(location,announce=true){
+ state.objLocation[state.model]=location.map(value=>Math.round(value*100)/100);
+ placeObject(state.model);updateTransformPanel();
+ if(announce)message(`Object moved to ${state.objLocation[state.model].map(value=>value.toFixed(2)).join(', ')}. The UV map stays on the object.`);
+}
 function setObjectScale(scale,announce=true){
  state.objScale[state.model]=scale.map(s=>Math.round(Math.min(4,Math.max(.25,s))*100)/100);
  placeEdges(state.model);updateFold(state.fold);updateTransformPanel();
@@ -382,6 +404,7 @@ function setObjectScale(scale,announce=true){
 }
 function applyScale(){
  if(state.mode!=='object'){message('Apply Scale works in Object Mode. Press Tab first (the Blender way: Ctrl A in Object Mode).',true);return;}
+ if(!state.objectSelected){message('Select the object before applying scale.',true);return;}
  if(!scaled()){message('Scale is already 1, 1, 1: nothing to apply.');return;}
  const s=state.objScale[state.model],wasNonUniform=nonUniform();
  for(const part of state.mesh[state.model]){part.size=part.size.map((n,i)=>n*s[i]);part.position=part.position.map((n,i)=>n*s[i]);}
@@ -390,17 +413,18 @@ function applyScale(){
  else message('Scale applied. It was uniform, so the UV proportions were already correct.');
  updateHeader();
 }
-function resetObject(){state.mesh[state.model]=structuredClone(MODELS[state.model]);state.objScale[state.model]=[1,1,1];buildModel(state.model);updateTransformPanel();unwrap('Object reset: original mesh data, scale 1, 1, 1.',null,true);}
+function resetObject(){state.mesh[state.model]=structuredClone(MODELS[state.model]);state.objScale[state.model]=[1,1,1];state.objLocation[state.model]=[0,0,0];buildModel(state.model);updateTransformPanel();unwrap('Object reset: original mesh data, location 0, 0, 0 and scale 1, 1, 1.',null,true);}
 function updateTransformPanel(){
- const s=state.objScale[state.model],object=state.mode==='object';
- $$('[data-scale-axis]').forEach(input=>{const i=Number(input.dataset.scaleAxis);if(document.activeElement!==input)input.value=s[i].toFixed(2);input.disabled=!object;});
- $('#apply-scale').disabled=!object||!scaled();
+ const s=state.objScale[state.model],location=state.objLocation[state.model],object=state.mode==='object';
+ $$('[data-location-axis]').forEach(input=>{const i=Number(input.dataset.locationAxis);if(document.activeElement!==input)input.value=location[i].toFixed(2);input.disabled=!object||!state.objectSelected;});
+ $$('[data-scale-axis]').forEach(input=>{const i=Number(input.dataset.scaleAxis);if(document.activeElement!==input)input.value=s[i].toFixed(2);input.disabled=!object||!state.objectSelected;});
+ $('#apply-scale').disabled=!object||!state.objectSelected||!scaled();
  const panel=$('#transform-panel');panel.classList.toggle('warn',nonUniform());panel.classList.toggle('locked',!object);
- $('#transform-note').textContent=object?(scaled()?'Not applied: Unwrap ignores this scale. Ctrl A › Scale.':'Scale 1, 1, 1: mesh and object agree.'):(nonUniform()?'Scale not applied! Tab to Object Mode › Ctrl A › Scale.':'Change scale in Object Mode (Tab).');
+ $('#transform-note').textContent=object?(!state.objectSelected?'Select the object to edit its transforms.':scaled()?'Not applied: Unwrap ignores this scale. Ctrl A › Scale.':'Scale 1, 1, 1: mesh and object agree.'):(nonUniform()?'Scale not applied! Tab to Object Mode › Ctrl A › Scale.':'Change scale in Object Mode (Tab).');
 }
 // Blender-like modal scale: S, optional X / Y / Z, type a number, Enter.
 let scaleModal=null;
-function startScaleModal(){if(state.mode!=='object'){message('In Edit Mode, S would scale the selected elements. To scale the object, press Tab for Object Mode, then S.');return;}scaleModal={axis:null,text:'',start:[...state.objScale[state.model]]};showScaleModal();}
+function startScaleModal(){if(state.mode!=='object'){message('In Edit Mode, S would scale the selected elements. To scale the object, press Tab for Object Mode, then S.');return;}if(!state.objectSelected){message('Select the object before pressing S.',true);return;}scaleModal={axis:null,text:'',start:[...state.objScale[state.model]]};showScaleModal();}
 function showScaleModal(){const m=scaleModal,axis=m.axis===null?'':` along ${'XYZ'[m.axis]}`;message(`Scale${axis}: ${m.text||'type a value'} · X / Y / Z pick an axis · Enter confirm · Esc cancel`);}
 function scaleModalKey(event){
  const m=scaleModal,key=event.key.toLowerCase();event.preventDefault();
@@ -412,6 +436,66 @@ function scaleModalKey(event){
  const v=parseFloat(m.text);
  const next=[...m.start];if(Number.isFinite(v)&&v>0)for(let i=0;i<3;i++)if(m.axis===null||m.axis===i)next[i]=m.start[i]*v;
  setObjectScale(next,false);showScaleModal();
+}
+// Blender-style G transform: the cursor moves the object in the view plane;
+// X/Y/Z constrain it to a world axis and typed numbers give an exact distance.
+let moveModal=null;
+function startMoveModal(){
+ if(state.mode!=='object'||!state.objectSelected){message('Select the object in Object Mode before pressing G.',true);return;}
+ if(state.fold<.999){message('Fold back to the 3D object before moving it.',true);return;}
+ moveModal={start:[...state.objLocation[state.model]],axis:null,text:'',x:pointer.x,y:pointer.y};
+ showMoveModal();
+}
+function showMoveModal(){
+ const m=moveModal,axis=m.axis===null?'freely':`on ${'XYZ'[m.axis]}`;
+ message(`Move ${axis}${m.text?` · ${m.text}`:''}. Move the mouse or type a value · X/Y/Z constrain · LMB/Enter confirm · RMB/Esc cancel.`);
+}
+function movePreview(x,y){
+ if(!moveModal||!camera)return;
+ const m=moveModal,rect=renderer.domElement.getBoundingClientRect(),distance=camera.position.distanceTo(controls.target);
+ const units=2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)*distance/rect.height;
+ const dx=x-m.x,dy=y-m.y,delta=new THREE.Vector3();
+ if(m.text){
+  const amount=Number(m.text);
+  if(Number.isFinite(amount)){
+   if(m.axis!==null){const components=[0,0,0];components[m.axis]=amount;delta.copy(blenderToWorld(components));}
+   else{
+    const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
+    const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+    delta.addScaledVector(right,dx).addScaledVector(up,-dy);
+    if(delta.lengthSq()<1e-6)delta.copy(right);
+    delta.normalize().multiplyScalar(amount);
+   }
+  }
+ }else if(m.axis===null){
+  const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
+  const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+  delta.addScaledVector(right,dx*units).addScaledVector(up,-dy*units);
+ }else{
+  const origin=blenderToWorld(m.start).add(new THREE.Vector3(0,targetY[state.model],0));
+  const axis=blenderToWorld([0,0,0].map((_,i)=>i===m.axis?1:0));
+  const a=origin.clone().project(camera),b=origin.clone().add(axis).project(camera);
+  const vx=(b.x-a.x)*rect.width/2,vy=-(b.y-a.y)*rect.height/2,length=vx*vx+vy*vy;
+  const amount=length>4?(dx*vx+dy*vy)/length:-dy*units;
+  delta.addScaledVector(axis,amount);
+ }
+ const blenderDelta=worldToBlender(delta);
+ setObjectLocation(m.start.map((value,i)=>value+blenderDelta[i]),false);
+}
+function finishMove(commit){
+ if(!moveModal)return;
+ const start=moveModal.start;moveModal=null;
+ if(!commit){setObjectLocation(start,false);message('Move cancelled.');}
+ else message(`Move confirmed. Location: ${state.objLocation[state.model].map(value=>value.toFixed(2)).join(', ')}.`);
+}
+function moveModalKey(event){
+ const m=moveModal,key=event.key.toLowerCase();event.preventDefault();
+ if(key==='escape'){finishMove(false);return;}
+ if(key==='enter'){finishMove(true);return;}
+ if('xyz'.includes(key)&&key.length===1){m.axis='xyz'.indexOf(key);showMoveModal();movePreview(pointer.x,pointer.y);return;}
+ if(/^[0-9.]$/.test(key)||key==='-'&&m.text==='')m.text+=key;
+ else if(key==='backspace')m.text=m.text.slice(0,-1);
+ movePreview(pointer.x,pointer.y);showMoveModal();
 }
 
 /* ------------------------------------------------------------------ *
@@ -545,13 +629,14 @@ function refreshSelection(){
  * ------------------------------------------------------------------ */
 function switchModel(model){
  if(state.model===model)return;animation++;
+ if(moveModal)finishMove(false);
  state.model=model;state.objectSelected=true;state.listPart=model==='cube'?'cube':'seat';state.activeFace=model==='cube'?'cube:F':'seat:T';
  state.selEdges.clear();state.selFaces.clear();state.activeEdge=null;state.hoverEdge=null;state.hoverFace=null;state.stale=false;
  $$('[data-model]').forEach(button=>{button.classList.toggle('active',button.dataset.model===model);button.setAttribute('aria-pressed',String(button.dataset.model===model));});
  $('#object-title').textContent=model==='cube'?'Cube':'Chair · 6 separate box parts';
  $('#preset-section').hidden=model!=='cube';$('#part-label').hidden=model!=='chair';
  for(const name of ['cube','chair'])if(objectGroups[name]){objectGroups[name].visible=edgeGroups[name].visible=name===model;}
- if(camera&&controls){controls.enabled=true;controls.target.set(0,targetY[model],0);camera.position.copy(views[model]);controls.update();}
+ if(camera&&controls){controls.enabled=true;controls.target.copy(viewTargets[model]);camera.position.copy(views[model]);controls.update();}
  updateTransformPanel();
  const select=$('#part-select');select.replaceChildren(...MODELS.chair.map(part=>{const option=document.createElement('option');option.value=part.id;option.textContent=part.name;return option;}));select.value=state.listPart;
  renderEdgeList();state.fold=1;
@@ -581,9 +666,11 @@ $$('[data-model]').forEach(button=>button.addEventListener('click',()=>switchMod
 $('#part-select').addEventListener('change',event=>{state.listPart=event.target.value;renderEdgeList();});
 $('#animate').addEventListener('click',()=>animateTo(state.fold>.5?0:1));
 $$('[data-scale-axis]').forEach(input=>input.addEventListener('change',()=>{const next=[...state.objScale[state.model]],v=Number(input.value);if(Number.isFinite(v)&&v>0)next[Number(input.dataset.scaleAxis)]=v;setObjectScale(next);}));
+$$('[data-location-axis]').forEach(input=>input.addEventListener('change',()=>{const next=[...state.objLocation[state.model]],v=Number(input.value);if(Number.isFinite(v))next[Number(input.dataset.locationAxis)]=v;setObjectLocation(next);}));
 $('#apply-scale').addEventListener('click',applyScale);
 $('#scale-experiment').addEventListener('click',()=>{
  switchModel('cube');state.mesh.cube=structuredClone(MODELS.cube);buildModel('cube');state.objScale.cube=[2,1,1];placeEdges('cube');
+ state.objLocation.cube=[0,0,0];placeObject('cube');
  state.cuts.cube.set('cube',new Set(PRESETS.classic));deselectAll(true);if(state.mode!=='edit')setMode('edit');
  $('#workspace').scrollIntoView({behavior:'smooth',block:'start'});updateTransformPanel();
  unwrap(null,null,true);
@@ -607,7 +694,33 @@ $('#map-host').addEventListener('contextmenu',event=>{
 });
 
 function typing(){const el=document.activeElement;return el&&(['INPUT','SELECT','TEXTAREA'].includes(el.tagName)&&el.type!=='checkbox'&&el.type!=='range');}
+function frameView(selected=false){
+ if(!camera||!controls||state.fold<.999)return;
+ if(selected&&state.mode==='object'&&!state.objectSelected){message('Select the object before using Numpad .',true);return;}
+ const center=blenderToWorld(state.objLocation[state.model]).add(new THREE.Vector3(0,targetY[state.model],0));
+ const direction=camera.position.clone().sub(controls.target).normalize();
+ const distance=state.model==='cube'?5.5:8.5;
+ controls.target.copy(center);camera.position.copy(center).addScaledVector(direction,distance);controls.update();
+ message(selected?'Framed selected object (Numpad .).':'Framed all objects (Home).');
+}
+function zoomView(inward){
+ if(!camera||!controls||state.fold<.999)return;
+ const offset=camera.position.clone().sub(controls.target),distance=offset.length();
+ offset.setLength(THREE.MathUtils.clamp(distance*(inward?.8:1.25),controls.minDistance,controls.maxDistance));
+ camera.position.copy(controls.target).add(offset);controls.update();
+}
+function orbitStep(code){
+ if(!camera||!controls||state.fold<.999)return;
+ const spherical=new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
+ const step=THREE.MathUtils.degToRad(15);
+ if(code==='Numpad4')spherical.theta-=step;
+ if(code==='Numpad6')spherical.theta+=step;
+ if(code==='Numpad8')spherical.phi=Math.max(.05,spherical.phi-step);
+ if(code==='Numpad2')spherical.phi=Math.min(Math.PI-.05,spherical.phi+step);
+ camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical));controls.update();
+}
 document.addEventListener('keydown',event=>{
+ if(moveModal){moveModalKey(event);return;}
  if(scaleModal){scaleModalKey(event);return;}
  if(event.key==='Escape'){closeMenu();return;}
  if(typing())return;
@@ -615,6 +728,11 @@ document.addEventListener('keydown',event=>{
  const inside=pointer.area||document.activeElement?.closest?.('#workspace');
  if(!inside)return;
  const key=event.key.toLowerCase(),ctrl=event.ctrlKey||event.metaKey;
+ if(pointer.area==='view'&&!ctrl&&!event.altKey){
+  if(['Numpad2','Numpad4','Numpad6','Numpad8'].includes(event.code)){event.preventDefault();orbitStep(event.code);return;}
+  if(event.code==='NumpadAdd'||event.code==='NumpadSubtract'){event.preventDefault();zoomView(event.code==='NumpadAdd');return;}
+  if(event.code==='NumpadDecimal'||event.key==='Home'){event.preventDefault();frameView(event.code==='NumpadDecimal');return;}
+ }
  if(key==='tab'&&pointer.area&&!ctrl&&!event.altKey){event.preventDefault();setMode(state.mode==='edit'?'object':'edit');return;}
  if(ctrl&&key==='e'){event.preventDefault();openMenu('edge',pointer.x,pointer.y);return;}
  if(ctrl&&key==='p'&&pointer.area==='uv'){event.preventDefault();packIslands();return;}
@@ -622,8 +740,10 @@ document.addEventListener('keydown',event=>{
  if(ctrl&&key==='a'&&state.mode==='object'){event.preventDefault();openMenu('apply',pointer.x,pointer.y);return;}
  if(ctrl)return;
  if(event.altKey&&key==='a'){event.preventDefault();deselectAll();return;}
+ if(event.altKey&&key==='g'&&pointer.area==='view'&&state.mode==='object'){event.preventDefault();if(state.objectSelected)setObjectLocation([0,0,0]);return;}
  if(event.altKey)return;
  if(key==='u'){event.preventDefault();openMenu('uv',pointer.area?pointer.x:innerWidth/2,pointer.area?pointer.y:innerHeight/2);return;}
+ if(key==='g'&&pointer.area==='view'){event.preventDefault();startMoveModal();return;}
  if(key==='s'&&pointer.area==='view'){event.preventDefault();startScaleModal();return;}
  if(key==='a'){event.preventDefault();selectAll();return;}
  if(key==='2'){setSelectMode('edge');return;}
@@ -637,15 +757,15 @@ document.addEventListener('keydown',event=>{
 function start3D(){
  try{
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.setClearColor(0x2d3035,0);host.prepend(renderer.domElement);
-  renderer.domElement.setAttribute('aria-label','Interactive 3D object. Drag to orbit, click an edge to select it.');renderer.domElement.setAttribute('role','img');
+  renderer.domElement.setAttribute('aria-label','Interactive 3D object. Middle-drag to orbit, Shift-middle-drag to pan, wheel or Ctrl-middle-drag to zoom; left-click to select.');renderer.domElement.setAttribute('role','img');
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(42,1,.1,100);camera.position.copy(views.cube);
   scene.add(new THREE.AmbientLight(0xffffff,2.1));const light=new THREE.DirectionalLight(0xffffff,2.1);light.position.set(4,6,7);scene.add(light);
-  controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=.08;controls.enablePan=false;
-  controls.enableZoom=true;controls.minDistance=3.2;controls.maxDistance=16;controls.zoomSpeed=.7;
-  controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.ROTATE,RIGHT:null};
+  controls=new OrbitControls(camera,renderer.domElement);controls.target.copy(viewTargets.cube);controls.enableDamping=true;controls.dampingFactor=.08;controls.enablePan=true;
+  controls.enableZoom=true;controls.minDistance=.75;controls.maxDistance=80;controls.zoomSpeed=1.1;
+  controls.mouseButtons={LEFT:-1,MIDDLE:THREE.MOUSE.ROTATE,RIGHT:-1};
+  renderer.domElement.addEventListener('pointerdown',event=>{if(event.button===1)controls.mouseButtons.MIDDLE=event.ctrlKey?THREE.MOUSE.DOLLY:THREE.MOUSE.ROTATE;},true);
   renderer.domElement.style.touchAction=matchMedia('(max-width:900px)').matches?'pan-y':'none';
-  controls.addEventListener('change',()=>dirty=true);
-  controls.addEventListener('end',()=>{if(state.fold>.97)views[state.model].copy(camera.position);});
+  controls.addEventListener('change',()=>{dirty=true;if(state.fold>=.999&&controls.enableRotate){views[state.model].copy(camera.position);viewTargets[state.model].copy(controls.target);}});
   controls.update();
   buildModel('cube');buildModel('chair');
   const raycaster=new THREE.Raycaster(),ndc=new THREE.Vector2();
@@ -662,24 +782,26 @@ function start3D(){
   let down=null,hoverQueued=null;
   renderer.domElement.addEventListener('pointerdown',event=>{down={x:event.clientX,y:event.clientY,button:event.button};closeMenu();});
   renderer.domElement.addEventListener('pointermove',event=>{
+   if(moveModal){movePreview(event.clientX,event.clientY);return;}
    if(down||event.pointerType==='touch')return;
    hoverQueued=event;requestAnimationFrame(()=>{if(!hoverQueued)return;const e=hoverQueued;hoverQueued=null;if(state.mode!=='edit'){setHoverEdge(null);setHoverFace(null);return;}const hit=pick(e);setHoverEdge(hit.edge);setHoverFace(state.selectMode==='face'?hit.face:null);});
   });
   renderer.domElement.addEventListener('pointerleave',()=>{hoverQueued=null;setHoverEdge(null);setHoverFace(null);});
   renderer.domElement.addEventListener('pointerup',event=>{
+   if(moveModal){if(event.button===0)finishMove(true);else if(event.button===2)finishMove(false);down=null;return;}
    if(!down||down.button!==0||Math.hypot(event.clientX-down.x,event.clientY-down.y)>6){down=null;return;}down=null;
    const hit=pick(event);
    if(state.mode!=='edit'){
     if(hit.face){state.objectSelected=true;message('Object selected. The orange outline marks the active object. Press Tab to edit edges and faces.');}
     else{state.objectSelected=false;message('Nothing selected. Click the object to select it.',true);}
-    updateHeader();updateScene();return;
+    updateHeader();updateTransformPanel();updateScene();return;
    }
    if(hit.edge){if(state.tool==='seam'&&!event.shiftKey)toggleSeam(hit.edge);else selectEdge(hit.edge,event.shiftKey);return;}
    if(hit.face){selectFace(hit.face,event.shiftKey);return;}
    if(!event.shiftKey&&hasSelection())deselectAll();
   });
   renderer.domElement.addEventListener('contextmenu',event=>{
-   event.preventDefault();if(state.mode!=='edit'){needEditMode();return;}
+   event.preventDefault();if(moveModal){finishMove(false);return;}if(state.mode!=='edit'){needEditMode();return;}
    const hit=pick(event);
    if(state.selectMode==='edge'&&hit.edge&&!state.selEdges.has(hit.edge))selectEdge(hit.edge);
    if(state.selectMode==='face'&&hit.face&&!state.selFaces.has(hit.face))selectFace(hit.face);

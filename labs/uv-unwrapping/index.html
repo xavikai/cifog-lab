@@ -6,7 +6,7 @@
   <meta name="description" content="Practise the Blender UV workflow: select edges, mark seams, unwrap, and read the UV map of a cube or a chair.">
   <title>UV Unwrap Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=7">
+  <link rel="stylesheet" href="./style.css?v=8">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
 <body>
@@ -47,7 +47,7 @@
         <span class="bar-sep" aria-hidden="true"></span>
         <div class="quick-ops" role="group" aria-label="Object operators" data-object-only hidden>
           <button type="button" class="op" data-open-menu="apply" title="Ctrl A in Object Mode">Apply… <kbd>Ctrl</kbd><kbd>A</kbd></button>
-          <span class="op-hint">Scale the object in the <strong>Transform</strong> panel or press <kbd>S</kbd> over the 3D Viewport.</span>
+          <span class="op-hint">Select the object, then press <kbd>G</kbd> to move or <kbd>S</kbd> to scale.</span>
         </div>
         <div class="quick-ops" role="group" aria-label="Seam and unwrap operators" data-edit-only>
           <button type="button" id="op-mark" class="op op-mark" title="Mark Seam (U › Mark Seam, Ctrl+E, right-click)"><i aria-hidden="true"></i>Mark Seam</button>
@@ -95,9 +95,10 @@
               <button type="button" class="tool" data-tool="seam" aria-pressed="false" title="Quick Seam — lab shortcut: one click marks or clears a seam. Blender has no such tool."><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17 17 3" stroke="currentColor" stroke-width="2.6"/><path d="M6 6.5 4.2 4.7M9.5 3.8 8.3 2.5M3.8 9.5 2.5 8.3" stroke="currentColor" stroke-width="1.5"/><circle cx="15.5" cy="15.5" r="2.4" fill="currentColor"/></svg><span>Quick Seam</span></button>
             </div>
             <div class="canvas-hint" id="canvas-hint">Loading object…</div>
-            <div class="nav-hint" aria-hidden="true">Drag or <kbd>MMB</kbd> orbit · <kbd>Wheel</kbd> zoom</div>
+            <div class="nav-hint" aria-hidden="true"><kbd>MMB</kbd> orbit · <kbd>Shift</kbd><kbd>MMB</kbd> pan · <kbd>Wheel</kbd> / <kbd>Ctrl</kbd><kbd>MMB</kbd> zoom</div>
             <div class="transform-panel" id="transform-panel" aria-label="Object transform (N panel)">
               <div class="tp-head">Item › Transform <span>N panel</span></div>
+              <div class="tp-row"><span>Location</span><label>X<input type="number" step="0.1" data-location-axis="0" value="0.00" aria-label="Location X"></label><label>Y<input type="number" step="0.1" data-location-axis="1" value="0.00" aria-label="Location Y"></label><label>Z<input type="number" step="0.1" data-location-axis="2" value="0.00" aria-label="Location Z"></label></div>
               <div class="tp-row"><span>Scale</span><label>X<input type="number" step="0.1" min="0.25" max="4" data-scale-axis="0" value="1.00" aria-label="Scale X"></label><label>Y<input type="number" step="0.1" min="0.25" max="4" data-scale-axis="1" value="1.00" aria-label="Scale Y"></label><label>Z<input type="number" step="0.1" min="0.25" max="4" data-scale-axis="2" value="1.00" aria-label="Scale Z"></label></div>
               <p id="transform-note" class="tp-note"></p>
               <button type="button" id="apply-scale" class="tp-apply">Apply Scale <kbd>Ctrl</kbd><kbd>A</kbd></button>
@@ -139,7 +140,12 @@
         <div><dt><kbd>Ctrl</kbd><kbd>E</kbd> · <kbd>RMB</kbd></dt><dd>Edge menu / context menu</dd></div>
         <div><dt><kbd>Ctrl</kbd><kbd>P</kbd> · <kbd>Ctrl</kbd><kbd>A</kbd></dt><dd>In the UV Editor: Pack Islands / Average Islands Scale</dd></div>
         <div><dt><kbd>S</kbd> · <kbd>Ctrl</kbd><kbd>A</kbd></dt><dd>Object Mode: Scale (then X/Y/Z, a number, Enter) / Apply › Scale</dd></div>
-        <div><dt><kbd>MMB</kbd> · <kbd>Wheel</kbd></dt><dd>Orbit / zoom the 3D view</dd></div>
+        <div><dt><kbd>G</kbd></dt><dd>Object Mode: Move. Add X/Y/Z for an axis; Enter or click to confirm, Esc to cancel.</dd></div>
+        <div><dt><kbd>Alt</kbd><kbd>G</kbd></dt><dd>Clear Location: return the selected object to 0, 0, 0.</dd></div>
+        <div><dt><kbd>MMB</kbd> · <kbd>Shift</kbd><kbd>MMB</kbd></dt><dd>Orbit / pan the 3D view</dd></div>
+        <div><dt><kbd>Wheel</kbd> · <kbd>Ctrl</kbd><kbd>MMB</kbd></dt><dd>Zoom the 3D view</dd></div>
+        <div><dt><kbd>Numpad +</kbd> · <kbd>Numpad −</kbd></dt><dd>Zoom in / out · <kbd>Numpad .</kbd> frames the selected object</dd></div>
+        <div><dt><kbd>Numpad 2/4/6/8</kbd></dt><dd>Orbit in steps · <kbd>Home</kbd> frames all objects</dd></div>
       </dl>
     </section>
 
@@ -147,6 +153,6 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>The same steps in Blender 5.2</h2><p>This lab uses rectangular paper nets so each operation is easy to see. Blender's real Unwrap uses more advanced solvers on curved meshes and only unwraps the faces you select.</p></div><ol><li>Open the <strong>UV Editing</strong> workspace. The object enters <strong>Edit Mode</strong>.</li><li>Press <strong>2</strong> for Edge Select. Click edges, <strong>Shift</strong>-click to add.</li><li>Press <strong>U › Mark Seam</strong> (or <strong>Ctrl E</strong> › Mark Seam).</li><li>Press <strong>A</strong> to select everything, then <strong>U › Unwrap</strong>.</li><li>In the UV Editor, try <strong>Display Stretch</strong>, <strong>Average Islands Scale</strong> and <strong>Pack Islands</strong>.</li><li>Optional: <strong>UV › Live Unwrap</strong> re-unwraps every time you change a seam.</li><li>Scaled the object in Object Mode? <strong>Ctrl A › Scale</strong> first, then unwrap — otherwise the texture stretches.</li></ol></aside>
   </main>
   <footer><span>CIFOG · UV Unwrap Lab</span><a href="https://docs.blender.org/manual/en/5.2/modeling/meshes/uv/unwrapping/seams.html" target="_blank" rel="noopener">Blender 5.2: Seams ↗</a><span>Box-based teaching model · Blender may unwrap differently.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=7"></script>
+  <script type="module" src="./app.js?v=8"></script>
 </body>
 </html>
