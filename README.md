@@ -10,7 +10,9 @@ A home for small interactive activities that support CIFOG classroom presentatio
 
 **Material Lab** (`labs/materials/`) is an interactive editor in English based on a focused subset of Blender 5.2 nodes. Students can connect Texture Coordinate, Mapping, Image Texture, Normal Map, Principled BSDF and Material Output; adjust materials; switch preview shapes; and try short guided experiments on roughness, normal maps and repeating textures.
 
-**UV Unwrap Lab** (`labs/uv-unwrapping/`) uses a paper cube to show how seams open a 3D surface into one or more 2D UV islands. Students can select matching faces in both views, mark or clear any of the twelve cube edges, choose starting layouts, and animate the same six faces between the cube and their flat arrangement. U and V are shown as coordinates across a square image area. A closed loop or overlapping layout is explained rather than silently presented as a valid net.
+**UV Unwrap Lab** (`labs/uv-unwrapping/`) copies Blender's UV Editing workspace: a UV Editor and a 3D Viewport side by side, an Edit Mode header with Edge/Face Select, Select and UV menus, and a status bar that shows the available keys. Students select edges (Shift to add), then Mark Seam through the U menu, Ctrl+E, the right-click menu or the header buttons, and Unwrap. Live Unwrap (on by default) updates the map immediately; turned off, the map is marked out of date until students run Unwrap, as in Blender. Hovering an edge highlights it in both views, and a seam appears twice in the UV map. Face Select + Mark Seam cuts around the selected faces. Tab switches Object/Edit Mode (the UV Editor only shows UVs in Edit Mode). A "Quick Seam" tool is a clearly labelled lab shortcut that toggles a seam with one click. The 3D faces sample a texture painted from the UV map with a UV-space checker, so stretch and uneven density are visible on the model. Unfold works for the cube and the chair: every face hinges about its shared edge and lands exactly on its UV position. Object Mode has a Transform panel, S to scale and Ctrl+A › Scale to apply; an unapplied non-uniform scale reproduces Blender's unwrap warning and a stretched checker until the scale is applied and the object unwrapped again. Closed loops and overlaps are explained rather than silently shown.
+
+Both labs follow Blender conventions where it helps transfer: Material Lab links are made by dragging from an output to an input (compatible inputs light up), removed or moved by dragging a connected input away, and cut with Ctrl + right-drag; the mouse wheel zooms, the middle button pans and Home fits all nodes; values use Blender-style slider bars.
 
 Open a lab from the home page. To add another lab later, create a new `labs/<name>/` folder with its own `index.html` and add its card to the root `index.html`. The root page, existing lab and shared `vendor/` library can then remain in place.
 
@@ -28,7 +30,7 @@ Visit `http://127.0.0.1:5197/`. The local server resolves folder URLs to their `
 npm test
 ```
 
-The tests cover material graph connections, Mapping transformations and valid or conflicting cube nets.
+The tests cover material graph connections, Mapping transformations, valid or conflicting cube nets, and that unfolded faces land exactly on their UV positions.
 
 ## Structure
 

@@ -36,3 +36,15 @@ test('average scale clears area differences and horizontal stretching adds angle
  assert.ok(charts[0].faces.some(face=>metrics.get(face.key).angle>5));
  assert.ok(charts[0].faces.some(face=>metrics.get(face.key).area>.2));
 });
+
+import {edgeSegment,boundaryEdges,edgesOfFaces} from '../labs/uv-unwrapping/workbench.js';
+test('edge segments sit on the correct side of each face',()=>{
+ assert.deepEqual(edgeSegment('F','R',[2,2]),[[1,-1],[1,1]]);
+ assert.deepEqual(edgeSegment('F','T',[2,2]),[[-1,1],[1,1]]);
+ assert.deepEqual(edgeSegment('T','F',[2.4,2]),[[-1.2,-1],[1.2,-1]]);
+});
+test('face-select seam helpers cut around a region and clear inside it',()=>{
+ assert.deepEqual(boundaryEdges(new Set(['T'])).sort(),['B-T','F-T','L-T','R-T']);
+ assert.equal(boundaryEdges(new Set(['F','R','B','L','T','D'])).length,0);
+ assert.equal(edgesOfFaces(new Set(['F','T'])).length,7);
+});

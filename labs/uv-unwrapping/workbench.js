@@ -1,4 +1,4 @@
-import {buildLayout, EDGES, FACES, PRESETS} from './unfold.js?v=2';
+import {buildLayout, EDGES, FACES, PRESETS} from './unfold.js?v=4';
 
 export const MODELS = Object.freeze({
  cube:[{id:'cube',name:'Cube',size:[2,2,2],position:[0,0,0],color:'#e9a667'}],
@@ -21,9 +21,10 @@ const extent=face=>[
 
 // Each disconnected box part has its own seam graph. The paper-net solver
 // keeps the dimensions of every rectangular face, so UV area is measurable.
-export function buildCharts(model,cutsByPart){
+// `parts` is the current mesh data (sizes change when Apply Scale is used).
+export function buildCharts(model,cutsByPart,parts=MODELS[model]){
  const charts=[];let invalid=null;
- for(const part of MODELS[model]){
+ for(const part of parts){
   const layout=buildLayout(cutsByPart.get(part.id),part.size);
   if(!layout.valid){invalid={part,layout};continue;}
   for(const component of layout.components){
@@ -80,3 +81,19 @@ export function stretchMetrics(charts){
 
 export const edgeName=edge=>`${FACES[edge.a].name} / ${FACES[edge.b].name}`;
 export const hasEdge=key=>EDGES.some(edge=>edge.key===key);
+
+// Where the edge shared with `otherId` lies on a face, in that face's local
+// (u, v) units. Used to draw the same 3D edge in the UV Editor: a joined edge
+// appears once, a seam appears twice (once on each side of the cut).
+const dot3=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+export function edgeSegment(faceId,otherId,size){
+ const face=FACES[faceId],normal=FACES[otherId].n,su=dot3(normal,face.u),sv=dot3(normal,face.v),w=size[0]/2,h=size[1]/2;
+ if(su)return [[su*w,-h],[su*w,h]];
+ if(sv)return [[-w,sv*h],[w,sv*h]];
+ return null;
+}
+export const edgesOfFace=faceId=>EDGES.filter(edge=>edge.a===faceId||edge.b===faceId);
+// Face Select + Mark Seam: Blender cuts around the selected region.
+export const boundaryEdges=faces=>EDGES.filter(edge=>faces.has(edge.a)!==faces.has(edge.b)).map(edge=>edge.key);
+// Face Select + Clear Seam: every edge that belongs to a selected face.
+export const edgesOfFaces=faces=>EDGES.filter(edge=>faces.has(edge.a)||faces.has(edge.b)).map(edge=>edge.key);

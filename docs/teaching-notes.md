@@ -12,17 +12,21 @@ Set up the Roughness experiment. Keep Metallic at 1 and change Roughness between
 
 ## 3. Normal maps
 
-Set up the Normal experiment. Disconnect the Normal input on Principled BSDF. Reconnect Normal Map's Normal output to it. Increase or decrease Strength. The joints change in the lighting, while the mesh silhouette remains the same.
+Set up the Normal experiment. Drag the link off Principled BSDF's Normal input and drop it on empty space (as in Blender). Then drag from Normal Map's Normal output back to it; only compatible inputs light up while dragging. Increase or decrease Strength. The joints change in the lighting, while the mesh silhouette remains the same.
 
 ## 4. Repeating textures
 
-Set up Tiling. Increase both Scale X and Scale Y to 4. All three maps share Mapping and remain aligned. Disconnect one Image Texture's Vector input to demonstrate a mismatch in scale. Reset afterward.
+Set up Tiling. Increase both Scale X and Scale Y to 4. All three maps share Mapping and remain aligned. Drag one Image Texture's Vector link away (or Ctrl + right-drag across it) to demonstrate a mismatch in scale. Reset afterward.
 
 The brick image also contains recognizable dark patches: seamless edges do not guarantee that repetition is invisible.
 
 Trace the purple wires: **Texture Coordinate: UV → Mapping: Vector → Image Texture: Vector**. UV chooses the coordinates; Mapping transforms them; each image samples them. Location offsets the pattern, Rotation Z turns it, and Scale X/Y changes repetition. The initial Mapping type is Point. Texture uses the inverse transform, so increasing its scale makes the visible pattern larger.
 
 Compare UV and Generated on a cube. UV uses the face layouts; Generated uses the object's bounding box. Because the images use Flat projection, Generated can stretch across side faces. UV is two-dimensional (Z = 0), so Scale Z and Location Z alone do not change a flat image. The XYZ controls are available for three-dimensional coordinate inputs and rotations. Reset the scene to restore UV.
+
+## Node editor controls
+
+The controls match Blender: drag output → input to connect, drag a connected input away to move or remove a link, Ctrl + right-drag to cut links, mouse wheel to zoom, middle mouse (or background drag) to pan, Home to see all nodes. Values are Blender-style slider bars. Click-output-then-click-input also works on touch screens.
 
 ## 5. Images created with AI
 
