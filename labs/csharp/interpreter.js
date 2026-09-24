@@ -428,6 +428,8 @@ function parseCalc(tokens) {
     const stmt = p.isDeclStart() ? p.declaration() : p.simple();
     p.eat(';');
     if (p.tok.t !== 'eof') {
+      if (/^_{2,}$/.test(p.tok.v)) p.fail('LAB', 'Fill in the blank ___', p.tok, 'Replace ___ with the missing piece. Here it goes between two values, so it is probably an operator.');
+      if (p.tok.v === '=>') p.fail('LAB', "'=>' is not a comparison. Did you mean >= ?", p.tok, 'Greater than or equal is written >= : the > goes first.');
       if (stmt.type === 'VarDecl' && p.tok.t === 'id') p.fail('LAB', "A name can't contain spaces", p.tok, `Join the words and start each new word with a capital letter: ${stmt.decls.at(-1).name}${p.tok.v[0].toUpperCase()}${p.tok.v.slice(1)}`);
       if (p.is(',') && toks.some(t => t.t === 'num')) p.fail('LAB', "Decimals use a point, not a comma", p.tok, 'Write 3.5, not 3,5.');
       p.fail('LAB', `Unexpected '${p.tok.v}'`, p.tok, 'Write one calculation per line. Did you forget an operator such as + or *?');
@@ -884,6 +886,7 @@ export function show(e, valueOf) {
     case 'Num': return e.raw;
     case 'Str': return JSON.stringify(e.value);
     case 'Char': return literal(e.value, 'char');
+    case 'Lit': return literal(e.value, e.ty);
     case 'Index': return `${show(e.object, valueOf)}[${show(e.index, valueOf)}]`;
     case 'Bool': return String(e.value);
     case 'Interp': return '$"' + e.parts.map(p => typeof p === 'string' ? p : `{${s(p)}}`).join('') + '"';
@@ -1044,6 +1047,7 @@ export class Runner {
       const e = st.expr, value = this.eval(e), type = e.ty;
       const text = type === 'void' ? '' : literal(value, type);
       entry = { line: s.line, value, type, text, expression: true };
+      if (type === 'bool' && !['Bool'].includes(e.type)) entry.steps = this.reduceSteps(e);
       if (e.type === 'Call' && type === 'void') this.note(s.line, this.lastCallNote || show(e));
       else this.note(s.line, `${show(e)} → ${text}`, `${show(e)} is ${text}`);
       if (this.calcTowers && type === 'int') {
@@ -1063,14 +1067,36 @@ export class Runner {
     this.resultsByLine.set(s.line, entry);
   }
 
+  // How an expression is worked out, step by step:
+  // age >= 18 && member → 16 >= 18 && true → false && true → false
+  reduceSteps(e) {
+    const orig = n => n._o || n;
+    const LEAVES = ['Num', 'Str', 'Bool', 'Char', 'Lit'];
+    const KEYS = ['left', 'right', 'arg', 'expr', 'object', 'index'];
+    const isLit = n => LEAVES.includes(n.type);
+    const isStatic = n => n.type === 'Member' && n.object.type === 'Ident' && ['Color', 'Direction', 'Math'].includes(n.object.name);
+    const done = n => isLit(n) || isStatic(n);
+    const L = n => ({ type: 'Lit', value: this.eval(orig(n)), ty: orig(n).ty });
+    const map = (n, f) => { const c = { ...n, _o: orig(n) }; for (const k of KEYS) if (n[k]) c[k] = f(n[k]); if (n.args) c.args = n.args.map(f); return c; };
+    const kids = n => [...KEYS.filter(k => n[k]).map(k => n[k]), ...(n.args || [])];
+    const subst = n => done(n) ? n : (n.type === 'Ident' || (n.type === 'Member' && n.object.type === 'Ident' && n.object.name === 'drone')) ? L(n) : map(n, subst);
+    const collapse = n => done(n) ? n : kids(n).every(done) ? (n.type === 'Paren' ? n.expr : L(n)) : map(n, collapse);
+    const steps = [show(e)];
+    const push = x => { if (steps.at(-1) !== x) steps.push(x); };
+    let cur = subst(e);
+    push(show(cur));
+    for (let i = 0; i < 16 && !isLit(cur); i++) { cur = collapse(cur); push(show(cur)); }
+    return steps;
+  }
+
   cond(test, line) { this.line = line; return this.eval(test); }
   condEvent(s, test, value, outcome) {
     this.tick(s.line);
     let text = 'true';
     if (test) {
-      const src = show(test);
-      const sub = show(test, e => literal(this.eval(e), e.ty));
-      text = sub !== src ? `${src}  →  ${sub}  →  ${value}` : `${src}  →  ${value}`;
+      const steps = this.reduceSteps(test);
+      if (steps.at(-1) !== String(value)) steps.push(String(value));
+      text = steps.join('  →  ');
     }
     this.note(s.line, `${value ? '✓' : '✗'} ${test ? show(test, e => literal(this.eval(e), e.ty)) : 'true'} is ${value}`, `${test ? show(test) : 'true'} is ${value}: ${outcome.split('→ ')[1] || outcome}`);
     return { kind: 'cond', line: s.line, value, text, outcome };

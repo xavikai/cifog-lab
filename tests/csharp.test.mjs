@@ -40,7 +40,7 @@ test('starters: create/fix/complete need work, observe/predict run as given', ()
     const c = compile(ch.starter, { mode: ch.mode });
     if (ch.type === 'observe' || ch.type === 'predict') { assert.equal(runHeadless(ch, ch.starter).error, null, ch.id); continue; }
     if (ch.type === 'complete') { assert.ok(c.errors.some(e => e.message === 'Fill in the blank ___'), ch.id); continue; }
-    if (['1-3', '2-3', '0-7', 'n-5', 't-7'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
+    if (['1-3', '2-3', '0-7', 'n-5', 't-7', 'l-7'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
     assert.equal(c.ok, true, `${ch.id}: ${c.errors.map(e => e.message)}`);
     if (!ch.sandbox) assert.equal(runHeadless(ch, ch.starter, 3).ok, false, ch.id);
   }

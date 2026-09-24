@@ -107,6 +107,18 @@ a{color:var(--yellow)}h1,h2,h3,p{margin:0}code{font-family:var(--mono);font-size
 .strip-foot{font-size:.7rem;color:var(--dim);margin-top:8px}
 .strip-empty{font-size:.78rem;color:var(--dim)}
 
+/* Lamps */
+.lamps{max-height:calc(100% - 60px);overflow:auto}
+.lamp-steps{margin-bottom:10px}
+.lamp-list{display:flex;flex-direction:column;gap:5px}
+.lamp-row{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:10px;padding:4px 6px;border-radius:6px;font-size:.8rem}
+.lamp-row.latest{background:#23272c}
+.lamp-row code{white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.lamp-row b{font-family:var(--mono);font-size:.78rem}.lamp-row b.true{color:var(--ok)}.lamp-row b.false{color:var(--err)}
+.lamp{width:18px;height:18px;border-radius:50%;border:2px solid #15171a}
+.lamp.on{background:radial-gradient(circle at 35% 35%,#e6ffd6,#7fd15c 45%,#3f8f2a);box-shadow:0 0 12px #7fd15caa}
+.lamp.off{background:radial-gradient(circle at 35% 35%,#8a4b50,#4a2327 60%);box-shadow:inset 0 0 4px #000}
+
 /* Calculator results */
 .result-chip{display:inline-flex;align-items:baseline;gap:7px;margin-left:22px;padding:0 8px;border-radius:10px;background:#2e2a1d;border:1px solid #6b5a26;line-height:18px}
 .result-chip .rv{color:#ffd966;font-weight:700}.result-chip i{font-style:normal;font-size:.72em;color:#9fa6ae}

@@ -12,6 +12,7 @@ const store = {
 };
 const SPEEDS = [{ label: 'Slow', ms: 900 }, { label: 'Normal', ms: 380 }, { label: 'Fast', ms: 130 }, { label: 'Very fast', ms: 35 }, { label: 'Instant', ms: 0 }];
 const LH = 21;
+const LV = Object.fromEntries(LEVELS.map(l => [l.name, l.id]));
 
 const ta = $('#code'), layer = $('#code-layer'), gutter = $('#gutter'), editor = $('#editor');
 const view = new IsoView($('#scene'));
@@ -212,6 +213,7 @@ function renderRequirements(stats = null, result = null) {
   if (ch.type === 'predict') items.push({ label: 'Choose your prediction', ok: S.prediction != null ? true : null }, { label: 'Run the program and compare', ok: result ? true : null });
   if (ch.type === 'observe') items.push({ label: 'Run the program to the end (try Step)', ok: result ? true : null });
   if (!ch.sandbox && Object.keys(S.target || {}).length) items.push({ label: 'Build the target shape', ok: result ? (a?.shape?.ok ?? result.ok) : null });
+  if (ch.expectTail) items.push({ label: `The last lines give ${ch.expectTail.join(', ')}`, ok: result ? !!a?.output?.ok : null });
   if (ch.expectLast != null) items.push({ label: `The last line gives ${ch.expectLast}`, ok: result ? !!a?.output?.ok : null });
   if (ch.type === 'classify') items.push({ label: 'Answer every item', ok: S.classify && Object.keys(S.classify.choices).length === ch.classify.items.length ? true : null }, { label: 'Get them all right', ok: S.classify?.checked ? S.classify.allRight : null });
   if (ch.expectOutput) items.push({ label: `Print exactly: ${ch.expectOutput.join(' · ')}`, ok: result ? !!a?.output?.ok : null });
@@ -223,7 +225,7 @@ function renderRequirements(stats = null, result = null) {
 function renderToolbox() {
   const lvl = S.challenge.level.id;
   $('#toolbox-items').innerHTML = API.filter(a => a.level <= lvl).map((a, i) =>
-    `<button class="tool${a.level === lvl && lvl < 8 ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
+    `<button class="tool${a.level === lvl && lvl < LV['Free build'] ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
 }
 $('#toolbox-items').addEventListener('click', e => {
   const b = e.target.closest('.tool'); if (!b || ta.readOnly) return;
@@ -315,8 +317,8 @@ const varRow = (type, name, value, { changed = false, assigned = true } = {}) =>
 
 function renderMemory() {
   const w = S.world, r = S.runner, lvl = S.challenge.level.id;
-  const showDrone = lvl >= 3 || S.challenge.calcTowers;
-  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= 6 ? varRow('int', 'Height', w.height()) : ''}${lvl >= 7 ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
+  const showDrone = lvl >= LV['First instructions'] || S.challenge.calcTowers;
+  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= LV.Loops ? varRow('int', 'Height', w.height()) : ''}${lvl >= LV.Conditions ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
   const scopes = r?.scopes || [];
   if (!scopes.length) html += '<p class="empty">Variables appear here while the program runs. Each one is a box with a <b>type</b>, a <b>name</b> and a <b>value</b>.</p>';
   else {
@@ -341,6 +343,12 @@ function renderNow() {
   if (S.mode === 'error') { el.innerHTML = `<span class="label">RUNTIME ERROR · LINE ${S.runner.line}</span>The program stopped here. Read the Console to see why.`; return; }
   if (S.mode === 'finished') { el.innerHTML = `<span class="label">FINISHED · ${S.runner.steps} STEPS</span>The program reached the last line. Its variables stay in memory only while it runs (faded).`; return; }
   if (!ev) return;
+  const lastRes = S.runner.results.at(-1);
+  if (ev.kind === 'line' && lastRes?.steps && S.challenge.mode === 'calc') {
+    const st = lastRes.steps;
+    el.innerHTML = `<span class="label">LINE ${lastRes.line} · HOW IT WAS WORKED OUT</span><div class="eval">${st.map((p, i) => i === st.length - 1 ? `<span class="${lastRes.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>')}</div><div class="outcome">Next: line ${ev.line}</div>`;
+    return;
+  }
   if (ev.kind === 'cond') {
     const parts = ev.text.split('  →  ');
     const chips = parts.map((p, i) => i === parts.length - 1 ? `<span class="${ev.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>');
@@ -379,7 +387,7 @@ function renderControls() {
 }
 function renderStrip() {
   const el = $('#strip'), ch = S.challenge;
-  $('#viewport').classList.toggle('text-mode', !!ch.textStrip);
+  $('#viewport').classList.toggle('text-mode', !!(ch.textStrip || ch.lamps));
   el.hidden = !ch.textStrip;
   if (!ch.textStrip) return;
   const entry = [...(S.runner?.results || [])].reverse().find(r => r.textView && r.textView.text != null);
@@ -390,9 +398,21 @@ function renderStrip() {
   const line = (ta.value.split('\n')[entry.line - 1] || '').trim();
   el.innerHTML = `<div class="strip-head"><code>${esc(line)}</code><span>→ <b>${esc(entry.text)}</b></span></div><div class="cells">${cells || '<span class="strip-empty">"" (empty text)</span>'}</div><div class="strip-foot">Length ${text.length} · positions 0 to ${Math.max(0, text.length - 1)}${v.count ? ' · Length counts all of them' : ''}</div>`;
 }
+function renderLamps() {
+  const el = $('#lamps'), ch = S.challenge;
+  el.hidden = !ch.lamps;
+  if (!ch.lamps) return;
+  $('#viewport').classList.add('text-mode');
+  const bools = (S.runner?.results || []).filter(r => r.type === 'bool');
+  if (!bools.length) { el.innerHTML = '<p class="strip-empty">Run the program: every true/false answer lights a lamp here.</p>'; return; }
+  const last = bools.at(-1);
+  const lines = ta.value.split('\n');
+  const steps = last.steps ? `<div class="eval lamp-steps">${last.steps.map((p, i) => i === last.steps.length - 1 ? `<span class="${last.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>')}</div>` : '';
+  el.innerHTML = `${steps}<div class="lamp-list">${bools.map(b => `<div class="lamp-row${b === last ? ' latest' : ''}"><span class="lamp ${b.value ? 'on' : 'off'}" aria-label="${b.value}"></span><code>${esc((lines[b.line - 1] || '').trim())}</code><b class="${b.value}">${b.value}</b></div>`).join('')}</div>`;
+}
 function renderAll({ instant = false } = {}) {
   view.update(S.world, { target: S.target, result: S.result, instant, labels: !!S.challenge.labels, say: S.runner?.output.at(-1)?.text ?? null });
-  renderCode(); renderMemory(); renderNow(); renderTrace(); renderOutput(); renderProgress(); renderControls(); renderStrip();
+  renderCode(); renderMemory(); renderNow(); renderTrace(); renderOutput(); renderProgress(); renderControls(); renderStrip(); renderLamps();
   if (S.event && (S.mode === 'running' || S.mode === 'paused')) scrollToLine(S.event.line);
 }
 
@@ -713,7 +733,8 @@ function finish() {
     if (shape.wrong.length) bits.push(`${shape.wrong.length} wrong color`);
     if (shape.extra.length) bits.push(`${shape.extra.length} extra`);
     let msg = bits.length ? `Blocks: ${bits.join(' · ')}. Ghost blocks show what is still missing; red outlines mark wrong blocks.` : '';
-    if (a.output && !a.output.ok) msg += a.output.last ? `${msg ? ' ' : ''}The last line should give ${a.output.want[0]}, but it gives ${a.output.got[0] || 'nothing'}.` : `${msg ? ' ' : ''}Expected the Console to show "${a.output.want.join(' / ')}" but it showed "${a.output.got.join(' / ') || '(nothing)'}".`;
+    if (a.output && !a.output.ok && a.output.tail) msg += `${msg ? ' ' : ''}The last lines should give ${a.output.want.join(', ')}, but they give ${a.output.got.join(', ') || 'nothing'}.`;
+    else if (a.output && !a.output.ok) msg += a.output.last ? `${msg ? ' ' : ''}The last line should give ${a.output.want[0]}, but it gives ${a.output.got[0] || 'nothing'}.` : `${msg ? ' ' : ''}Expected the Console to show "${a.output.want.join(' / ')}" but it showed "${a.output.got.join(' / ') || '(nothing)'}".`;
     const failed = a.requirements.filter(q => !q.ok).map(q => q.label);
     if (failed.length) msg += `${msg ? ' ' : ''}Still to do: ${failed.join(', ')}.`;
     if (a.ok && ch.randomized && !shape.verified) msg = `It works on this world, but only on ${shape.verifiedCount} of 3 other random worlds. Read the world with the drone instead of using fixed numbers.`;

@@ -32,6 +32,10 @@ export function assess(challenge, { compiled, runner, world, target, prediction 
     const got = results.at(-1)?.text ?? '';
     outputCheck = { ok: got === challenge.expectLast, want: [challenge.expectLast], got: [got], last: true };
   }
+  if (challenge.expectTail) {
+    const want = challenge.expectTail, got = results.slice(-want.length).map(r => r.text);
+    outputCheck = { ok: got.length === want.length && want.every((w, i) => w === got[i]), want, got, tail: true };
+  }
   let predictionCheck = null;
   if (challenge.question) {
     const actual = challenge.question.actual({ output, results, world, vars: variables(runner) });

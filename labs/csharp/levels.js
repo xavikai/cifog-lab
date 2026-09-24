@@ -1,4 +1,5 @@
-import { compile } from './interpreter.js';
+import { compile, Runner } from './interpreter.js';
+import { World } from './world.js';
 
 // Levels and challenges for the C# Code Lab.
 // Each challenge builds a target in an 8 × 8 voxel world.
@@ -23,20 +24,22 @@ export const API = [
   { level: 2, code: '"Hello".Length      "Hello"[0]', text: 'A string is a row of characters. <code>Length</code> counts them; <code>[0]</code> reads one (a <code>char</code>, in single quotes). Positions start at 0.' },
   { level: 2, code: 'text.ToUpper()   text.Substring(0, 3)', text: 'Methods of text: <code>ToUpper()</code>, <code>ToLower()</code>, <code>Substring(start, length)</code>, <code>IndexOf("x")</code>, <code>Contains("x")</code>, <code>Replace("a", "b")</code>.' },
   { level: 2, code: '$"{name} is {age}"', text: 'Interpolation: a <code>$</code> before the quotes lets you put values inside <code>{ }</code>.' },
+  { level: 3, code: '5 > 3    2 + 2 == 4    x != 0', text: 'Comparisons give a <code>bool</code> (true or false): <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>=</code> stores, <code>==</code> compares.' },
+  { level: 3, code: 'a && b    a || b    !a', text: '<code>&amp;&amp;</code> and: both must be true · <code>||</code> or: at least one · <code>!</code> not: flips true and false.' },
   { level: 1, code: 'int age = 16', text: 'A variable: type, name, value. Names use <b>camelCase</b>: <code>playerScore</code>. C# is case-sensitive.' },
-  { level: 3, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
-  { level: 3, code: 'drone.Build(3);', text: 'Builds a tower of 3 blocks, then moves one tile right, ready for the next tower. Optional color: <code>drone.Build(3, Color.Red);</code>' },
-  { level: 4, code: 'drone.Move(Direction.Right);', text: 'Moves one tile. Directions: <code>Right</code>, <code>Left</code>, <code>Forward</code>, <code>Back</code>.' },
-  { level: 4, code: 'drone.Place(Color.Red);', text: 'Places a block on top of the column under the drone. Colors: White, Red, Orange, Yellow, Green, Blue, Purple, Black.' },
-  { level: 5, code: 'int distance = 3;', text: 'Creates a variable: a named box with a type and a value. Types: <code>int</code> 3 · <code>double</code> 2.5 · <code>float</code> 2.5f · <code>bool</code> true · <code>string</code> "text" · <code>Color</code>.' },
-  { level: 5, code: 'drone.Move(Direction.Right, distance);', text: 'Moves several tiles at once.' },
-  { level: 6, code: 'for (int i = 0; i < 5; i++)\n{\n    \n}', text: 'Repeats the block. <code>i = 0</code> start · <code>i &lt; 5</code> keep going while true · <code>i++</code> add 1 after each turn.' },
-  { level: 6, code: 'drone.MoveTo(x, z);', text: 'Flies straight to a tile. X goes right, Z goes forward.' },
-  { level: 6, code: 'while (drone.Height < 6)\n{\n    \n}', text: 'Repeats while the condition is true. Use it when you don\'t know how many turns you need.' },
-  { level: 6, code: 'drone.Height', text: 'How many blocks are in the column under the drone (int). Also <code>drone.X</code> and <code>drone.Z</code>.' },
-  { level: 7, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
-  { level: 7, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
-  { level: 7, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
+  { level: 4, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
+  { level: 4, code: 'drone.Build(3);', text: 'Builds a tower of 3 blocks, then moves one tile right, ready for the next tower. Optional color: <code>drone.Build(3, Color.Red);</code>' },
+  { level: 5, code: 'drone.Move(Direction.Right);', text: 'Moves one tile. Directions: <code>Right</code>, <code>Left</code>, <code>Forward</code>, <code>Back</code>.' },
+  { level: 5, code: 'drone.Place(Color.Red);', text: 'Places a block on top of the column under the drone. Colors: White, Red, Orange, Yellow, Green, Blue, Purple, Black.' },
+  { level: 6, code: 'int distance = 3;', text: 'Creates a variable: a named box with a type and a value. Types: <code>int</code> 3 · <code>double</code> 2.5 · <code>float</code> 2.5f · <code>bool</code> true · <code>string</code> "text" · <code>Color</code>.' },
+  { level: 6, code: 'drone.Move(Direction.Right, distance);', text: 'Moves several tiles at once.' },
+  { level: 7, code: 'for (int i = 0; i < 5; i++)\n{\n    \n}', text: 'Repeats the block. <code>i = 0</code> start · <code>i &lt; 5</code> keep going while true · <code>i++</code> add 1 after each turn.' },
+  { level: 7, code: 'drone.MoveTo(x, z);', text: 'Flies straight to a tile. X goes right, Z goes forward.' },
+  { level: 7, code: 'while (drone.Height < 6)\n{\n    \n}', text: 'Repeats while the condition is true. Use it when you don\'t know how many turns you need.' },
+  { level: 7, code: 'drone.Height', text: 'How many blocks are in the column under the drone (int). Also <code>drone.X</code> and <code>drone.Z</code>.' },
+  { level: 8, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
+  { level: 8, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
+  { level: 8, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
 ];
 
 export const LEVELS = [
@@ -336,7 +339,123 @@ city.ToUpper()`,
     ],
   },
   {
-    id: 3, name: 'First instructions', concept: 'Statements',
+    id: 3, name: 'Logic', concept: 'True or false', mode: 'calc',
+    intro: 'Programs make decisions with questions whose answer is true or false. Each answer lights a lamp: green for true, red for false.',
+    challenges: [
+      {
+        id: 'l-1', type: 'observe', title: 'True or false', mode: 'calc', lamps: true,
+        goal: 'Step through the comparisons and watch the lamps.',
+        brief: '<p>A <b>comparison</b> asks a question, and the answer is a <code>bool</code>: <code>true</code> or <code>false</code>. <code>==</code> asks "is it equal?" (two equals signs!), <code>!=</code> asks "is it different?".</p>',
+        hint: 'Each line lights one lamp.',
+        starter: `5 > 3
+5 < 3
+2 + 2 == 4
+2 + 2 != 4
+10 >= 10
+`,
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'l-2', type: 'predict', title: 'Store or compare?', mode: 'calc', lamps: true,
+        goal: 'Predict what the last line gives.',
+        brief: '<p>One of the most common mistakes: <code>=</code> <b>stores</b> a value in a box. <code>==</code> <b>compares</b> two values and gives true or false.</p>',
+        starter: `int x = 3
+x == 5
+x = 5
+x == 5
+`,
+        question: {
+          prompt: 'What does the last line (x == 5) give?',
+          options: ['true', 'false'], answer: 'true',
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: 'Line 2 compares: 3 == 5 is false. Line 3 stores 5 in x (=). So on line 4, x == 5 is true. The same question can have different answers at different moments.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'l-3', type: 'predict', title: 'Both at once', mode: 'calc', lamps: true,
+        goal: 'Predict whether Ada can enter.',
+        brief: '<p><code>&amp;&amp;</code> means <b>and</b>: the result is true only if <b>both</b> sides are true. The panel shows how the computer works it out, one step at a time.</p>',
+        starter: `int age = 16
+bool hasTicket = true
+age >= 18 && hasTicket
+`,
+        question: {
+          prompt: 'What does age >= 18 && hasTicket give?',
+          options: ['true', 'false'], answer: 'false',
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: 'age >= 18 is 16 >= 18, which is false. With &&, one false side is enough to make everything false: false && true is false.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'l-4', type: 'classify', title: 'And, or, not',
+        goal: 'Decide whether each expression is true or false.',
+        brief: '<p>Here <code>int age = 16;</code> and <code>bool member = true;</code>.</p><p><code>&amp;&amp;</code> <b>and</b>: both must be true.<br><code>||</code> <b>or</b>: at least one must be true.<br><code>!</code> <b>not</b>: flips true and false.</p><p>The computer checks your answers by running each line.</p>',
+        hint: 'Work out each comparison first, then combine them.',
+        classify: { categories: ['true', 'false'], judge: 'bool', items: [
+          { text: 'age > 10 && age < 20', answer: 'true' },
+          { text: 'age > 18 || member', answer: 'true' },
+          { text: '!member', answer: 'false' },
+          { text: 'age == 16 && !member', answer: 'false' },
+          { text: 'age < 12 || age > 65', answer: 'false' },
+          { text: '!(age >= 18)', answer: 'true' },
+        ] },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'l-5', type: 'complete', title: 'Can I ride?', mode: 'calc', lamps: true,
+        goal: 'Fill the gap: to ride you must be at least 12 AND at least 130 cm tall.',
+        brief: '<p>Turn a rule written in words into code. Leo is 10 and 140 cm tall, so he <b>cannot</b> ride: the last line must be <code>false</code>.</p>',
+        hint: 'The word AND becomes &&.',
+        starter: `int age = 10
+int height = 140
+age >= 12 ___ height >= 130
+`,
+        solution: `int age = 10
+int height = 140
+age >= 12 && height >= 130`,
+        expectLast: 'false',
+        requires: [{ feature: 'logic', label: 'Combine both conditions' }],
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'l-6', type: 'create', title: 'Even or odd', mode: 'calc', lamps: true,
+        goal: 'Write two lines: is a even? is b even? (false, then true)',
+        brief: '<p>A number is <b>even</b> when the remainder of dividing it by 2 is 0. Remember <code>%</code> from the calculator? Write one comparison for <code>a</code> and one for <code>b</code>, using the variables (not the numbers).</p>',
+        hint: 'a % 2 == 0',
+        starter: `int a = 7
+int b = 10
+`,
+        solution: `int a = 7
+int b = 10
+a % 2 == 0
+b % 2 == 0`,
+        expectTail: ['false', 'true'],
+        requires: [{ feature: 'modulo', label: 'Use %' }],
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'l-7', type: 'fix', title: 'Logic bugs', mode: 'calc', lamps: true,
+        goal: 'Fix the program so the last line gives true.',
+        brief: '<p>Three typical logic typos: an operator written backwards, a single <code>&amp;</code> instead of <code>&amp;&amp;</code>, and a name with the wrong capital letter.</p>',
+        hint: '>= (not =>) · && (two) · excellent (lowercase)',
+        starter: `int score = 75
+bool passed = score => 50
+bool excellent = score > 90 & score <= 100
+passed && !Excellent
+`,
+        solution: `int score = 75
+bool passed = score >= 50
+bool excellent = score > 90 && score <= 100
+passed && !excellent`,
+        expectLast: 'true',
+        setup: () => ({ size: 6, target: {} }),
+      },
+    ],
+  },
+  {
+    id: 4, name: 'First instructions', concept: 'Statements',
     intro: 'Programs are lists of instructions. Each one ends with ; and many of them call a method to do something.',
     challenges: [
       {
@@ -380,7 +499,7 @@ Console.WriteLine("10 / 4 = " + 10 / 4.0);`,
     ],
   },
   {
-    id: 4, name: 'The drone', concept: 'Sequence',
+    id: 5, name: 'The drone', concept: 'Sequence',
     intro: 'A program is a list of instructions. The computer runs them in order, top to bottom, one at a time.',
     challenges: [
       {
@@ -441,7 +560,7 @@ drone.Place(Color.Green);`,
     ],
   },
   {
-    id: 5, name: 'Variables', concept: 'Store values',
+    id: 6, name: 'Variables', concept: 'Store values',
     intro: 'A variable is a named box that stores a value. Every variable has a type that says what it can hold.',
     challenges: [
       {
@@ -575,7 +694,7 @@ drone.Place(roof);`,
     ],
   },
   {
-    id: 6, name: 'Loops', concept: 'Repeat',
+    id: 7, name: 'Loops', concept: 'Repeat',
     intro: 'A loop repeats a block of code. The loop variable changes on every turn, so each turn can do something slightly different.',
     challenges: [
       {
@@ -722,7 +841,7 @@ for (int x = 0; x < 8; x++)
     ],
   },
   {
-    id: 7, name: 'Conditions', concept: 'Decide',
+    id: 8, name: 'Conditions', concept: 'Decide',
     intro: 'An if statement lets the program decide. The condition is evaluated to true or false, and only one path runs.',
     challenges: [
       {
@@ -863,7 +982,7 @@ else
     ],
   },
   {
-    id: 8, name: 'Free build', concept: 'Sandbox',
+    id: 9, name: 'Free build', concept: 'Sandbox',
     intro: 'No goal: experiment with everything you have learned.',
     challenges: [
       {
@@ -942,6 +1061,13 @@ export function judge(kind, text) {
   if (kind === 'calc') {
     const c = compile(text, { mode: 'calc' });
     return { answer: c.ok ? 'Works' : 'Error', why: c.ok ? 'The compiler accepts it.' : `${c.errors[0].message.replace(/\.$/, '')}. ${c.errors[0].hint}` };
+  }
+  if (kind === 'bool') {
+    const c = compile(`int age = 16\nbool member = true\n${text}`, { mode: 'calc' });
+    if (!c.ok) return { answer: 'error', why: c.errors[0].message };
+    const r = new Runner(c.ast, new World()); r.runToEnd();
+    const last = r.results.at(-1);
+    return { answer: last.text, why: last.steps ? last.steps.join('  →  ') : last.text };
   }
   if (kind === 'style') {
     const camel = /^[a-z][a-z0-9]*([A-Z][a-z0-9]*)*$/.test(text);
