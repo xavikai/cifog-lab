@@ -16,11 +16,11 @@ const dot2=(a,b)=>a[0]*b[0]+a[1]*b[1];
 // Edge keys carry their part: "cube|F-T", "seat|B-L". Face keys: "cube:F".
 const ek=(part,edge)=>`${part}|${edge}`;
 const splitEdge=key=>key.split('|');
-const COLORS={edge:'#101215',sel:'#ffa01c',active:'#ffffff',cut:'#ff3b30',hover:'#ffffff'};
+const COLORS={edge:'#101215',sel:'#ffa01c',active:'#ffffff',cut:'#ff3b30',hover:'#ffffff',object:'#ff9800'};
 
 const state={
  model:'cube',cuts:{cube:defaultCuts('cube'),chair:defaultCuts('chair')},
- mode:'edit',selectMode:'edge',tool:'select',live:true,stale:false,projection:null,
+ mode:'edit',selectMode:'edge',tool:'select',live:true,stale:false,projection:null,objectSelected:true,
  selEdges:new Set(),activeEdge:null,selFaces:new Set(),activeFace:'cube:F',
  hoverEdge:null,hoverFace:null,
  charts:[],invalid:null,fold:1,stretch:'none',listPart:'cube',staleReason:'',
@@ -68,6 +68,7 @@ function updateHeader(){
  $$('[data-select-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.selectMode===state.selectMode)));
  $$('[data-tool]').forEach(button=>{const on=button.dataset.tool===state.tool;button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));});
  $('#workspace').classList.toggle('face-mode',state.selectMode==='face');$('#workspace').classList.toggle('object-mode',state.mode==='object');
+ const selection=$('#object-selection-state');selection.hidden=state.mode!=='object';selection.textContent=state.objectSelected?'Selected':'Not selected';selection.classList.toggle('off',!state.objectSelected);
  $('#live-unwrap').checked=state.live;
  // Guide: which step comes next?
  let step=state.touched?4:1;
@@ -126,6 +127,7 @@ function setSelectMode(mode,announce=true){
 }
 function setMode(mode){
  if(state.mode===mode)return;
+ if(mode==='edit')state.objectSelected=true;
  state.mode=mode;state.hoverEdge=null;state.hoverFace=null;closeMenu();
  message(mode==='edit'?(nonUniform()?'Edit Mode. Careful: the object scale is still not applied, so Unwrap will stretch the texture.':'Edit Mode: you can now select edges and faces.'):'Object Mode: transform the whole object here (S to scale, Ctrl A to apply). Seams and UVs are edited in Edit Mode (Tab).',mode==='edit'&&nonUniform());
  updateTransformPanel();
@@ -343,8 +345,14 @@ function overlayColor(score){const t=Math.min(1,score),a=[104,166,236],b=[246,10
 function stretchScore(metrics,key){if(state.stretch==='none')return null;const value=metrics?.get(key)?.[state.stretch]||0;return Math.min(1,value/(state.stretch==='angle'?25:1.6));}
 let lastMetrics=null;
 function updateScene(){
- const edit=state.mode==='edit',edgesVisible=edit&&state.fold>.96;
+ const edit=state.mode==='edit',object=state.mode==='object',edgesVisible=edit&&state.fold>.96;
  for(const [key,obj] of edgeObjects){
+  if(object){
+   const selected=state.objectSelected&&obj.model===state.model;
+   obj.mesh.visible=selected;obj.ghost.visible=false;obj.hit.visible=false;
+   if(selected){const r=obj.radius*1.75;obj.mesh.material.color.set(COLORS.object);obj.mesh.scale.x=obj.mesh.scale.z=r;}
+   continue;
+  }
   const visible=edgesVisible&&obj.model===state.model;
   obj.mesh.visible=obj.ghost.visible=obj.hit.visible=visible;if(!visible)continue;
   const selected=state.selEdges.has(key),active=state.activeEdge===key&&selected,seam=isSeam(key),hover=state.hoverEdge===key;
@@ -537,7 +545,7 @@ function refreshSelection(){
  * ------------------------------------------------------------------ */
 function switchModel(model){
  if(state.model===model)return;animation++;
- state.model=model;state.listPart=model==='cube'?'cube':'seat';state.activeFace=model==='cube'?'cube:F':'seat:T';
+ state.model=model;state.objectSelected=true;state.listPart=model==='cube'?'cube':'seat';state.activeFace=model==='cube'?'cube:F':'seat:T';
  state.selEdges.clear();state.selFaces.clear();state.activeEdge=null;state.hoverEdge=null;state.hoverFace=null;state.stale=false;
  $$('[data-model]').forEach(button=>{button.classList.toggle('active',button.dataset.model===model);button.setAttribute('aria-pressed',String(button.dataset.model===model));});
  $('#object-title').textContent=model==='cube'?'Cube':'Chair · 6 separate box parts';
@@ -660,8 +668,12 @@ function start3D(){
   renderer.domElement.addEventListener('pointerleave',()=>{hoverQueued=null;setHoverEdge(null);setHoverFace(null);});
   renderer.domElement.addEventListener('pointerup',event=>{
    if(!down||down.button!==0||Math.hypot(event.clientX-down.x,event.clientY-down.y)>6){down=null;return;}down=null;
-   if(state.mode!=='edit'){message('Object Mode: clicking selects the whole object. Press Tab to edit edges and faces.');return;}
    const hit=pick(event);
+   if(state.mode!=='edit'){
+    if(hit.face){state.objectSelected=true;message('Object selected. The orange outline marks the active object. Press Tab to edit edges and faces.');}
+    else{state.objectSelected=false;message('Nothing selected. Click the object to select it.',true);}
+    updateHeader();updateScene();return;
+   }
    if(hit.edge){if(state.tool==='seam'&&!event.shiftKey)toggleSeam(hit.edge);else selectEdge(hit.edge,event.shiftKey);return;}
    if(hit.face){selectFace(hit.face,event.shiftKey);return;}
    if(!event.shiftKey&&hasSelection())deselectAll();
