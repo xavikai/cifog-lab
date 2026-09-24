@@ -40,7 +40,7 @@ test('starters: create/fix/complete need work, observe/predict run as given', ()
     const c = compile(ch.starter, { mode: ch.mode });
     if (ch.type === 'observe' || ch.type === 'predict') { assert.equal(runHeadless(ch, ch.starter).error, null, ch.id); continue; }
     if (ch.type === 'complete') { assert.ok(c.errors.some(e => e.message === 'Fill in the blank ___'), ch.id); continue; }
-    if (['1-3', '2-3', '0-7', 'n-5', 't-7', 'l-7', 'm-6', 'm-8'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
+    if (['1-3', '2-3', '0-7', 'n-5', 't-7', 'l-7', 'm-6', 'm-8', 'a-8'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
     assert.equal(c.ok, true, `${ch.id}: ${c.errors.map(e => e.message)}`);
     if (!ch.sandbox) assert.equal(runHeadless(ch, ch.starter, 3).ok, false, ch.id);
   }
@@ -272,4 +272,54 @@ test('methods: endless recursion stops with a StackOverflowException', () => {
   const c = compile('F(0);\nvoid F(int n) { F(n + 1); }');
   const r = new Runner(c.ast, new World());
   assert.throws(() => r.runToEnd(), e => e.exception === 'StackOverflowException');
+});
+
+// ─── Arrays ─────────────────────────────────────────────────────────────────
+test('arrays: initializers, new, indexing, Length, foreach and printing', () => {
+  assert.deepEqual(out(`int[] h = { 3, 5, 2 };
+Console.WriteLine(h.Length);
+Console.WriteLine(h[1]);
+Console.WriteLine(h);
+int[] f = new int[3];
+f[1] = 4; f[2]++; f[0] += 2;
+Console.WriteLine(f[0] + f[1] + f[2]);
+int total = 0;
+foreach (int x in h) { total += x; }
+Console.WriteLine(total);
+string[] names = new string[2];
+Console.WriteLine("[" + names[0] + "]");
+Color[] cs = new Color[] { Color.Red, Color.Blue };
+Console.WriteLine(cs[1]);`), ['3', '5', 'System.Int32[]', '7', '10', '[]', 'Blue']);
+});
+
+test('arrays: passed to a method, the method changes the same array', () => {
+  assert.deepEqual(out(`int[] a = { 1, 2 };
+Double(a);
+Console.WriteLine(a[0] + a[1]);
+void Double(int[] v) { for (int i = 0; i < v.Length; i++) v[i] = v[i] * 2; }`), ['6']);
+});
+
+test('arrays: one position too far is an IndexOutOfRangeException at that line', () => {
+  const c = compile('int[] h = { 3, 1, 4 };\nfor (int i = 0; i <= h.Length; i++)\n{\n    drone.Build(h[i]);\n}');
+  const r = new Runner(c.ast, new World());
+  assert.throws(() => r.runToEnd(), e => e.exception === 'IndexOutOfRangeException' && e.line === 4 && /positions 0 to 2/.test(e.hint));
+});
+
+test('arrays: compiler errors for common mistakes', () => {
+  assert.deepEqual(errors('var a = { 1, 2 };'), ['CS0820']);
+  assert.deepEqual(errors('int a = { 1, 2 };'), ['CS0622']);
+  assert.deepEqual(errors('int[] a = { 1, 2 };\nint b = a;'), ['CS0029']);
+  assert.deepEqual(errors('int[] a = { 1, 2 };\nforeach (int x in a) { x = 3; }'), ['CS1656']);
+  assert.deepEqual(errors('string s = "hi";\ns[0] = \'H\';'), ['CS0200']);
+  assert.deepEqual(errors('int[5] a;'), ['CS0270']);
+  assert.deepEqual(errors('int[] a = new int[3];\na.Length = 4;'), ['CS0200']);
+  assert.deepEqual(errors('int n = 5;\nforeach (int x in n) { }'), ['CS1579']);
+  assert.deepEqual(errors('int[] a;\na[0] = 1;'), ['CS0165']);
+});
+
+test('arrays: conditions show the position first, then the value', () => {
+  const c = compile('int[] h = { 3, 7 };\nint i = 1;\nif (h[i] > 5) { }');
+  const r = new Runner(c.ast, new World());
+  const cond = [...r.run()].find(e => e.kind === 'cond');
+  assert.equal(cond.text, 'h[i] > 5  →  h[1] > 5  →  7 > 5  →  true');
 });

@@ -250,3 +250,13 @@ dialog::backdrop{background:#0b0c0ecc}dialog h2{font-size:1.6rem;letter-spacing:
 .frame.active>.scope.method{border-color:#5f86c4;background:#1c2330;box-shadow:0 0 0 1px #5f86c455}
 .scope.method .scope-head{color:#9db8e3}.frame-name{font-family:var(--mono,monospace);text-transform:none;letter-spacing:0;font-size:.72rem;color:#cfe0ff}
 #step-into[hidden]{display:none}
+
+/* Arrays: a row of boxes with their positions */
+.var.array{grid-template-columns:auto 1fr;row-gap:4px}.var.array .arr{grid-column:1/-1}
+.arr{display:flex;flex-wrap:wrap;gap:3px}
+.arr .cell{display:flex;flex-direction:column;align-items:center;min-width:30px;background:#2c3036;border:1px solid #454b53;border-radius:4px;padding:1px 4px 0}
+.arr .cell b{font-weight:500;color:var(--num);white-space:nowrap;display:flex;align-items:center;gap:3px}
+.arr .cell i{font-style:normal;font-size:.56rem;color:#7f8893;line-height:1.2}
+.arr .cell.read{border-color:#5f86c4;background:#22324a}.arr .cell.read i{color:#9db8e3}
+.arr .cell.write{border-color:var(--yellow);background:#4a3f16}.arr .cell.write i{color:#f0d68a}
+.arr .cell.empty b{color:#7f8893;font-style:italic}

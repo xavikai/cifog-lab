@@ -121,10 +121,25 @@ Methods are written as local functions below the main program (`void Tower(int h
 7. **Build a wall method** (order) — two parameters, `Wall(int length, Color color)`.
 8. **A street of houses** (create) — a parameter plus a loop inside the method.
 
+## Level 10 · Arrays
+
+An array variable is drawn in Memory as a row of boxes with their positions underneath; the box read in the current step lights up blue and a box being written lights up yellow. Conditions show the position first and then the value: `h[i] > 5 → h[1] > 5 → 7 > 5 → true`. `foreach` steps show which item comes next (`heights[2] → 6`). Arrays are real references: passing one to a method lets the method change the same boxes (both frames light up). Array assignment between variables (`b = a`) is left for Code Lab 02, with the other references.
+
+1. **A row of boxes** (observe) — `int[] heights = { … }`, positions from 0, `Length`.
+2. **Which box?** (predict) — `scores[1]` is the second value.
+3. **A skyline with a loop** (complete) — `for` with `i < heights.Length` and `heights[i]`.
+4. **One box too far** (fix) — `<=` gives an IndexOutOfRangeException at the exact line, with the position asked for; printing an array prints `System.Int32[]`, not its values.
+5. **Empty boxes** (predict) — `new int[4]` starts full of zeros; writing into one box.
+6. **Add up and find the tallest** (create) — the sum and the "best so far" patterns; the result must be calculated.
+7. **One by one with foreach** (order) — `foreach` reads items in order and cannot change them (CS1656 if you try).
+8. **Two streets, one method** (create) — a method with an `int[]` parameter, called for two arrays.
+
+Compiler checks include CS0820 (`var` with `{ … }`), CS0622 (`{ … }` for a non-array), CS0270 (`int[5] a`), CS0029 with a hint when an array is used where one value is expected, CS0200 (`Length` or a string character cannot be assigned), CS1579 (`foreach` over a number) and CS1656.
+
 ## Free build
 
 A sandbox with a pyramid made from three nested loops and the conditional operator. Good for open-ended tasks: a spiral staircase, a hollow tower, a gradient of colors.
 
 ## Next levels (planned)
 
-Code Lab 01 continues with arrays (a strip of boxes with indices, towers from `int[]`) and a closing project, "From block to city". Code Lab 02 (objects, towards Unity) will cover classes and objects, references and `null`, `List<T>` and `foreach`, `struct` vs `class`, `Update()`/`deltaTime` and light inheritance.
+Code Lab 01 closes with a project, "From block to city": methods, arrays, loops and conditions together, reading varied plots with `drone.Scan()`. Code Lab 02 (objects, towards Unity) will cover classes and objects, references and `null`, `List<T>` and `foreach`, `struct` vs `class`, `Update()`/`deltaTime` and light inheritance.

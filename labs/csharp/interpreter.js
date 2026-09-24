@@ -1,7 +1,7 @@
 // A small, teaching-oriented C# interpreter.
 // It understands a focused subset of C# (top-level statements, local variables,
 // if/else, while, do/while, for, break/continue, methods (local functions with
-// parameters and return), expressions and the lab API)
+// parameters and return), arrays and foreach, expressions and the lab API)
 // and runs programs step by step so the interface can show what happens.
 
 export const COLORS = ['None', 'White', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'Black'];
@@ -23,6 +23,10 @@ export class CSharpError extends Error {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const isNum = t => NUMERIC.includes(t);
+export const isArr = t => typeof t === 'string' && t.endsWith('[]');
+export const elemOf = t => t.slice(0, -2);
+const DEFAULTS = { int: 0, float: 0, double: 0, bool: false, char: '\0', string: null, Color: 'None', Direction: 'Forward' };
+const NET_NAMES = { int: 'Int32', float: 'Single', double: 'Double', bool: 'Boolean', string: 'String', char: 'Char' };
 const widest = (a, b) => NUMERIC[Math.max(NUMERIC.indexOf(a), NUMERIC.indexOf(b))];
 export function implicitOK(from, to) {
   if (from === to) return true;
@@ -51,7 +55,9 @@ export function formatFloat(v) {
 }
 // How C# prints a value (Console.WriteLine, string concatenation)
 export function formatValue(value, type) {
-  if (value === undefined) return '';
+  if (value === undefined || value === null) return '';
+  // Printing an array shows its type, not its values (a classic surprise).
+  if (isArr(type)) return NET_NAMES[elemOf(type)] ? `System.${NET_NAMES[elemOf(type)]}[]` : type;
   switch (type) {
     case 'bool': return value ? 'True' : 'False';
     case 'float': return formatFloat(value);
@@ -62,6 +68,8 @@ export function formatValue(value, type) {
 // How a value would look written as C# source (used in the Memory panel and explanations)
 export function literal(value, type) {
   if (value === undefined) return '?';
+  if (value === null) return 'null';
+  if (isArr(type)) return `{ ${value.map(v => literal(v, elemOf(type))).join(', ')} }`;
   switch (type) {
     case 'string': return JSON.stringify(value);
     case 'char': return `'${value === "'" ? "\\'" : value === '\n' ? '\\n' : value}'`;
@@ -214,13 +222,35 @@ class Parser {
   isDeclStart() {
     const t = this.tok, n = this.peek();
     if (t.t === 'kw' && TYPE_KEYWORDS.has(t.v)) return true;
+    if (t.t === 'id' && n.t === 'op' && n.v === '[' && this.peek(2).v === ']' && this.peek(3).t === 'id') return true;
     return t.t === 'id' && n.t === 'id';
+  }
+  // After a type name: optional [] makes it an array type.
+  arraySuffix(type) {
+    if (!this.is('[')) return type;
+    const open = this.tok; this.p++;
+    if (this.is(',')) this.fail('LAB', 'Arrays with several dimensions [,] are not part of this lab yet.', this.tok, 'Use a one-dimensional array: int[] heights.');
+    if (!this.is(']')) this.fail('CS0270', "Array size cannot be specified in a variable declaration (try initializing with a 'new' expression)", open, `Write the size after new: ${type}[] name = new ${type}[5];`);
+    this.p++;
+    if (this.is('[')) this.fail('LAB', 'Arrays of arrays are not part of this lab.', this.tok);
+    return type + '[]';
+  }
+  arrayItems() {
+    const open = this.expect('{'), items = [];
+    while (!this.is('}')) {
+      if (this.tok.t === 'eof') this.fail('CS1513', '} expected', open, 'The list of values that starts with { must end with }.');
+      items.push(this.expression());
+      if (!this.eat(',')) break;
+    }
+    this.expect('}');
+    return items;
   }
 
   isMethodStart() {
     const t = this.tok, n = this.peek(), n2 = this.peek(2);
     if (this.is('void') || this.is('static')) return true;
     const typeLike = (t.t === 'kw' && TYPE_KEYWORDS.has(t.v) && t.v !== 'var') || t.t === 'id';
+    if (typeLike && n.v === '[' && n.t === 'op' && this.peek(2).v === ']') return this.peek(3).t === 'id' && this.peek(4).v === '(';
     return typeLike && n.t === 'id' && n2.t === 'op' && n2.v === '(';
   }
 
@@ -232,6 +262,7 @@ class Parser {
     if (!(typeTok.t === 'id' || (typeTok.t === 'kw' && (TYPE_KEYWORDS.has(typeTok.v) || typeTok.v === 'void')))) this.fail('CS1001', 'Identifier expected', typeTok, 'A method starts with the type of value it gives back (void if none), then its name: void Tower(int h)');
     if (typeTok.v === 'var') this.fail('CS0825', "The contextual keyword 'var' may only appear within a local variable declaration", typeTok, 'Write the real type the method gives back: int, string… or void.');
     this.p++;
+    const returnType = typeTok.v === 'void' ? 'void' : this.arraySuffix(typeTok.v);
     const nameTok = this.tok;
     if (nameTok.t !== 'id') {
       if (nameTok.t === 'kw') this.fail('CS1041', `Identifier expected; '${nameTok.v}' is a keyword`, nameTok, `${nameTok.v} is a reserved word in C#. Choose another name for your method.`);
@@ -246,13 +277,14 @@ class Parser {
         if (!(pt.t === 'id' || (pt.t === 'kw' && TYPE_KEYWORDS.has(pt.v)))) this.fail('CS1001', 'Identifier expected', pt, 'Each parameter needs a type and a name: int h');
         if (pt.v === 'var') this.fail('CS0825', "The contextual keyword 'var' may only appear within a local variable declaration", pt, 'Parameters need a real type: int h, not var h.');
         this.p++;
+        const ptype = this.arraySuffix(pt.v);
         const pn = this.tok;
         if (pn.t !== 'id') {
           if (pn.t === 'kw') this.fail('CS1041', `Identifier expected; '${pn.v}' is a keyword`, pn, `${pn.v} is a reserved word in C#. Choose another name.`);
           this.fail('CS1001', 'Identifier expected', pn, `After the type, write a name for the parameter: ${pt.v} value`);
         }
         this.p++;
-        params.push({ varType: pt.v, name: pn.v, line: pn.line, col: pn.col });
+        params.push({ varType: ptype, name: pn.v, line: pn.line, col: pn.col });
       } while (this.eat(','));
     }
     const close = this.expect(')');
@@ -262,14 +294,14 @@ class Parser {
       const arrow = this.tok; this.p++;
       const value = this.expression();
       this.expect(';');
-      const ret = typeTok.v === 'void' ? this.node('ExprStmt', { expr: value }, value) : this.node('Return', { value }, arrow);
+      const ret = returnType === 'void' ? this.node('ExprStmt', { expr: value }, value) : this.node('Return', { value }, arrow);
       body = this.node('Block', { body: [ret], endLine: arrow.line, arrow: true }, arrow);
     } else {
       if (this.is(';')) this.fail('CS1514', '{ expected', this.tok, 'A method needs a body: the instructions go between { and }.');
       body = this.block();
     }
     this.inMethod = false;
-    return this.node('MethodDecl', { returnType: typeTok.v, name: nameTok.v, params, body, nameLine: nameTok.line, nameCol: nameTok.col, headerEnd: close.line }, start);
+    return this.node('MethodDecl', { returnType, name: nameTok.v, params, body, nameLine: nameTok.line, nameCol: nameTok.col, headerEnd: close.line }, start);
   }
 
   statement() {
@@ -289,6 +321,7 @@ class Parser {
         case 'while': return this.whileStmt();
         case 'do': return this.doStmt();
         case 'for': return this.forStmt();
+        case 'foreach': return this.foreachStmt();
         case 'break': case 'continue': this.p++; this.expect(';'); return this.node(t.v === 'break' ? 'Break' : 'Continue', {}, t);
         case 'else': this.fail('CS1525', "Invalid expression term 'else'", t, 'An else must come right after the } of an if block.');
         default:
@@ -317,6 +350,7 @@ class Parser {
 
   declaration() {
     const typeTok = this.tok; this.p++;
+    const varType = this.arraySuffix(typeTok.v);
     const decls = [];
     do {
       const n = this.tok;
@@ -326,11 +360,14 @@ class Parser {
       }
       this.p++;
       let init = null;
-      if (this.eat('=')) init = this.expression();
+      if (this.eat('=')) {
+        if (this.is('{')) { const at = this.tok; init = this.node('ArrayInit', { items: this.arrayItems() }, at); }
+        else init = this.expression();
+      }
       else if (this.is('==')) this.fail('CS1002', '; expected', this.tok, 'To give a variable a value use a single = (== compares two values).');
       decls.push({ name: n.v, init, line: n.line, col: n.col });
     } while (this.eat(','));
-    return this.node('VarDecl', { varType: typeTok.v, decls }, typeTok);
+    return this.node('VarDecl', { varType, decls }, typeTok);
   }
 
   simple() {
@@ -384,6 +421,23 @@ class Parser {
     if (this.is(',')) this.fail('LAB', 'Several updates separated by commas are not part of this lab.', this.tok);
     this.expect(')');
     return this.node('For', { init, test, update, body: this.statement() }, t);
+  }
+
+  foreachStmt() {
+    const t = this.tok; this.p++;
+    this.expect('(');
+    const typeTok = this.tok;
+    if (!(typeTok.t === 'id' || (typeTok.t === 'kw' && TYPE_KEYWORDS.has(typeTok.v)))) this.fail('CS1525', `Invalid expression term '${typeTok.v}'`, typeTok, 'foreach starts with the type and the name of the item: foreach (int h in heights)');
+    this.p++;
+    const varType = this.arraySuffix(typeTok.v);
+    const n = this.tok;
+    if (n.t !== 'id') this.fail('CS1001', 'Identifier expected', n, 'Write a name for each item: foreach (int h in heights)');
+    this.p++;
+    if (!this.is('in')) this.fail('CS1515', "'in' expected", this.tok, 'foreach (type name in array)');
+    this.p++;
+    const collection = this.expression();
+    this.expect(')');
+    return this.node('Foreach', { varType, name: n.v, nameLine: n.line, nameCol: n.col, collection, body: this.statement() }, t);
   }
 
   expression() { return this.ternary(); }
@@ -443,6 +497,26 @@ class Parser {
       return e;
     }
   }
+  newExpr() {
+    const t = this.tok; this.p++;
+    const typeTok = this.tok;
+    if (typeTok.t === 'op' && typeTok.v === '[') this.fail('LAB', 'Write the type of the array after new: new int[] { … }', typeTok);
+    if (!(typeTok.t === 'id' || (typeTok.t === 'kw' && TYPE_KEYWORDS.has(typeTok.v) && typeTok.v !== 'var'))) this.fail('CS1526', 'A new expression requires an argument list or (), [], or {} after type', typeTok);
+    this.p++;
+    if (this.is('(')) this.fail('LAB', `Creating objects with new ${typeTok.v}() is part of Code Lab 02 (objects).`, this.tok, 'Here new is only used to create arrays: new int[5]');
+    if (!this.is('[')) this.fail('CS1526', 'A new expression requires an argument list or (), [], or {} after type', this.tok, `To create an array: new ${typeTok.v}[5]`);
+    this.p++;
+    if (this.is(']')) {
+      this.p++;
+      if (!this.is('{')) this.fail('CS1586', 'Array creation must have array size or array initializer', this.tok, `Give a size, new ${typeTok.v}[5], or the values, new ${typeTok.v}[] { 1, 2, 3 }.`);
+      return this.node('NewArray', { elem: typeTok.v, items: this.arrayItems() }, t);
+    }
+    if (this.is(',')) this.fail('LAB', 'Arrays with several dimensions [,] are not part of this lab yet.', this.tok);
+    const size = this.expression();
+    this.expect(']');
+    if (this.is('{')) this.fail('LAB', 'Give either the size or the values, not both.', this.tok, `new ${typeTok.v}[] { 1, 2, 3 } works out the size by itself.`);
+    return this.node('NewArray', { elem: typeTok.v, size }, t);
+  }
   primary() {
     const t = this.tok;
     switch (t.t) {
@@ -463,11 +537,13 @@ class Parser {
       case 'id': this.p++; return this.node('Ident', { name: t.v }, t);
       case 'kw':
         if (t.v === 'true' || t.v === 'false') { this.p++; return this.node('Bool', { value: t.v === 'true' }, t); }
+        if (t.v === 'new') return this.newExpr();
         if (TYPE_KEYWORDS.has(t.v)) this.fail('CS1525', `Invalid expression term '${t.v}'`, t, `${t.v} is a type. To create a variable write: ${t.v} name = value;`);
         this.fail('LAB', `'${t.v}' is valid C#, but it isn't part of this lab yet.`, t);
         break;
       case 'op':
         if (t.v === '(') { this.p++; const e = this.expression(); this.expect(')'); return this.node('Paren', { expr: e }, t); }
+        if (t.v === '{') this.fail('CS1525', "Invalid expression term '{'", t, 'Here, create the array with new: new int[] { 1, 2, 3 }');
         break;
       case 'eof':
         this.fail('CS1733', 'Expected expression', t, 'The program ends in the middle of an instruction.');
@@ -536,6 +612,8 @@ function kidsOf(e) {
   const out = [];
   for (const k of ['object', 'left', 'right', 'arg', 'expr', 'index', 'test', 'a', 'b', 'callee']) if (e[k] && typeof e[k] === 'object') out.push(e[k]);
   if (e.args) out.push(...e.args);
+  if (e.items) out.push(...e.items);
+  if (e.size) out.push(e.size);
   if (e.type === 'Interp') for (const p of e.parts) if (typeof p !== 'string') out.push(p);
   return out;
 }
@@ -549,6 +627,7 @@ function declaredNames(stmts, out = new Map()) {
     if (!s || typeof s !== 'object') return;
     if (s.type === 'MethodDecl') return;
     if (s.type === 'VarDecl') for (const d of s.decls) if (!out.has(d.name)) out.set(d.name, d.line);
+    if (s.type === 'Foreach' && !out.has(s.name)) out.set(s.name, s.nameLine);
     for (const k of ['body', 'cons', 'alt', 'init', 'update']) {
       const v = s[k];
       if (Array.isArray(v)) v.forEach(visit); else if (v && typeof v === 'object' && v.type) visit(v);
@@ -682,6 +761,7 @@ class Checker {
         return new Set([...a1].filter(v => a2.has(v)));
       }
       case 'While': case 'Do': case 'For': return this.loop(s, A);
+      case 'Foreach': return this.foreachStmt(s, A);
       case 'MethodDecl': return A;
       case 'Return': return this.returnStmt(s, A);
       case 'Break': case 'Continue':
@@ -732,6 +812,34 @@ class Checker {
     return A;
   }
 
+  foreachStmt(s, A) {
+    this.stats.features.add('foreach');
+    if (this.loops) this.stats.features.add('nestedLoop');
+    const ct = this.type(s.collection, A);
+    let item = null;
+    if (ct) {
+      if (isArr(ct)) item = elemOf(ct);
+      else if (ct === 'string') item = 'char';
+      else this.error('CS1579', `foreach statement cannot operate on variables of type '${ct}' because '${ct}' does not contain a public instance or extension definition for 'GetEnumerator'`, s.collection, 'foreach goes through the items of an array (or the characters of a string). To repeat a number of times, use for.');
+    }
+    let type = s.varType === 'var' ? item : this.resolveType(s.varType, s);
+    if (type && item && s.varType !== 'var' && !implicitOK(item, type)) {
+      this.error('CS0030', `Cannot convert type '${item}' to '${type}'`, s, `The items are of type ${item}: foreach (${item} ${s.name} in …)`);
+      type = null;
+    }
+    this.scopes.push(new Map());
+    const existing = this.lookup(s.name);
+    if (existing) this.error('CS0136', `A local or parameter named '${s.name}' cannot be declared in this scope because that name is used in an enclosing local scope to define a local or parameter`, { line: s.nameLine, col: s.nameCol }, `${s.name} already exists (line ${existing.line}). Pick a different name.`);
+    const v = { name: s.name, type, line: s.nameLine, foreachVar: true };
+    s.resolvedType = type; s.itemType = item;
+    this.scopes.at(-1).set(s.name, v);
+    this.loops++;
+    this.body(s.body, new Set(A).add(v));
+    this.loops--;
+    this.scopes.pop();
+    return A;
+  }
+
   cond(e, A) {
     const t = this.type(e, A);
     if (t && t !== 'bool') this.error('CS0029', `Cannot implicitly convert type '${t}' to 'bool'`, e, 'A condition must be true or false, for example x > 3 or x == 0.');
@@ -739,6 +847,7 @@ class Checker {
 
   resolveType(name, at) {
     if (VALUE_TYPES.includes(name)) return name;
+    if (isArr(name)) { const el = this.resolveType(elemOf(name), at); if (el) this.stats.features.add('array'); return el ? el + '[]' : null; }
     const s = suggest(name, VALUE_TYPES);
     this.error('CS0246', `The type or namespace name '${name}' could not be found`, at, s ? `Did you mean ${s}? C# is case-sensitive.` : 'Available types here: int, float, double, bool, string, Color, Direction.');
     return null;
@@ -749,7 +858,11 @@ class Checker {
     const declared = s.varType === 'var' ? 'var' : this.resolveType(s.varType, s);
     for (const d of s.decls) {
       let type = declared;
-      if (d.init) {
+      if (d.init && d.init.type === 'ArrayInit') {
+        if (declared === 'var') { this.error('CS0820', 'Cannot initialize an implicitly-typed variable with an array initializer', d.init, 'With var, write the type of the array: var heights = new int[] { 1, 2, 3 };'); type = null; }
+        else if (declared && !isArr(declared)) { this.error('CS0622', 'Can only use array initializer expressions to assign to array types. Try using a new expression instead.', d.init, `{ … } holds several values. For an array, write the type with []: ${declared}[] ${d.name} = { … };`); type = null; }
+        else if (declared) this.arrayItemsCheck(d.init, elemOf(declared), A);
+      } else if (d.init) {
         const t = this.type(d.init, A);
         if (declared === 'var') {
           type = t;
@@ -774,6 +887,12 @@ class Checker {
     return A;
   }
 
+  arrayItemsCheck(node, elem, A) {
+    node.elemType = elem;
+    this.stats.features.add('array');
+    for (const it of node.items) { const t = this.type(it, A); if (t) this.convertible(it, t, elem); }
+  }
+
   convertible(node, from, to) {
     if (from === 'void') { this.error('CS0029', `Cannot implicitly convert type 'void' to '${to}'`, node, 'This method does not give back a value.'); return false; }
     if (implicitOK(from, to)) return true;
@@ -784,7 +903,9 @@ class Checker {
         to === 'int' ? `An int can't hold decimals. Use (int) to cut them off, or make the variable a ${from}.` : `A ${to} is less precise than a ${from}. Use (${to}) to convert it.`);
     else {
       let hint = '';
-      if (from === 'string' && to === 'Color') hint = 'Colors are written Color.Red, not "Red".';
+      if (isArr(from) && elemOf(from) === to) hint = 'An array holds many values. Pick one with [i], or count them with .Length.';
+      else if (isArr(to) && elemOf(to) === from) hint = `To store several values, create an array: { 1, 2, 3 } or new ${from}[3].`;
+      else if (from === 'string' && to === 'Color') hint = 'Colors are written Color.Red, not "Red".';
       else if (from === 'string' && isNum(to)) hint = 'Numbers are written without quotes: 3, not "3".';
       else if (isNum(from) && to === 'string') hint = 'Text needs quotes: "3". Or convert the number with .ToString().';
       else if (from === 'string' && to === 'bool') hint = 'Write true or false without quotes.';
@@ -794,15 +915,27 @@ class Checker {
   }
 
   target(e, A, mustBeAssigned) {
+    if (e.type === 'Index') {
+      const t = this.type(e.object, A), it = this.type(e.index, A);
+      if (!t) return null;
+      if (t === 'string') { this.error('CS0200', "Property or indexer 'string.this[int]' cannot be assigned to -- it is read only", e, 'The characters of a string cannot be changed one by one. Build a new string instead.'); return null; }
+      if (!isArr(t)) { this.error('CS0021', `Cannot apply indexing with [] to an expression of type '${t}'`, e); return null; }
+      if (it && it !== 'int') { this.error('CS0029', `Cannot implicitly convert type '${it}' to 'int'`, e.index, 'The position inside [ ] must be a whole number.'); return null; }
+      this.stats.features.add('arrayWrite');
+      e.ty = elemOf(t);
+      return { name: show(e), type: elemOf(t), element: true };
+    }
     if (e.type === 'Member') {
       const objType = this.type(e.object, A);
-      if (objType === 'Drone' && e.name in DRONE_PROPS) this.error('CS0200', `Property or indexer 'Drone.${e.name}' cannot be assigned to -- it is read only`, e, 'Use drone.Move(...) or drone.MoveTo(x, z) to change where the drone is.');
+      if (e.name === 'Length' && (isArr(objType) || objType === 'string')) this.error('CS0200', `Property or indexer '${isArr(objType) ? 'Array' : 'string'}.Length' cannot be assigned to -- it is read only`, e, isArr(objType) ? 'An array keeps the size it was created with. Create a new array to get a different size.' : 'The length of a string changes only when its text changes.');
+      else if (objType === 'Drone' && e.name in DRONE_PROPS) this.error('CS0200', `Property or indexer 'Drone.${e.name}' cannot be assigned to -- it is read only`, e, 'Use drone.Move(...) or drone.MoveTo(x, z) to change where the drone is.');
       else this.error('CS0131', 'The left-hand side of an assignment must be a variable, property or indexer', e);
       return null;
     }
     if (e.type !== 'Ident') { this.error('CS0131', 'The left-hand side of an assignment must be a variable, property or indexer', e); return null; }
     const v = this.lookup(e.name);
     if (!v) { this.unknownName(e); return null; }
+    if (v.foreachVar) { this.error('CS1656', `Cannot assign to '${e.name}' because it is a 'foreach iteration variable'`, e, 'foreach only reads the items. To change them, use a for loop and write array[i] = …;'); return null; }
     if (mustBeAssigned && !A.has(v)) this.unassigned(e, v);
     e.ty = v.type;
     return v;
@@ -813,7 +946,7 @@ class Checker {
     const v = this.target(s.target, A, s.op !== '=');
     const t = this.type(s.value, A);
     if (!v || !v.type || !t) return A;
-    if (s.op === '=') { this.convertible(s.value, t, v.type); return new Set(A).add(v); }
+    if (s.op === '=') { this.convertible(s.value, t, v.type); return v.element ? A : new Set(A).add(v); }
     const r = this.binaryType(s.op[0], v.type, t, s);
     if (r && !implicitOK(r, v.type)) this.convertible(s.value, r, v.type);
     return A;
@@ -861,13 +994,25 @@ class Checker {
       case 'Index': {
         const t = this.type(e.object, A), it = this.type(e.index, A);
         if (!t) return null;
-        if (t !== 'string') { this.error('CS0021', `Cannot apply indexing with [] to an expression of type '${t}'`, e, 'Only text (string) can be read letter by letter here.'); return null; }
+        if (t !== 'string' && !isArr(t)) { this.error('CS0021', `Cannot apply indexing with [] to an expression of type '${t}'`, e, 'Only arrays and text (string) can be read item by item with [ ].'); return null; }
         if (it && it !== 'int') { this.error('CS0029', `Cannot implicitly convert type '${it}' to 'int'`, e.index, 'The position inside [ ] must be a whole number.'); return null; }
+        if (isArr(t)) { this.stats.features.add('arrayIndex'); return elemOf(t); }
         this.stats.features.add('index');
         return 'char';
       }
       case 'Interp': if (e.parts.some(x => typeof x !== 'string')) this.stats.features.add('interpolation'); for (const p of e.parts) if (typeof p !== 'string') { const t = this.type(p, A); if (t === 'void') this.error('CS0029', "Cannot implicitly convert type 'void' to 'object'", p); } return 'string';
       case 'Paren': return this.type(e.expr, A);
+      case 'ArrayInit': this.error('CS1525', "Invalid expression term '{'", e, 'Here, create the array with new: new int[] { 1, 2, 3 }'); return null;
+      case 'NewArray': {
+        const el = this.resolveType(e.elem, e);
+        this.stats.features.add('newArray'); this.stats.features.add('array');
+        if (e.size) {
+          const st = this.type(e.size, A);
+          if (st && st !== 'int') this.error('CS0029', `Cannot implicitly convert type '${st}' to 'int'`, e.size, 'The size of an array is a whole number.');
+          if (e.size.type === 'Unary' && e.size.op === '-' && e.size.arg.type === 'Num') this.error('CS0248', 'Cannot create an array with a negative size', e.size);
+        } else if (el) this.arrayItemsCheck(e, el, A);
+        return el ? el + '[]' : null;
+      }
       case 'Ident': {
         if (e.name === 'drone' && !this.lookup('drone')) return 'Drone';
         if (this.staticClass(e)) { this.error('CS0119', `'${e.name}' is a type, which is not valid in the given context`, e, e.name === 'Color' ? 'Choose one color: Color.Red' : ''); return null; }
@@ -920,6 +1065,7 @@ class Checker {
       if (op === '+' && (l === 'bool' || r === 'bool')) hint = 'true and false cannot be added.';
       else if (['==', '!='].includes(op) && (l === 'string' || r === 'string')) hint = 'Compare text with text and numbers with numbers. "3" (text) is not the same as 3 (number).';
       else if (['&&', '||'].includes(op)) hint = `Both sides of ${op} must be true/false conditions, for example x > 0 ${op} x < 5.`;
+      else if (isArr(l) || isArr(r)) hint = 'An array is a whole row of values. Use one item, like heights[0], or heights.Length.';
       this.error('CS0019', `Operator '${op}' cannot be applied to operands of type '${l}' and '${r}'`, at, hint);
       return null;
     };
@@ -961,7 +1107,12 @@ class Checker {
       this.error('CS1061', `'Drone' does not contain a definition for '${e.name}'`, { line: e.nameLine, col: e.nameCol }, s ? `Did you mean ${s}? C# is case-sensitive.` : '');
       return null;
     }
-    if (t === 'string' && e.name === 'Length') return 'int';
+    if ((t === 'string' || isArr(t)) && e.name === 'Length') return 'int';
+    if (isArr(t)) {
+      const s = suggest(e.name, ['Length']);
+      this.error('CS1061', `'${t}' does not contain a definition for '${e.name}'`, { line: e.nameLine, col: e.nameCol }, s ? `Did you mean ${s}? C# is case-sensitive.` : 'An array has Length (how many items it holds). Read an item with [i].');
+      return null;
+    }
     if (t === 'string' && e.name in STRING_METHODS) { this.error('CS0428', `Cannot convert method group '${e.name}' to non-delegate type`, e, `${e.name} is a method: add brackets, ${e.name}().`); return null; }
     const s = t === 'string' ? suggest(e.name, ['Length', ...Object.keys(STRING_METHODS)]) : null;
     this.error('CS1061', `'${t}' does not contain a definition for '${e.name}'`, { line: e.nameLine, col: e.nameCol }, s ? `Did you mean ${s}?` : '');
@@ -1038,6 +1189,7 @@ class Checker {
         this.stats.methods.add(c.name);
         return m.returns;
       }
+      if (isArr(t) && c.name === 'Length') { argTypes(); this.error('CS1955', "Non-invocable member 'Array.Length' cannot be used like a method.", e, 'Length is a property, not a method: remove the brackets.'); return null; }
       if (t !== 'Drone') { argTypes(); this.error('CS1061', `'${t}' does not contain a definition for '${c.name}'`, { line: c.nameLine, col: c.nameCol }); return null; }
       key = `Drone.${c.name}`;
       owner = 'Drone';
@@ -1113,6 +1265,8 @@ export function show(e, valueOf) {
     case 'Binary': return `${s(e.left)} ${e.op} ${s(e.right)}`;
     case 'Cast': return `(${e.to})${s(e.arg)}`;
     case 'Cond': return `${s(e.test)} ? ${s(e.a)} : ${s(e.b)}`;
+    case 'ArrayInit': return `{ ${e.items.map(s).join(', ')} }`;
+    case 'NewArray': return e.size ? `new ${e.elem}[${s(e.size)}]` : `new ${e.elem}[] { ${e.items.map(s).join(', ')} }`;
   }
   return '';
 }
@@ -1183,6 +1337,7 @@ export class Runner {
     });
     if (count) this.lineCounts.set(line, (this.lineCounts.get(line) || 0) + 1);
     this.changed = new Set();
+    this.access = null; // the array item read or written in this step
   }
   note(line, text, summary = text) {
     this.notes.set(line, text);
@@ -1217,7 +1372,8 @@ export class Runner {
   *preStmt(s) {
     switch (s.type) {
       case 'VarDecl': for (const d of s.decls) if (d.init) yield* this.pre(d.init); return;
-      case 'Assign': yield* this.pre(s.value); return;
+      case 'Assign': yield* this.pre(s.target); yield* this.pre(s.value); return;
+      case 'IncDec': yield* this.pre(s.target); return;
       case 'ExprStmt': yield* this.pre(s.expr); return;
       case 'Return': if (s.value) yield* this.pre(s.value); return;
     }
@@ -1344,6 +1500,30 @@ export class Runner {
         this.popScope();
         return;
       }
+      case 'Foreach': {
+        yield* this.pre(s.collection);
+        this.line = s.line;
+        const coll = this.eval(s.collection);
+        if (coll == null) throw this.runtimeError('NullReferenceException', 'Object reference not set to an instance of an object.', `${show(s.collection)} has no value yet (null).`);
+        const isText = typeof coll === 'string';
+        const items = isText ? [...coll] : coll;
+        const scope = this.pushScope(`foreach (line ${s.line})`, s.line, 'for');
+        const v = { name: s.name, type: s.resolvedType, value: undefined, assigned: false, line: s.nameLine, id: ++this.uid, readOnly: true };
+        let n = 0;
+        for (;;) {
+          const has = n < items.length;
+          if (has) { if (!scope.vars.has(s.name)) scope.vars.set(s.name, v); this.set(v, items[n]); }
+          yield this.foreachEvent(s, has, n, items, isText);
+          if (!has) break;
+          n++;
+          scope.iteration = n;
+          const sig = yield* this.exec(s.body, `foreach · turn ${n}`);
+          if (sig === BREAK) break;
+          if (sig && sig.kind === 'return') { this.popScope(); return sig; }
+        }
+        this.popScope();
+        return;
+      }
       case 'Break': yield this.at(s); this.note(s.line, 'break → leave the loop'); return BREAK;
       case 'Continue': yield this.at(s); this.note(s.line, 'continue → next turn'); return CONTINUE;
     }
@@ -1388,9 +1568,13 @@ export class Runner {
     const done = n => isLit(n) || isStatic(n);
     const L = n => ({ type: 'Lit', value: this.eval(orig(n)), ty: orig(n).ty });
     const map = (n, f) => { const c = { ...n, _o: orig(n) }; for (const k of KEYS) if (n[k]) c[k] = f(n[k]); if (n.args) c.args = n.args.map(f); return c; };
-    const kids = n => [...KEYS.filter(k => n[k]).map(k => n[k]), ...(n.args || [])];
-    const subst = n => done(n) ? n : (n.type === 'Ident' || (n.type === 'Member' && n.object.type === 'Ident' && n.object.name === 'drone')) ? L(n) : map(n, subst);
-    const collapse = n => done(n) ? n : kids(n).every(done) ? (n.type === 'Paren' ? n.expr : L(n)) : map(n, collapse);
+    // heights[i] → heights[2] → 7: the array name stays, its position is worked out first.
+    const namedItem = n => n.type === 'Index' && n.object.type === 'Ident' && isArr(n.object.ty);
+    const kids = n => namedItem(n) ? [n.index] : [...KEYS.filter(k => n[k]).map(k => n[k]), ...(n.args || [])];
+    const subst = n => done(n) ? n
+      : (n.type === 'Ident' || (n.type === 'Member' && n.object.type === 'Ident' && (n.object.name === 'drone' || n.name === 'Length'))) ? L(n)
+      : namedItem(n) ? { ...n, _o: orig(n), index: subst(n.index) } : map(n, subst);
+    const collapse = n => done(n) ? n : kids(n).every(done) ? (n.type === 'Paren' ? n.expr : L(n)) : namedItem(n) ? { ...n, index: collapse(n.index) } : map(n, collapse);
     const steps = [show(e)];
     const push = x => { if (steps.at(-1) !== x) steps.push(x); };
     let cur = subst(e);
@@ -1410,6 +1594,24 @@ export class Runner {
     }
     this.note(s.line, `${value ? '✓' : '✗'} ${test ? show(test, e => literal(this.eval(e), e.ty)) : 'true'} is ${value}`, `${test ? show(test) : 'true'} is ${value}: ${outcome.split('→ ')[1] || outcome}`);
     return { kind: 'cond', line: s.line, value, text, outcome, depth: this.depth };
+  }
+
+  foreachEvent(s, has, n, items, isText) {
+    this.tick(s.line);
+    const src = show(s.collection);
+    let text, outcome;
+    if (has) {
+      if (!isText) this.access = { arr: items, i: n, write: false };
+      const lit = literal(items[n], s.itemType);
+      text = `${src}[${n}]  →  ${lit}`;
+      outcome = `next item → loop turn ${n + 1}`;
+      this.note(s.line, `${s.name} = ${lit} (item ${n} of ${src})`, `${s.name} = ${src}[${n}] = ${lit}`);
+    } else {
+      text = `${src}.Length  →  ${items.length}`;
+      outcome = `no more items → the loop ends after ${n} turn${n === 1 ? '' : 's'}`;
+      this.note(s.line, `no more items in ${src}`, `${src} has no more items: the loop ends`);
+    }
+    return { kind: 'cond', line: s.line, value: has, text, outcome, depth: this.depth };
   }
 
   convert(v, type) {
@@ -1439,6 +1641,7 @@ export class Runner {
         return;
       }
       case 'Assign': {
+        if (s.target.type === 'Index') return this.assignElement(s, line);
         const v = this.lookup(s.target.name);
         const r = this.eval(s.value);
         if (s.op === '=') { this.set(v, r); this.note(line, `${v.name} = ${literal(v.value, v.type)}`); return; }
@@ -1449,6 +1652,7 @@ export class Runner {
         return;
       }
       case 'IncDec': {
+        if (s.target.type === 'Index') return this.assignElement(s, line);
         const v = this.lookup(s.target.name);
         const before = v.value;
         this.set(v, v.type === 'int' ? (before + (s.op === '++' ? 1 : -1)) | 0 : before + (s.op === '++' ? 1 : -1));
@@ -1463,6 +1667,30 @@ export class Runner {
         return;
       }
     }
+  }
+
+  element(indexNode) {
+    const arr = this.eval(indexNode.object), i = this.eval(indexNode.index);
+    const name = show(indexNode.object);
+    if (arr == null) throw this.runtimeError('NullReferenceException', 'Object reference not set to an instance of an object.', `${name} has no value yet (null).`);
+    if (i < 0 || i >= arr.length) throw this.runtimeError('IndexOutOfRangeException', 'Index was outside the bounds of the array.',
+      arr.length ? `${name} has ${arr.length} item${arr.length === 1 ? '' : 's'}: positions 0 to ${arr.length - 1}. You asked for position ${i}.` : `${name} is empty: it has no positions at all.`);
+    return { arr, i, name };
+  }
+  assignElement(s, line) {
+    const { arr, i, name } = this.element(s.target);
+    const type = s.target.ty, before = arr[i];
+    let value;
+    if (s.type === 'IncDec') value = before + (s.op === '++' ? 1 : -1);
+    else {
+      const r = this.eval(s.value);
+      value = s.op === '=' ? r : this.arith(s.op[0], before, r, type === 'string' ? 'string' : widest(type, s.value.ty), type, s.value.ty);
+    }
+    arr[i] = this.convert(value, type);
+    this.access = { arr, i, write: true };
+    for (const sc of this.scopes) for (const v of sc.vars.values()) if (v.value === arr) this.changed.add(v);
+    const now = literal(arr[i], type);
+    this.note(line, `${name}[${i}] = ${now}`, s.op === '=' ? `${name}[${i}] is now ${now}` : `${name}[${i}] was ${literal(before, type)}, now ${now}`);
   }
 
   arith(op, l, r, type, lt, rt) {
@@ -1489,8 +1717,22 @@ export class Runner {
       case 'Num': return e.value;
       case 'Str': return e.value;
       case 'Char': return e.value;
+      case 'ArrayInit': return e.items.map(x => this.convert(this.eval(x), e.elemType));
+      case 'NewArray': {
+        if (e.items) return e.items.map(x => this.convert(this.eval(x), e.elemType));
+        const n = this.eval(e.size);
+        if (n < 0) throw this.runtimeError('OverflowException', 'Arithmetic operation resulted in an overflow.', `An array cannot have a negative size (${n}).`);
+        if (n > 1000) throw this.runtimeError('LabException', 'Arrays in this lab can hold up to 1,000 items.', 'Use a smaller size.');
+        return Array(n).fill(DEFAULTS[e.elem] ?? null);
+      }
       case 'Index': {
+        if (isArr(e.object.ty)) {
+          const { arr, i } = this.element(e);
+          this.access = { arr, i, write: false };
+          return arr[i];
+        }
         const text = this.eval(e.object), i = this.eval(e.index);
+        if (text == null) throw this.runtimeError('NullReferenceException', 'Object reference not set to an instance of an object.', `${show(e.object)} has no value yet (null).`);
         if (i < 0 || i >= text.length) throw this.runtimeError('IndexOutOfRangeException', 'Index was outside the bounds of the array.', `"${text}" has ${text.length} characters: positions 0 to ${text.length - 1}. You asked for position ${i}.`);
         this.lastText = { text, from: i, to: i + 1 };
         return text[i];
@@ -1515,7 +1757,11 @@ export class Runner {
             case 'Ground': return this.world.groundColor();
           }
         }
-        if (e.name === 'Length') { this.lastText = { text: o, from: 0, to: o.length, count: true }; return o.length; }
+        if (e.name === 'Length') {
+          if (o == null) throw this.runtimeError('NullReferenceException', 'Object reference not set to an instance of an object.', `${show(e.object)} has no value yet (null), so it has no Length.`);
+          if (typeof o === 'string') this.lastText = { text: o, from: 0, to: o.length, count: true };
+          return o.length;
+        }
         return undefined;
       }
       case 'Call':
@@ -1557,6 +1803,8 @@ export class Runner {
 
   callMethod(e, statement) {
     const args = e.args.map(a => this.eval(a));
+    if (e.method && (e.method.startsWith('string.') || e.method === 'ToString') && this.eval(e.callee.object) == null)
+      throw this.runtimeError('NullReferenceException', 'Object reference not set to an instance of an object.', `${show(e.callee.object)} has no value yet (null).`);
     const w = this.world;
     const wrap = fn => {
       try { return fn(); }

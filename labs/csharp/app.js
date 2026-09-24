@@ -1,4 +1,4 @@
-import { compile, Runner, CSharpError, literal } from './interpreter.js';
+import { compile, Runner, CSharpError, literal, isArr, elemOf } from './interpreter.js';
 import { LEVELS, CHALLENGES, API, TYPES as KINDS, checkRequirements, assembleParsons, judge } from './levels.js';
 import { prepare, verifySeeds, assess } from './evaluate.js';
 import { compare } from './world.js';
@@ -316,14 +316,26 @@ function renderProgress() {
 }
 
 // ─── Memory & execution panels ───────────────────────────────────────────────
+// An array is drawn as a row of boxes with their positions; the item used in this step is highlighted.
+function arrayHtml(type, arr) {
+  if (arr === null) return '<span class="vl">null</span>';
+  const el = elemOf(type), acc = S.runner?.access;
+  const cells = arr.map((v, i) => {
+    const hl = acc && acc.arr === arr && acc.i === i ? (acc.write ? ' write' : ' read') : '';
+    const sw = el === 'Color' && v !== 'None' ? `<i class="swatch" style="background:${PALETTE[v]}"></i>` : '';
+    return `<span class="cell${hl}"><b>${sw}${esc(el === 'Color' ? v : literal(v, el))}</b><i>${i}</i></span>`;
+  }).join('');
+  return `<span class="arr">${cells || '<span class="cell empty"><b>empty</b></span>'}</span>`;
+}
 function valueHtml(type, value, assigned = true) {
   if (!assigned || value === undefined) return `<span class="vl unassigned">${esc(t('unassigned'))}</span>`;
+  if (isArr(type)) return arrayHtml(type, value);
   const cls = type === 'string' ? 'str' : ['int', 'float', 'double'].includes(type) ? 'num' : type === 'bool' ? 'bool' : '';
   const sw = type === 'Color' && value !== 'None' ? `<i class="swatch" style="background:${PALETTE[value]}"></i>` : '';
   return `<span class="vl ${cls}">${sw}${esc(literal(value, type))}</span>`;
 }
 const varRow = (type, name, value, { changed = false, assigned = true } = {}) =>
-  `<div class="var${changed ? ' changed' : ''}" data-no-i18n><span class="ty t-${type}">${esc(type || '?')}</span><span class="nm">${esc(name)}</span>${valueHtml(type, value, assigned)}</div>`;
+  `<div class="var${changed ? ' changed' : ''}${isArr(type) ? ' array' : ''}" data-no-i18n><span class="ty t-${type}">${esc(type || '?')}</span><span class="nm">${esc(name)}</span>${valueHtml(type, value, assigned)}</div>`;
 
 function renderMemory() {
   const w = S.world, r = S.runner, lvl = S.challenge.level.id;

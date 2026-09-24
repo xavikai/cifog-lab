@@ -43,6 +43,10 @@ export const API = [
   { level: 9, code: 'void Tower(int height)\n{\n    \n}', text: 'Declares a method: a name for a group of instructions. <code>void</code>: it gives nothing back. <code>int height</code>: a parameter. Write methods below the main program.' },
   { level: 9, code: 'Tower(3);', text: 'Calls the method: its instructions run with <code>height = 3</code>, then the program carries on with the next line.' },
   { level: 9, code: 'int Area(int w, int d)\n{\n    return w * d;\n}', text: 'A method that gives back a value: write its type instead of <code>void</code> and end with <code>return</code>. The call is replaced by the value.' },
+  { level: 10, code: 'int[] heights = { 3, 5, 2 };', text: 'An array: many values of one type in numbered boxes. <code>heights[0]</code> is the first box (positions start at 0) and <code>heights.Length</code> counts them.' },
+  { level: 10, code: 'int[] floors = new int[4];', text: 'Creates an array of 4 boxes, all 0 for now. Write into a box with <code>floors[2] = 5;</code>' },
+  { level: 10, code: 'for (int i = 0; i < heights.Length; i++)\n{\n    drone.Build(heights[i]);\n}', text: 'Goes through every position with its index <code>i</code>. Use <code>&lt;</code>, not <code>&lt;=</code>: the last position is <code>Length - 1</code>.' },
+  { level: 10, code: 'foreach (int h in heights)\n{\n    \n}', text: 'Goes through the items one by one, without an index. <code>h</code> can be read but not changed.' },
 ];
 
 export const LEVELS = [
@@ -1175,7 +1179,189 @@ void House(int walls)
     ],
   },
   {
-    id: 10, name: 'Free build', concept: 'Sandbox',
+    id: 10, name: 'Arrays', concept: 'Many values',
+    intro: 'An array keeps many values of the same type in one variable, in numbered boxes. Loops and arrays work together.',
+    challenges: [
+      {
+        id: 'a-1', type: 'observe', title: 'A row of boxes',
+        goal: 'Step through the program and watch the array in the Memory panel.',
+        brief: '<p>An <b>array</b> is one variable with many boxes. <code>int[] heights</code> means "an array of ints"; <code>{ 3, 5, 2, 6 }</code> fills it. Each box has a <b>position</b> (index) that starts at <b>0</b>, like the characters of a string.</p><p><code>heights[0]</code> reads the first box and <code>heights.Length</code> counts them. In Memory, the box being read lights up in blue.</p>',
+        hint: 'Watch the small numbers under each box: they are the positions.',
+        starter: `int[] heights = { 3, 5, 2, 6 };
+Console.WriteLine(heights.Length);
+
+drone.Build(heights[0]);
+drone.Build(heights[1]);
+drone.Build(heights[2]);
+drone.Build(heights[3]);
+`,
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 8, viewHeight: 6, target: {} }),
+      },
+      {
+        id: 'a-2', type: 'predict', title: 'Which box?',
+        goal: 'Predict what the Console will print.',
+        brief: '<p>Read the positions carefully: the first box is number 0.</p>',
+        starter: `int[] scores = { 4, 7, 1, 5 };
+Console.WriteLine(scores[1]);
+`,
+        question: {
+          prompt: 'What will scores[1] print?',
+          options: ['4', '7', '1'], answer: '7',
+          actual: ({ output }) => output[0],
+          explain: 'Positions start at 0: scores[0] is 4, scores[1] is 7. The last box of an array with 4 items is scores[3], which is scores.Length - 1.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'a-3', type: 'complete', title: 'A skyline with a loop',
+        goal: 'Fill the gaps so the loop builds one tower for each value.',
+        brief: '<p>Writing <code>drone.Build(heights[0])</code>, <code>[1]</code>, <code>[2]</code>… by hand does not scale. A <code>for</code> loop can walk through every position: <code>i</code> goes 0, 1, 2… and <code>heights[i]</code> reads the box at position <code>i</code>. Use <code>heights.Length</code> so the loop works for any size.</p>',
+        hint: 'i < heights.Length · drone.Build(heights[i]);',
+        starter: `int[] heights = { 2, 4, 6, 3, 5, 1 };
+
+for (int i = 0; i < ___; i++)
+{
+    drone.Build(___);
+}
+`,
+        solution: `int[] heights = { 2, 4, 6, 3, 5, 1 };
+
+for (int i = 0; i < heights.Length; i++)
+{
+    drone.Build(heights[i]);
+}`,
+        requires: [{ feature: 'for', label: 'Use a for loop' }],
+        labels: true,
+        setup: () => ({ size: 8, maxHeight: 8, viewHeight: 6, target: { '0,0': repeat('White', 2), '1,0': repeat('White', 4), '2,0': repeat('White', 6), '3,0': repeat('White', 3), '4,0': repeat('White', 5), '5,0': repeat('White', 1) } }),
+      },
+      {
+        id: 'a-4', type: 'fix', title: 'One box too far',
+        goal: 'Build the five towers and print exactly: Towers: 5',
+        brief: '<p>This program runs… and crashes. Read the runtime error: which position did it ask for? There is also a surprise in the Console: printing an array does not print its values.</p>',
+        hint: 'Positions go from 0 to Length - 1, so use i < heights.Length. For the count, print heights.Length.',
+        starter: `int[] heights = { 3, 1, 4, 1, 5 };
+Console.WriteLine("Towers: " + heights);
+
+for (int i = 0; i <= heights.Length; i++)
+{
+    drone.Build(heights[i]);
+}
+`,
+        solution: `int[] heights = { 3, 1, 4, 1, 5 };
+Console.WriteLine("Towers: " + heights.Length);
+
+for (int i = 0; i < heights.Length; i++)
+{
+    drone.Build(heights[i]);
+}`,
+        expectOutput: ['Towers: 5'],
+        labels: true,
+        setup: () => ({ size: 8, maxHeight: 8, viewHeight: 5, target: { '0,0': repeat('White', 3), '1,0': repeat('White', 1), '2,0': repeat('White', 4), '3,0': repeat('White', 1), '4,0': repeat('White', 5) } }),
+      },
+      {
+        id: 'a-5', type: 'predict', title: 'Empty boxes',
+        goal: 'Predict what the Console will print.',
+        brief: '<p><code>new int[4]</code> creates an array with 4 boxes <b>before</b> you know the values. Then you can write into a box: <code>floors[2] = 5;</code>. What is inside the boxes nobody wrote?</p>',
+        starter: `int[] floors = new int[4];
+floors[2] = 5;
+floors[0] = floors[2] - 1;
+Console.WriteLine(floors[0] + floors[1] + floors[3]);
+`,
+        question: {
+          prompt: 'What will the Console print?',
+          options: ['4', '5', 'An error'], answer: '4',
+          actual: ({ output }) => output[0],
+          explain: 'A new int array starts full of zeros. floors[0] becomes 5 - 1 = 4, and floors[1] and floors[3] are still 0: 4 + 0 + 0 = 4. (A new bool array starts with false and a string array with null.)',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'a-6', type: 'create', title: 'Add up and find the tallest',
+        goal: 'Build the towers, then print the total number of blocks and the tallest tower.',
+        brief: '<p>Two classic jobs with an array: <b>adding up</b> (start at 0 and add each value) and <b>finding the biggest</b> (keep the best so far, and replace it when you find a bigger one). The Console must print exactly <code>Total: 21</code> and <code>Tallest: 6</code>, but calculate them: don\'t write the numbers.</p>',
+        hint: 'Inside the loop: total += heights[i]; and if (heights[i] > tallest) { tallest = heights[i]; }',
+        starter: `int[] heights = { 2, 6, 3, 4, 1, 5 };
+int total = 0;
+int tallest = 0;
+
+for (int i = 0; i < heights.Length; i++)
+{
+    drone.Build(heights[i]);
+    // add to total, and keep the tallest
+}
+
+Console.WriteLine("Total: " + total);
+Console.WriteLine("Tallest: " + tallest);
+`,
+        solution: `int[] heights = { 2, 6, 3, 4, 1, 5 };
+int total = 0;
+int tallest = 0;
+
+for (int i = 0; i < heights.Length; i++)
+{
+    drone.Build(heights[i]);
+    total += heights[i];
+    if (heights[i] > tallest)
+    {
+        tallest = heights[i];
+    }
+}
+
+Console.WriteLine("Total: " + total);
+Console.WriteLine("Tallest: " + tallest);`,
+        expectOutput: ['Total: 21', 'Tallest: 6'],
+        requires: [{ feature: 'if', label: 'Use if to find the tallest' }, { onlyNumbers: [0, 1, 2, 3, 4, 5, 6], label: 'Calculate the results: don\'t write 21' }],
+        labels: true,
+        setup: () => ({ size: 8, maxHeight: 8, viewHeight: 6, target: { '0,0': repeat('White', 2), '1,0': repeat('White', 6), '2,0': repeat('White', 3), '3,0': repeat('White', 4), '4,0': repeat('White', 1), '5,0': repeat('White', 5) } }),
+      },
+      {
+        id: 'a-7', type: 'parsons', title: 'One by one with foreach',
+        goal: 'Stack the colors of the array in one column: Red, Yellow, Blue, from the bottom.',
+        brief: '<p><code>foreach (Color c in colors)</code> goes through the array <b>item by item</b>, in order: no index, no <code>Length</code>, no way to go too far. In each turn, <code>c</code> is the next item. It can only <b>read</b> the items: to change them, use <code>for</code>. Put the lines in order; one of them is not needed.</p>',
+        hint: 'The array first, then foreach, {, Place, }. The drone must not move.',
+        parsons: {
+          lines: ['Color[] colors = { Color.Red, Color.Yellow, Color.Blue };', 'foreach (Color c in colors)', '{', 'drone.Place(c);', '}'],
+          distractors: ['drone.Move(Direction.Right);'],
+        },
+        setup: () => ({ size: 6, viewHeight: 4, target: { '0,0': ['Red', 'Yellow', 'Blue'] } }),
+      },
+      {
+        id: 'a-8', type: 'create', title: 'Two streets, one method',
+        goal: 'Write Skyline(int[] heights): one tower for each value, in a row.',
+        brief: '<p>A method can receive a whole array as a parameter: <code>void Skyline(int[] heights)</code>. The main program is ready and calls it for two streets. Write the method below it, with a loop inside.</p>',
+        hint: 'void Skyline(int[] heights) { foreach (int h in heights) { drone.Build(h); } }',
+        starter: `int[] street1 = { 3, 5, 2, 4 };
+int[] street2 = { 1, 2, 3, 4, 5 };
+
+Skyline(street1);
+drone.MoveTo(0, 3);
+Skyline(street2);
+
+// Write the method Skyline(int[] heights) here.
+`,
+        solution: `int[] street1 = { 3, 5, 2, 4 };
+int[] street2 = { 1, 2, 3, 4, 5 };
+
+Skyline(street1);
+drone.MoveTo(0, 3);
+Skyline(street2);
+
+void Skyline(int[] heights)
+{
+    foreach (int h in heights)
+    {
+        drone.Build(h);
+    }
+}`,
+        requires: [{ feature: 'method', label: 'Write a method' }],
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 8, viewHeight: 5, target: fill((x, z) => z === 0 && x < 4 ? repeat('White', [3, 5, 2, 4][x]) : z === 3 && x < 5 ? repeat('White', x + 1) : null) }),
+      },
+    ],
+  },
+  {
+    id: 11, name: 'Free build', concept: 'Sandbox',
     intro: 'No goal: experiment with everything you have learned.',
     challenges: [
       {
