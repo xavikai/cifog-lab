@@ -7,7 +7,7 @@
   <meta name="description" content="A hands-on C# lab for CIFOG. Program a drone that builds voxel sculptures and watch variables, loops and conditions run step by step.">
   <title>Code Lab · C# · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=3">
+  <link rel="stylesheet" href="./style.css?v=4">
 </head>
 <body>
   <header class="app-header">
@@ -82,6 +82,7 @@
         <canvas id="scene" aria-label="Isometric view of the voxel world and the drone"></canvas>
         <div class="progress-chip" id="progress-chip"></div>
         <div class="result" id="result" hidden></div>
+        <div class="strip" id="strip" hidden></div>
       </div>
       <div class="inspect">
         <section class="memory" aria-labelledby="memory-title">
@@ -101,6 +102,6 @@
 
   <dialog id="help-dialog"><button class="dialog-close" aria-label="Close help">×</button><span class="eyebrow">CODE LAB · C#</span><h2>Write it. Run it. Watch it.</h2><p>You program a drone that builds with blocks. Every challenge has a ghost shape to build.</p><ol><li><strong>Run (F5)</strong> first <em>compiles</em> the program: the compiler checks the whole code. If there is an error, nothing runs and the Console tells you the line and what is wrong.</li><li><strong>Step (F10)</strong> runs one line at a time. The yellow line is the next one to run. Conditions show how they are evaluated: <code>i &lt; 7 → 3 &lt; 7 → true</code>.</li><li><strong>Memory</strong> shows each variable as a box with a type, a name and a value. Variables live inside a <em>scope</em> (the <code>{ }</code> where they were created) and disappear when it ends.</li><li>The <strong>×</strong> numbers next to the line numbers count how many times each line ran. Grey text at the end of a line shows what it did the last time.</li><li>Click a line number to add a <strong>breakpoint</strong>: Run pauses there.</li></ol><p><strong>Coordinates:</strong> the drone moves on an 8 × 8 grid. X goes Right, Z goes Forward and Y is up, as in Unity.</p><p class="muted">This lab runs a focused subset of C# in the browser (variables, if, loops, Console, Math). The drone API only exists here. Progress and code are saved in this browser.</p><button class="primary dialog-close-action">Back to the lab</button></dialog>
   <noscript><p class="no-script">Enable JavaScript to use the Code Lab.</p></noscript>
-  <script type="module" src="./app.js?v=3"></script>
+  <script type="module" src="./app.js?v=4"></script>
 </body>
 </html>

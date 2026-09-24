@@ -41,17 +41,29 @@ Each line is a single calculation, without `;` or method calls, like C# Interact
 4. **A box with a name** (predict) — `age + 1` calculates, `age = age + 1` stores.
 5. **Fix the names** (fix) — spaces in names, `Int`, `playerscore` vs `playerScore`.
 
-## Level 2 · First instructions
+## Level 2 · Text
+
+A strip under the scene shows the text as boxes with positions 0, 1, 2… and highlights what each line reads.
+
+1. **A row of characters** (observe) — `Length`, `[0]`, `[4]`, `ToUpper()`.
+2. **Counting from zero** (predict) — `word[1]` is the second character.
+3. **The last letter** (predict) — the last position is `Length - 1`.
+4. **Say hello** (complete) — joining text and a variable with `+`; spaces are characters.
+5. **A piece of text** (predict) — `Substring(start, length)`: the second number is a count.
+6. **Fill in the template** (create) — interpolation `$"{name} is {age}"`.
+7. **Text traps** (fix) — `'Barcelona'` (a char holds one character), `length`, `ToUpper` without brackets.
+
+## Level 3 · First instructions
 
 Now `;` and method calls appear: `Console.WriteLine("Hello!");` — who (`Console`), what (`WriteLine`), with what (the value in brackets). Then a Parsons problem and the broken calculator (`"2 + 3 = " + 2 + 3`).
 
-## Level 3 · The drone (sequence)
+## Level 4 · The drone (sequence)
 
 1. **First block** — programs run top to bottom, one instruction at a time. Each `Move` is one tile.
 2. **Order matters** — the starter stacks the tower upside down. The computer does exactly what is written.
 3. **Read the errors** — three mistakes: a missing `;`, `place` vs `Place`, `green` vs `Green`. Syntax errors appear one at a time; after fixing the `;`, the checker lists the other two together. C# is case-sensitive.
 
-## Level 4 · Variables
+## Level 5 · Variables
 
 - **A box, not an equation** (predict) — `x = x + 1` stores, it is not an equation.
 - **A copy, not a link** (predict) — `int b = a;` copies the value; changing `a` later does not change `b`. One of the most common beginner misconceptions.
@@ -61,7 +73,7 @@ Now `;` and method calls appear: `Console.WriteLine("Hello!");` — who (`Consol
 2. **Whole numbers** — `7 / 2` is `3` for `int`. The Console prints `middle = 3`. Discuss `7 / 2.0`, `double` and `(int)` casts. The end tile is `width - 1` (counting from 0).
 3. **Types** — `Color roof = "Red";` fails with CS0029: a string is not a Color. Reuse the variables for the second tower and reassign `label` (no type the second time, or CS0128 appears).
 
-## Level 5 · Loops
+## Level 6 · Loops
 
 - **Count the turns** (predict) — `i <= 4` from 0 runs five times (off-by-one).
 - **Loop inside a loop** (order, before The floor) — braces are lines too; indentation appears automatically.
@@ -72,7 +84,7 @@ Now `;` and method calls appear: `Console.WriteLine("Hello!");` — who (`Consol
 4. **The floor** — two nested loops cover a grid: the pattern behind instancing, tiling and procedural placement.
 5. **Fill it up** — the starting heights are random. `while (drone.Height < 6)` repeats an unknown number of times. The program is verified on three other random worlds.
 
-## Level 6 · Conditions
+## Level 7 · Conditions
 
 - **Which path?** (predict) — an `if / else if / else` chain runs only the first true branch; `&&` needs both sides.
 

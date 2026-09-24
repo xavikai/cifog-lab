@@ -20,20 +20,23 @@ export const API = [
   { level: 0, code: '2 + 3 * 4', text: 'Operators: <code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> (remainder). <code>*</code> <code>/</code> <code>%</code> go before <code>+</code> <code>-</code>. Use <code>( )</code> to change the order.' },
   { level: 0, code: '7 / 2      7.0 / 2', text: 'int ÷ int gives a whole number (3). With a decimal number (double) you get 3.5.' },
   { level: 0, code: '3   3.5   "3"   true', text: 'Types of values: <code>int</code>, <code>double</code>, <code>string</code> (text in double quotes), <code>bool</code>.' },
+  { level: 2, code: '"Hello".Length      "Hello"[0]', text: 'A string is a row of characters. <code>Length</code> counts them; <code>[0]</code> reads one (a <code>char</code>, in single quotes). Positions start at 0.' },
+  { level: 2, code: 'text.ToUpper()   text.Substring(0, 3)', text: 'Methods of text: <code>ToUpper()</code>, <code>ToLower()</code>, <code>Substring(start, length)</code>, <code>IndexOf("x")</code>, <code>Contains("x")</code>, <code>Replace("a", "b")</code>.' },
+  { level: 2, code: '$"{name} is {age}"', text: 'Interpolation: a <code>$</code> before the quotes lets you put values inside <code>{ }</code>.' },
   { level: 1, code: 'int age = 16', text: 'A variable: type, name, value. Names use <b>camelCase</b>: <code>playerScore</code>. C# is case-sensitive.' },
-  { level: 2, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
-  { level: 2, code: 'drone.Build(3);', text: 'Builds a tower of 3 blocks, then moves one tile right, ready for the next tower. Optional color: <code>drone.Build(3, Color.Red);</code>' },
-  { level: 3, code: 'drone.Move(Direction.Right);', text: 'Moves one tile. Directions: <code>Right</code>, <code>Left</code>, <code>Forward</code>, <code>Back</code>.' },
-  { level: 3, code: 'drone.Place(Color.Red);', text: 'Places a block on top of the column under the drone. Colors: White, Red, Orange, Yellow, Green, Blue, Purple, Black.' },
-  { level: 4, code: 'int distance = 3;', text: 'Creates a variable: a named box with a type and a value. Types: <code>int</code> 3 · <code>double</code> 2.5 · <code>float</code> 2.5f · <code>bool</code> true · <code>string</code> "text" · <code>Color</code>.' },
-  { level: 4, code: 'drone.Move(Direction.Right, distance);', text: 'Moves several tiles at once.' },
-  { level: 5, code: 'for (int i = 0; i < 5; i++)\n{\n    \n}', text: 'Repeats the block. <code>i = 0</code> start · <code>i &lt; 5</code> keep going while true · <code>i++</code> add 1 after each turn.' },
-  { level: 5, code: 'drone.MoveTo(x, z);', text: 'Flies straight to a tile. X goes right, Z goes forward.' },
-  { level: 5, code: 'while (drone.Height < 6)\n{\n    \n}', text: 'Repeats while the condition is true. Use it when you don\'t know how many turns you need.' },
-  { level: 5, code: 'drone.Height', text: 'How many blocks are in the column under the drone (int). Also <code>drone.X</code> and <code>drone.Z</code>.' },
-  { level: 6, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
-  { level: 6, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
-  { level: 6, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
+  { level: 3, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
+  { level: 3, code: 'drone.Build(3);', text: 'Builds a tower of 3 blocks, then moves one tile right, ready for the next tower. Optional color: <code>drone.Build(3, Color.Red);</code>' },
+  { level: 4, code: 'drone.Move(Direction.Right);', text: 'Moves one tile. Directions: <code>Right</code>, <code>Left</code>, <code>Forward</code>, <code>Back</code>.' },
+  { level: 4, code: 'drone.Place(Color.Red);', text: 'Places a block on top of the column under the drone. Colors: White, Red, Orange, Yellow, Green, Blue, Purple, Black.' },
+  { level: 5, code: 'int distance = 3;', text: 'Creates a variable: a named box with a type and a value. Types: <code>int</code> 3 · <code>double</code> 2.5 · <code>float</code> 2.5f · <code>bool</code> true · <code>string</code> "text" · <code>Color</code>.' },
+  { level: 5, code: 'drone.Move(Direction.Right, distance);', text: 'Moves several tiles at once.' },
+  { level: 6, code: 'for (int i = 0; i < 5; i++)\n{\n    \n}', text: 'Repeats the block. <code>i = 0</code> start · <code>i &lt; 5</code> keep going while true · <code>i++</code> add 1 after each turn.' },
+  { level: 6, code: 'drone.MoveTo(x, z);', text: 'Flies straight to a tile. X goes right, Z goes forward.' },
+  { level: 6, code: 'while (drone.Height < 6)\n{\n    \n}', text: 'Repeats while the condition is true. Use it when you don\'t know how many turns you need.' },
+  { level: 6, code: 'drone.Height', text: 'How many blocks are in the column under the drone (int). Also <code>drone.X</code> and <code>drone.Z</code>.' },
+  { level: 7, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
+  { level: 7, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
+  { level: 7, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
 ];
 
 export const LEVELS = [
@@ -225,7 +228,115 @@ playerScore + bonus`,
     ],
   },
   {
-    id: 2, name: 'First instructions', concept: 'Statements',
+    id: 2, name: 'Text', concept: 'Strings', mode: 'calc',
+    intro: 'Text (string) is a row of characters. The strip under the scene shows every character with its position.',
+    challenges: [
+      {
+        id: 't-1', type: 'observe', title: 'A row of characters', mode: 'calc', textStrip: true,
+        goal: 'Step through the lines and watch the character strip.',
+        brief: '<p>A <code>string</code> is a row of <b>characters</b>, and each one has a <b>position</b> (index) that starts at <b>0</b>. <code>Length</code> counts the characters. <code>[0]</code> reads one character: a <code>char</code>, written with single quotes.</p>',
+        hint: 'Watch the numbers under each letter in the strip.',
+        starter: `"Hello"
+"Hello".Length
+"Hello"[0]
+"Hello"[4]
+"Hello".ToUpper()
+`,
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 't-2', type: 'predict', title: 'Counting from zero', mode: 'calc', textStrip: true,
+        goal: 'Predict which character word[1] gives.',
+        brief: '<p>Almost every programming language counts positions from <b>0</b>, not from 1. It feels strange at first, and it causes many bugs.</p>',
+        starter: `string word = "drone"
+word[1]
+`,
+        question: {
+          prompt: 'What is word[1]?',
+          options: ["'d'", "'r'", "'o'"], answer: "'r'",
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: "Positions start at 0: d is 0, r is 1, o is 2. So word[1] is 'r', the second character.",
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 't-3', type: 'predict', title: 'The last letter', mode: 'calc', textStrip: true,
+        goal: 'Predict the result of the last line.',
+        brief: '<p>If a text has 5 characters, what is the position of the last one? Use the strip to check.</p>',
+        starter: `string lab = "CIFOG"
+lab.Length
+lab[lab.Length - 1]
+`,
+        question: {
+          prompt: 'What is lab[lab.Length - 1]?',
+          options: ["'G'", "'O'", 'An error'], answer: "'G'",
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: 'Length is 5, but positions go from 0 to 4. So the last character is always at Length - 1. lab[lab.Length] would be an error: position 5 does not exist.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 't-4', type: 'complete', title: 'Say hello', mode: 'calc', textStrip: true,
+        goal: 'Fill the gap so the last line gives "Hello, Ada!".',
+        brief: '<p><code>+</code> joins pieces of text. You can join <b>literal</b> text (between quotes) with a <b>variable</b> that holds text. Careful with the spaces: they are characters too.</p>',
+        hint: 'Put the variable name in the gap, without quotes.',
+        starter: `string name = "Ada"
+"Hello, " + ___ + "!"
+`,
+        solution: `string name = "Ada"
+"Hello, " + name + "!"`,
+        expectLast: '"Hello, Ada!"',
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 't-5', type: 'predict', title: 'A piece of text', mode: 'calc', textStrip: true,
+        goal: 'Predict what Substring(0, 3) gives.',
+        brief: '<p><code>Substring(start, length)</code> cuts a piece of text: it starts at a position and takes a number of characters.</p>',
+        starter: `"Blender".Substring(0, 3)
+`,
+        question: {
+          prompt: 'What is "Blender".Substring(0, 3)?',
+          options: ['"Ble"', '"Blen"', '"len"'], answer: '"Ble"',
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: 'Start at position 0 and take 3 characters: B, l, e. The second number is how many characters, not where to stop. "Blender".Substring(2, 3) would be "end".',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 't-6', type: 'create', title: 'Fill in the template', mode: 'calc', textStrip: true,
+        goal: 'Make the last line give "Ada is 16" using $"…" and the two variables.',
+        brief: '<p>Joining text with <code>+</code> gets messy. <b>Interpolation</b> is cleaner: write <code>$</code> before the quotes and put values inside <code>{ }</code>: <code>$"{name} is {age}"</code>. If the variables change, the text changes with them.</p>',
+        hint: '$"{name} is {age}"',
+        starter: `string name = "Ada"
+int age = 16
+"Ada is 16"
+`,
+        solution: `string name = "Ada"
+int age = 16
+$"{name} is {age}"`,
+        expectLast: '"Ada is 16"',
+        requires: [{ feature: 'interpolation', label: 'Use $"…" with {name} and {age}' }],
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 't-7', type: 'fix', title: 'Text traps', mode: 'calc', textStrip: true,
+        goal: 'Fix the three lines so the last one gives "BARCELONA".',
+        brief: '<p>Three classic text mistakes: the wrong quotes, a lowercase name, and a method without brackets. The compiler tells you where each one is.</p>',
+        hint: 'Double quotes for text · Length with a capital L · ToUpper() needs brackets.',
+        starter: `string city = 'Barcelona'
+city.length
+city.ToUpper
+`,
+        solution: `string city = "Barcelona"
+city.Length
+city.ToUpper()`,
+        expectLast: '"BARCELONA"',
+        setup: () => ({ size: 6, target: {} }),
+      },
+    ],
+  },
+  {
+    id: 3, name: 'First instructions', concept: 'Statements',
     intro: 'Programs are lists of instructions. Each one ends with ; and many of them call a method to do something.',
     challenges: [
       {
@@ -269,7 +380,7 @@ Console.WriteLine("10 / 4 = " + 10 / 4.0);`,
     ],
   },
   {
-    id: 3, name: 'The drone', concept: 'Sequence',
+    id: 4, name: 'The drone', concept: 'Sequence',
     intro: 'A program is a list of instructions. The computer runs them in order, top to bottom, one at a time.',
     challenges: [
       {
@@ -330,7 +441,7 @@ drone.Place(Color.Green);`,
     ],
   },
   {
-    id: 4, name: 'Variables', concept: 'Store values',
+    id: 5, name: 'Variables', concept: 'Store values',
     intro: 'A variable is a named box that stores a value. Every variable has a type that says what it can hold.',
     challenges: [
       {
@@ -464,7 +575,7 @@ drone.Place(roof);`,
     ],
   },
   {
-    id: 5, name: 'Loops', concept: 'Repeat',
+    id: 6, name: 'Loops', concept: 'Repeat',
     intro: 'A loop repeats a block of code. The loop variable changes on every turn, so each turn can do something slightly different.',
     challenges: [
       {
@@ -611,7 +722,7 @@ for (int x = 0; x < 8; x++)
     ],
   },
   {
-    id: 6, name: 'Conditions', concept: 'Decide',
+    id: 7, name: 'Conditions', concept: 'Decide',
     intro: 'An if statement lets the program decide. The condition is evaluated to true or false, and only one path runs.',
     challenges: [
       {
@@ -752,7 +863,7 @@ else
     ],
   },
   {
-    id: 7, name: 'Free build', concept: 'Sandbox',
+    id: 8, name: 'Free build', concept: 'Sandbox',
     intro: 'No goal: experiment with everything you have learned.',
     challenges: [
       {

@@ -6,8 +6,8 @@
 export const COLORS = ['None', 'White', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'Black'];
 export const DIRECTIONS = ['Forward', 'Back', 'Left', 'Right'];
 const NUMERIC = ['int', 'float', 'double'];
-const VALUE_TYPES = ['int', 'float', 'double', 'bool', 'string', 'Color', 'Direction'];
-const TYPE_KEYWORDS = new Set(['int', 'float', 'double', 'bool', 'string', 'var']);
+const VALUE_TYPES = ['int', 'float', 'double', 'bool', 'string', 'char', 'Color', 'Direction'];
+const TYPE_KEYWORDS = new Set(['int', 'float', 'double', 'bool', 'string', 'char', 'var']);
 const KEYWORDS = new Set([...TYPE_KEYWORDS, 'if', 'else', 'for', 'while', 'do', 'break', 'continue', 'true', 'false',
   'using', 'return', 'void', 'new', 'null', 'foreach', 'in', 'class', 'static', 'public', 'private', 'switch', 'case',
   'default', 'const', 'char', 'long', 'object', 'namespace']);
@@ -63,6 +63,7 @@ export function literal(value, type) {
   if (value === undefined) return '?';
   switch (type) {
     case 'string': return JSON.stringify(value);
+    case 'char': return `'${value === "'" ? "\\'" : value === '\n' ? '\\n' : value}'`;
     case 'bool': return value ? 'true' : 'false';
     case 'Color': return `Color.${value}`;
     case 'Direction': return `Direction.${value}`;
@@ -146,7 +147,19 @@ export function tokenize(src, baseLine = 1, baseCol = 1) {
       else push({ t: 'str', v: s }, l, c);
       continue;
     }
-    if (ch === "'") fail('LAB', 'Use double quotes for text.', l, c, "In C#, 'a' is a single character (char). For text write \"hello\".");
+    if (ch === "'") {
+      adv();
+      let v;
+      if (src[i] === '\\') {
+        const map = { n: '\n', t: '\t', "'": "'", '"': '"', '\\': '\\', 0: '\0' };
+        if (!(src[i + 1] in map)) fail('CS1009', 'Unrecognized escape sequence', line, col);
+        v = map[src[i + 1]]; adv(2);
+      } else if (src[i] === "'" || src[i] === undefined || src[i] === '\n') fail('CS1011', 'Empty character literal', l, c, "Single quotes hold exactly one character, like 'a'.");
+      else { v = src[i]; adv(); }
+      if (src[i] !== "'") fail('CS1012', 'Too many characters in character literal', l, c, 'Single quotes hold ONE character (a char), like \'a\'. For text use double quotes: "hello".');
+      adv();
+      push({ t: 'chr', v }, l, c); continue;
+    }
     const two = src.substr(i, 2);
     if (['++', '--', '+=', '-=', '*=', '/=', '%=', '==', '!=', '<=', '>=', '&&', '||', '=>'].includes(two)) { adv(2); push({ t: 'op', v: two }, l, c); continue; }
     if ('+-*/%=<>!(){};,.?:[]&|'.includes(ch)) { adv(); push({ t: 'op', v: ch }, l, c); continue; }
@@ -164,6 +177,7 @@ const EXPECT = {
   '}': ['CS1513', '} expected', 'Every { needs a matching }.'],
   '{': ['CS1514', '{ expected', ''],
   ':': ['CS1003', "Syntax error, ':' expected", ''],
+  ']': ['CS1003', "Syntax error, ']' expected", 'Every [ needs a matching ].'],
 };
 
 class Parser {
@@ -354,7 +368,13 @@ class Parser {
         e = { type: 'Call', callee: e, args, line: e.line, col: e.col };
         continue;
       }
-      if (this.is('[')) this.fail('LAB', 'Arrays and indexers arrive in a later level.', this.tok);
+      if (this.is('[')) {
+        this.p++;
+        const index = this.expression();
+        this.expect(']');
+        e = { type: 'Index', object: e, index, line: e.line, col: e.col };
+        continue;
+      }
       return e;
     }
   }
@@ -363,6 +383,7 @@ class Parser {
     switch (t.t) {
       case 'num': this.p++; return this.node('Num', { value: t.v, ty: t.ty, raw: t.raw }, t);
       case 'str': this.p++; return this.node('Str', { value: t.v }, t);
+      case 'chr': this.p++; return this.node('Char', { value: t.v }, t);
       case 'istr': {
         this.p++;
         const parts = t.parts.map(p => {
@@ -432,6 +453,14 @@ export const METHODS = {
   'Math.Pow': { overloads: [['double', 'double']], returns: 'double' },
   'Math.Floor': { overloads: [['double']], returns: 'double' },
   'Math.Round': { overloads: [['double']], returns: 'double' },
+};
+export const STRING_METHODS = {
+  ToUpper: { overloads: [[]], returns: 'string' }, ToLower: { overloads: [[]], returns: 'string' }, Trim: { overloads: [[]], returns: 'string' },
+  Substring: { overloads: [['int'], ['int', 'int']], returns: 'string' },
+  Contains: { overloads: [['string'], ['char']], returns: 'bool' },
+  IndexOf: { overloads: [['string'], ['char']], returns: 'int' },
+  Replace: { overloads: [['string', 'string'], ['char', 'char']], returns: 'string' },
+  StartsWith: { overloads: [['string']], returns: 'bool' }, EndsWith: { overloads: [['string']], returns: 'bool' },
 };
 const methodNames = cls => Object.keys(METHODS).filter(k => k.startsWith(cls + '.')).map(k => k.split('.')[1]);
 
@@ -644,8 +673,17 @@ class Checker {
     switch (e.type) {
       case 'Num': this.stats.numbers.push(e.value); return e.ty;
       case 'Str': return 'string';
+      case 'Char': return 'char';
       case 'Bool': return 'bool';
-      case 'Interp': for (const p of e.parts) if (typeof p !== 'string') { const t = this.type(p, A); if (t === 'void') this.error('CS0029', "Cannot implicitly convert type 'void' to 'object'", p); } return 'string';
+      case 'Index': {
+        const t = this.type(e.object, A), it = this.type(e.index, A);
+        if (!t) return null;
+        if (t !== 'string') { this.error('CS0021', `Cannot apply indexing with [] to an expression of type '${t}'`, e, 'Only text (string) can be read letter by letter here.'); return null; }
+        if (it && it !== 'int') { this.error('CS0029', `Cannot implicitly convert type '${it}' to 'int'`, e.index, 'The position inside [ ] must be a whole number.'); return null; }
+        this.stats.features.add('index');
+        return 'char';
+      }
+      case 'Interp': if (e.parts.some(x => typeof x !== 'string')) this.stats.features.add('interpolation'); for (const p of e.parts) if (typeof p !== 'string') { const t = this.type(p, A); if (t === 'void') this.error('CS0029', "Cannot implicitly convert type 'void' to 'object'", p); } return 'string';
       case 'Paren': return this.type(e.expr, A);
       case 'Ident': {
         if (e.name === 'drone' && !this.lookup('drone')) return 'Drone';
@@ -740,7 +778,8 @@ class Checker {
       return null;
     }
     if (t === 'string' && e.name === 'Length') return 'int';
-    const s = t === 'string' ? suggest(e.name, ['Length']) : null;
+    if (t === 'string' && e.name in STRING_METHODS) { this.error('CS0428', `Cannot convert method group '${e.name}' to non-delegate type`, e, `${e.name} is a method: add brackets, ${e.name}().`); return null; }
+    const s = t === 'string' ? suggest(e.name, ['Length', ...Object.keys(STRING_METHODS)]) : null;
     this.error('CS1061', `'${t}' does not contain a definition for '${e.name}'`, { line: e.nameLine, col: e.nameCol }, s ? `Did you mean ${s}?` : '');
     return null;
   }
@@ -764,6 +803,23 @@ class Checker {
         argTypes();
         if (e.args.length) { this.error('CS1501', `No overload for method 'ToString' takes ${e.args.length} arguments`, e); return null; }
         e.method = 'ToString'; return 'string';
+      }
+      if (t === 'string') {
+        const types = argTypes();
+        if (c.name === 'Length') { this.error('CS1955', "Non-invocable member 'string.Length' cannot be used like a method.", e, 'Length is a property, not a method: remove the brackets.'); return null; }
+        const m = STRING_METHODS[c.name];
+        if (!m) { const sg = suggest(c.name, ['Length', ...Object.keys(STRING_METHODS)]); this.error('CS1061', `'string' does not contain a definition for '${c.name}'`, { line: c.nameLine, col: c.nameCol }, sg ? `Did you mean ${sg}? C# is case-sensitive.` : ''); return null; }
+        const cands = m.overloads.filter(o => o.length === e.args.length);
+        if (!cands.length) { this.error('CS1501', `No overload for method '${c.name}' takes ${e.args.length} arguments`, e, `Use ${m.overloads.map(o => `${c.name}(${o.join(', ')})`).join('  or  ')}.`); return null; }
+        if (types.some(x => x === null)) return m.returns;
+        if (!cands.some(o => o.every((p, i) => implicitOK(types[i], p)))) {
+          const o = cands[0], i = o.findIndex((p, k) => !implicitOK(types[k], p));
+          this.error('CS1503', `Argument ${i + 1}: cannot convert from '${types[i]}' to '${o[i]}'`, e.args[i], o[i] === 'string' && types[i] === 'char' ? '' : '');
+          return m.returns;
+        }
+        e.method = 'string.' + c.name;
+        this.stats.methods.add(c.name);
+        return m.returns;
       }
       if (t !== 'Drone') { argTypes(); this.error('CS1061', `'${t}' does not contain a definition for '${c.name}'`, { line: c.nameLine, col: c.nameCol }); return null; }
       key = `Drone.${c.name}`;
@@ -827,6 +883,8 @@ export function show(e, valueOf) {
   switch (e.type) {
     case 'Num': return e.raw;
     case 'Str': return JSON.stringify(e.value);
+    case 'Char': return literal(e.value, 'char');
+    case 'Index': return `${show(e.object, valueOf)}[${show(e.index, valueOf)}]`;
     case 'Bool': return String(e.value);
     case 'Interp': return '$"' + e.parts.map(p => typeof p === 'string' ? p : `{${s(p)}}`).join('') + '"';
     case 'Ident': return valueOf && e.name !== 'drone' ? valueOf(e) : e.name;
@@ -981,6 +1039,7 @@ export class Runner {
   calcLine(s) {
     const st = s.stmt;
     let entry;
+    this.lastText = null;
     if (st.type === 'ExprStmt') {
       const e = st.expr, value = this.eval(e), type = e.ty;
       const text = type === 'void' ? '' : literal(value, type);
@@ -997,6 +1056,9 @@ export class Runner {
       const v = this.lookup(name);
       entry = { line: s.line, value: v.value, type: v.type, text: `${name} = ${literal(v.value, v.type)}`, expression: false };
     }
+    const top = st.type === 'ExprStmt' ? st.expr : null;
+    const showsSource = top && (top.type === 'Index' || (top.type === 'Member' && top.name === 'Length') || ['string.Substring', 'string.IndexOf'].includes(top.method));
+    entry.textView = showsSource && this.lastText ? this.lastText : entry.type === 'string' ? { text: entry.value } : entry.type === 'char' ? { text: entry.value, from: 0, to: 1 } : null;
     this.results.push(entry);
     this.resultsByLine.set(s.line, entry);
   }
@@ -1089,6 +1151,13 @@ export class Runner {
     switch (e.type) {
       case 'Num': return e.value;
       case 'Str': return e.value;
+      case 'Char': return e.value;
+      case 'Index': {
+        const text = this.eval(e.object), i = this.eval(e.index);
+        if (i < 0 || i >= text.length) throw this.runtimeError('IndexOutOfRangeException', 'Index was outside the bounds of the array.', `"${text}" has ${text.length} characters: positions 0 to ${text.length - 1}. You asked for position ${i}.`);
+        this.lastText = { text, from: i, to: i + 1 };
+        return text[i];
+      }
       case 'Bool': return e.value;
       case 'Interp': return e.parts.map(p => typeof p === 'string' ? p : formatValue(this.eval(p), p.ty)).join('');
       case 'Paren': return this.eval(e.expr);
@@ -1109,7 +1178,7 @@ export class Runner {
             case 'Ground': return this.world.groundColor();
           }
         }
-        if (e.name === 'Length') return o.length;
+        if (e.name === 'Length') { this.lastText = { text: o, from: 0, to: o.length, count: true }; return o.length; }
         return undefined;
       }
       case 'Call': return this.callMethod(e, statement);
@@ -1163,6 +1232,25 @@ export class Runner {
         return statement ? `printed "${text}"` : undefined;
       }
       case 'ToString': return formatValue(this.eval(e.callee.object), e.callee.object.ty);
+      case 'string.ToUpper': return this.eval(e.callee.object).toUpperCase();
+      case 'string.ToLower': return this.eval(e.callee.object).toLowerCase();
+      case 'string.Trim': return this.eval(e.callee.object).trim();
+      case 'string.Contains': return this.eval(e.callee.object).includes(args[0]);
+      case 'string.StartsWith': return this.eval(e.callee.object).startsWith(args[0]);
+      case 'string.EndsWith': return this.eval(e.callee.object).endsWith(args[0]);
+      case 'string.Replace': return this.eval(e.callee.object).split(args[0]).join(args[1]);
+      case 'string.IndexOf': {
+        const text = this.eval(e.callee.object), i = text.indexOf(args[0]);
+        this.lastText = i >= 0 ? { text, from: i, to: i + String(args[0]).length } : { text };
+        return i;
+      }
+      case 'string.Substring': {
+        const text = this.eval(e.callee.object), a = args[0], n = args.length > 1 ? args[1] : text.length - a;
+        if (a < 0 || a > text.length) throw this.runtimeError('ArgumentOutOfRangeException', 'startIndex cannot be larger than length of string.', `"${text}" has ${text.length} characters. The start must be between 0 and ${text.length}.`);
+        if (n < 0 || a + n > text.length) throw this.runtimeError('ArgumentOutOfRangeException', 'Index and length must refer to a location within the string.', `From position ${a}, only ${text.length - a} character${text.length - a === 1 ? ' is' : 's are'} left, but you asked for ${n}.`);
+        this.lastText = { text, from: a, to: a + n };
+        return text.substr(a, n);
+      }
       case 'Math.Abs': return e.ty === 'int' ? Math.abs(args[0]) | 0 : Math.abs(args[0]);
       case 'Math.Max': return Math.max(args[0], args[1]);
       case 'Math.Min': return Math.min(args[0], args[1]);

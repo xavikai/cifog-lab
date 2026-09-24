@@ -40,7 +40,7 @@ test('starters: create/fix/complete need work, observe/predict run as given', ()
     const c = compile(ch.starter, { mode: ch.mode });
     if (ch.type === 'observe' || ch.type === 'predict') { assert.equal(runHeadless(ch, ch.starter).error, null, ch.id); continue; }
     if (ch.type === 'complete') { assert.ok(c.errors.some(e => e.message === 'Fill in the blank ___'), ch.id); continue; }
-    if (['1-3', '2-3', '0-7', 'n-5'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
+    if (['1-3', '2-3', '0-7', 'n-5', 't-7'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
     assert.equal(c.ok, true, `${ch.id}: ${c.errors.map(e => e.message)}`);
     if (!ch.sandbox) assert.equal(runHeadless(ch, ch.starter, 3).ok, false, ch.id);
   }
@@ -192,4 +192,19 @@ test('Make 12 only accepts the numbers 3 and 4', () => {
   assert.equal(runHeadless(ch, '4 + 4 + 4').ok, true);
   assert.equal(runHeadless(ch, '12').ok, false);
   assert.equal(runHeadless(ch, '6 * 2').ok, false);
+});
+
+test('strings: length, positions from 0, char, methods and runtime errors', () => {
+  const c = compile('string w = "drone"\nw.Length\nw[0]\nw[w.Length - 1]\nw.ToUpper()\n"Blender".Substring(2, 3)\n"Blender".IndexOf("end")\n$"{w}!"', { mode: 'calc' });
+  assert.equal(c.ok, true, c.errors.map(e => e.message).join());
+  const r = new Runner(c.ast, new World()); r.runToEnd();
+  assert.deepEqual(r.results.map(x => x.text), ['w = "drone"', '5', "'d'", "'e'", '"DRONE"', '"end"', '2', '"drone!"']);
+  assert.deepEqual(r.results[5].textView, { text: 'Blender', from: 2, to: 5 });
+  const err = src => { const x = compile(src, { mode: 'calc' }); return x.ok ? null : x.errors[0].code; };
+  assert.equal(err("string c = 'Barcelona'"), 'CS1012');
+  assert.equal(err('"x".length'), 'CS1061');
+  assert.equal(err('"x".ToUpper'), 'CS0428');
+  assert.equal(err('"x".Length()'), 'CS1955');
+  const oob = compile('"abc"[3]', { mode: 'calc' });
+  assert.throws(() => new Runner(oob.ast, new World()).runToEnd(), e => e.exception === 'IndexOutOfRangeException');
 });

@@ -223,7 +223,7 @@ function renderRequirements(stats = null, result = null) {
 function renderToolbox() {
   const lvl = S.challenge.level.id;
   $('#toolbox-items').innerHTML = API.filter(a => a.level <= lvl).map((a, i) =>
-    `<button class="tool${a.level === lvl && lvl < 7 ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
+    `<button class="tool${a.level === lvl && lvl < 8 ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
 }
 $('#toolbox-items').addEventListener('click', e => {
   const b = e.target.closest('.tool'); if (!b || ta.readOnly) return;
@@ -315,8 +315,8 @@ const varRow = (type, name, value, { changed = false, assigned = true } = {}) =>
 
 function renderMemory() {
   const w = S.world, r = S.runner, lvl = S.challenge.level.id;
-  const showDrone = lvl >= 2 || S.challenge.calcTowers;
-  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= 5 ? varRow('int', 'Height', w.height()) : ''}${lvl >= 6 ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
+  const showDrone = lvl >= 3 || S.challenge.calcTowers;
+  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= 6 ? varRow('int', 'Height', w.height()) : ''}${lvl >= 7 ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
   const scopes = r?.scopes || [];
   if (!scopes.length) html += '<p class="empty">Variables appear here while the program runs. Each one is a box with a <b>type</b>, a <b>name</b> and a <b>value</b>.</p>';
   else {
@@ -377,9 +377,22 @@ function renderControls() {
   if (ch.type === 'classify') { $('#run-label').textContent = 'Check'; $('#run').firstElementChild.textContent = '✓'; $('#step').disabled = true; }
   $('#drone-status').textContent = `DRONE (${S.world.drone.x}, ${S.world.drone.z})${S.world.height() ? ` · HEIGHT ${S.world.height()}` : ''}`;
 }
+function renderStrip() {
+  const el = $('#strip'), ch = S.challenge;
+  $('#viewport').classList.toggle('text-mode', !!ch.textStrip);
+  el.hidden = !ch.textStrip;
+  if (!ch.textStrip) return;
+  const entry = [...(S.runner?.results || [])].reverse().find(r => r.textView && r.textView.text != null);
+  if (!entry) { el.innerHTML = '<p class="strip-empty">Run the program: each text appears here as a row of characters with their positions.</p>'; return; }
+  const v = entry.textView, text = String(v.text);
+  const hi = i => v.from != null && i >= v.from && i < v.to;
+  const cells = [...text].map((c, i) => `<div class="cell${hi(i) ? ' hi' : ''}"><span class="ch">${c === ' ' ? '␣' : esc(c)}</span><span class="ix">${i}</span></div>`).join('');
+  const line = (ta.value.split('\n')[entry.line - 1] || '').trim();
+  el.innerHTML = `<div class="strip-head"><code>${esc(line)}</code><span>→ <b>${esc(entry.text)}</b></span></div><div class="cells">${cells || '<span class="strip-empty">"" (empty text)</span>'}</div><div class="strip-foot">Length ${text.length} · positions 0 to ${Math.max(0, text.length - 1)}${v.count ? ' · Length counts all of them' : ''}</div>`;
+}
 function renderAll({ instant = false } = {}) {
   view.update(S.world, { target: S.target, result: S.result, instant, labels: !!S.challenge.labels, say: S.runner?.output.at(-1)?.text ?? null });
-  renderCode(); renderMemory(); renderNow(); renderTrace(); renderOutput(); renderProgress(); renderControls();
+  renderCode(); renderMemory(); renderNow(); renderTrace(); renderOutput(); renderProgress(); renderControls(); renderStrip();
   if (S.event && (S.mode === 'running' || S.mode === 'paused')) scrollToLine(S.event.line);
 }
 
