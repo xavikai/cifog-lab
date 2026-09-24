@@ -42,7 +42,7 @@ export class IsoView {
   }
 
   layout() {
-    const n = this.world?.size || 8, reserve = 4;
+    const n = this.world?.size || 8, reserve = this.world?.viewHeight || 4;
     // Fit the grid (n × tw wide, n × th tall) plus room for towers above it, then centre it.
     const tw = Math.min((this.w - 90) / n, (this.h - 70) / (n * 0.5 + reserve * 0.55));
     this.tw = Math.max(18, tw); this.th = this.tw / 2; this.bh = this.tw * 0.55;
@@ -55,10 +55,12 @@ export class IsoView {
   P(x, z, y) { return [this.ox + (x + z) * this.tw / 2, this.oy + (x - z) * this.th / 2 - y * this.bh]; }
 
   // Called whenever the world may have changed. instant = skip animations.
-  update(world, { target = this.target, result = null, instant = false, reset = false } = {}) {
+  update(world, { target = this.target, result = null, instant = false, reset = false, labels = this.labels, say = undefined } = {}) {
     const now = performance.now();
+    this.labels = labels;
+    if (say !== undefined && say !== this.say) { this.say = say; this.sayAt = now; }
     if (reset || world !== this.world) {
-      this.world = world; this.births.clear(); this.known.clear();
+      this.world = world; this.births.clear(); this.known.clear(); this.say = null; this.alt = null;
       this.drone = { x: world.drone.x, z: world.drone.z, fromX: world.drone.x, fromZ: world.drone.z, t0: 0, dur: 1 };
       this.layout();
       for (const [k, col] of world.columns) col.forEach((_, y) => this.known.add(`${k},${y}`));
@@ -172,6 +174,46 @@ export class IsoView {
     if (!droneDrawn) drawDrone();
     // Faint silhouette on top so the drone is never lost behind tall towers
     c.save(); c.globalAlpha = 0.28; this.droneShape(pos, now, true); c.restore();
+    if (this.labels) this.heightLabels();
+    if (this.say) this.bubble(pos, now);
+  }
+
+  heightLabels() {
+    const c = this.ctx, w = this.world;
+    const keys = new Set([...w.columns.keys(), ...Object.keys(this.target || {})]);
+    c.save();
+    c.textAlign = 'center'; c.textBaseline = 'bottom';
+    c.font = `800 ${Math.max(11, Math.round(this.tw * 0.3))}px Inter, Segoe UI, Arial, sans-serif`;
+    for (const k of keys) {
+      const [x, z] = k.split(',').map(Number);
+      const h = (w.columns.get(k) || []).length, want = (this.target[k] || []).length;
+      const top = Math.max(h, want);
+      const [sx, sy] = this.P(x + 0.5, z + 0.5, top + 1);
+      const text = want && want !== h ? `${h}/${want}` : String(h);
+      c.lineWidth = 4; c.strokeStyle = '#15171a'; c.strokeText(text, sx, sy - 2);
+      c.fillStyle = want && want !== h ? '#aab1ba' : '#ffbf00'; c.fillText(text, sx, sy - 2);
+    }
+    c.restore();
+  }
+
+  bubble(pos, now) {
+    const c = this.ctx;
+    const text = this.say.length > 34 ? this.say.slice(0, 33) + '…' : this.say;
+    const alt = (this.alt ?? 1) + 0.9;
+    const [sx, sy] = this.P(pos.x + 0.5, pos.z + 0.5, alt);
+    const t = Math.min(1, (now - this.sayAt) / 160);
+    c.save();
+    c.font = '600 12px Inter, Segoe UI, Arial, sans-serif';
+    const w = c.measureText(text).width + 18, h = 24;
+    let bx = sx - w / 2, by = sy - h - 12 - (1 - t) * 6;
+    bx = Math.max(6, Math.min(this.w - w - 6, bx)); by = Math.max(6, by);
+    c.globalAlpha = t;
+    c.fillStyle = '#f3f4f5'; c.strokeStyle = '#15171a'; c.lineWidth = 1.5;
+    c.beginPath(); c.roundRect(bx, by, w, h, 8); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(sx - 6, by + h - 1); c.lineTo(sx, by + h + 8); c.lineTo(sx + 6, by + h - 1); c.fill();
+    c.fillStyle = '#17191c'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(text, bx + w / 2, by + h / 2 + 1);
+    c.restore();
   }
 
   axes(n) {

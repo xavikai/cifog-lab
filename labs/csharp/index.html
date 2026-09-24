@@ -22,9 +22,15 @@
       <nav class="levels" id="levels" aria-label="Levels"></nav>
       <article class="challenge" id="challenge">
         <div class="challenge-top"><span class="eyebrow" id="challenge-level">LEVEL 1 · SEQUENCE</span><span class="challenge-count" id="challenge-count">1 / 15</span></div>
+        <span class="type-badge" id="challenge-type"></span>
         <h2 id="challenge-title">First block</h2>
         <p class="goal" id="challenge-goal"></p>
         <div class="brief" id="challenge-brief"></div>
+        <div class="predict" id="predict" hidden>
+          <p class="predict-q" id="predict-q"></p>
+          <div class="predict-options" id="predict-options" role="radiogroup"></div>
+          <p class="predict-note" id="predict-note">Choose an answer, then press Run or Step.</p>
+        </div>
         <ul class="requirements" id="requirements" aria-label="Goals"></ul>
         <div class="challenge-actions">
           <button id="hint-button" class="quiet-btn">Show hint</button>
@@ -50,6 +56,10 @@
         <button id="stop" title="Stop (Shift+F5)" disabled><span aria-hidden="true">■</span> Stop</button>
         <label class="speed"><span>Speed</span><input id="speed" type="range" min="0" max="4" step="1" value="1" aria-label="Execution speed"><output id="speed-label">Normal</output></label>
       </div>
+      <div class="parsons" id="parsons" hidden>
+        <div class="parsons-col"><div class="parsons-head"><h3>Your program</h3><span class="small-label">DRAG · ↑↓ · ×</span></div><ol class="parsons-list program" id="parsons-program" aria-label="Your program"></ol></div>
+        <div class="parsons-col"><div class="parsons-head"><h3>Available lines</h3><span class="small-label">CLICK TO ADD</span></div><ul class="parsons-list pool" id="parsons-pool" aria-label="Available lines"></ul></div>
+      </div>
       <div class="editor" id="editor">
         <div class="gutter" id="gutter" aria-hidden="true"></div>
         <div class="code-wrap">
@@ -57,7 +67,7 @@
           <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="C# code"></textarea>
         </div>
       </div>
-      <div class="editing-note" id="editing-note" hidden>The program is running. Press <b>Stop</b> to edit the code.</div>
+      <div class="editing-note" id="editing-note" hidden></div>
       <section class="console" aria-label="Console">
         <div class="console-head"><h3>Console</h3><span id="build-status" class="build-status">Ready</span><button id="clear-console" class="tiny">Clear</button></div>
         <div class="console-body" id="console" role="log" aria-live="polite"></div>

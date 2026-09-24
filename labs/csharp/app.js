@@ -1,6 +1,6 @@
 import { compile, Runner, CSharpError, literal } from './interpreter.js';
-import { LEVELS, CHALLENGES, API, checkRequirements } from './levels.js';
-import { prepare, verifySeeds } from './evaluate.js';
+import { LEVELS, CHALLENGES, API, TYPES as KINDS, checkRequirements, assembleParsons } from './levels.js';
+import { prepare, verifySeeds, assess } from './evaluate.js';
 import { compare } from './world.js';
 import { IsoView, PALETTE } from './render.js';
 
@@ -20,6 +20,7 @@ const S = {
   mode: 'idle', runner: null, gen: null, world: null, target: {}, seed: 1, compiled: null,
   event: null, prevLine: null, breakpoints: new Set(), timer: null, errorLines: new Map(),
   result: null, outEl: null, speed: store.get('speed', 1),
+  prediction: null, correct: new Set(store.get('correct', [])), parsons: null, parsonsView: 'blocks',
 };
 
 // ─── Syntax highlighting ─────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ function highlight(line, st) {
     if ((m = rest.match(/^\d[\d_]*(\.\d+)?[fFdD]?/))) { out += span('t-num', m[0]); i += m[0].length; continue; }
     if ((m = rest.match(/^[A-Za-z_]\w*/))) {
       const w = m[0], after = rest.slice(w.length);
-      const cls = KW.has(w) ? 't-kw' : TYPES.has(w) ? 't-type' : w === 'drone' ? 't-drone' : /^\s*\(/.test(after) ? 't-method' : 't-id';
+      const cls = /^_{2,}$/.test(w) ? 't-blank' : KW.has(w) ? 't-kw' : TYPES.has(w) ? 't-type' : w === 'drone' ? 't-drone' : /^\s*\(/.test(after) ? 't-method' : 't-id';
       out += span(cls, w); i += w.length; continue;
     }
     if ((m = rest.match(/^\s+/))) { out += m[0]; i += m[0].length; continue; }
@@ -137,6 +138,7 @@ function onCodeInput() {
 }
 ta.addEventListener('input', onCodeInput);
 function updateStats() {
+  if (S.challenge?.type === 'parsons' && S.parsonsView === 'blocks') return;
   const c = compile(ta.value);
   $('#code-stats').textContent = c.stats ? `${c.stats.statements} INSTRUCTION${c.stats.statements === 1 ? '' : 'S'}` : '—';
 }
@@ -155,7 +157,7 @@ function logProblem(err, kind) {
   d.className = kind === 'warning' ? 'c-warn' : 'c-error';
   const loc = err.kind === 'runtime'
     ? `Unhandled exception · line ${err.line}`
-    : `Program.cs(${err.line},${err.col}): ${kind} ${err.code || ''}`.trim();
+    : `Program.cs(${err.line},${err.col}): ${kind} ${err.code && err.code !== 'LAB' ? err.code : ''}`.trim();
   const msg = err.kind === 'runtime' ? `System.${err.exception}: ${err.message}`.replace('System.DroneException', 'DroneException') : err.message;
   d.innerHTML = `<div class="c-loc">${esc(loc)}</div><div class="c-msg">${esc(msg)}</div>${err.hint ? `<div class="c-hint">${esc(err.hint)}</div>` : ''}`;
   d.title = 'Go to the line';
@@ -187,7 +189,10 @@ function renderLevels() {
     return `<div class="level${cur.level.id === l.id ? ' current' : ''}${allDone ? ' done' : ''}">
       <span class="level-num">${allDone ? '✓' : l.id}</span>
       <span class="level-name">${esc(l.name)}<small>${esc(l.concept)}</small></span>
-      <div class="pills">${l.challenges.map(c => `<button class="pill${c.id === cur.id ? ' active' : ''}${S.done.has(c.id) ? ' done' : ''}" data-id="${c.id}" title="${esc(c.title)}">${c.sandbox ? 'Free' : c.id}</button>`).join('')}</div>
+      <div class="pills">${l.challenges.map((c, i) => {
+        const full = CHALLENGES.find(x => x.id === c.id), kind = KINDS[full.type];
+        return `<button class="pill k-${full.type}${c.id === cur.id ? ' active' : ''}${S.done.has(c.id) ? ' done' : ''}" data-id="${c.id}" title="${esc(kind.label)} · ${esc(c.title)}">${c.sandbox ? 'Free' : `<b class="pm">${kind.mark}</b>${i + 1}`}</button>`;
+      }).join('')}</div>
     </div>`;
   }).join('');
 }
@@ -198,7 +203,11 @@ $('#levels').addEventListener('click', e => {
 function renderRequirements(stats = null, result = null) {
   const ch = S.challenge;
   const items = [];
-  if (!ch.sandbox) items.push({ label: 'Build the target shape', ok: result ? result.ok : null });
+  const a = S.assessment;
+  if (ch.type === 'predict') items.push({ label: 'Choose your prediction', ok: S.prediction != null ? true : null }, { label: 'Run the program and compare', ok: result ? true : null });
+  if (ch.type === 'observe') items.push({ label: 'Run the program to the end (try Step)', ok: result ? true : null });
+  if (!ch.sandbox && Object.keys(S.target || {}).length) items.push({ label: 'Build the target shape', ok: result ? (a?.shape?.ok ?? result.ok) : null });
+  if (ch.expectOutput) items.push({ label: `Print exactly: ${ch.expectOutput.join(' · ')}`, ok: result ? !!a?.output?.ok : null });
   const reqs = stats ? checkRequirements(ch, stats) : (ch.requires || []).map(r => ({ ...r, ok: null }));
   items.push(...reqs.map(r => ({ label: r.label, ok: r.ok })));
   if (ch.randomized) items.push({ label: 'Works on any starting world', ok: result && 'verified' in result ? result.verified : null });
@@ -229,10 +238,19 @@ function loadChallenge(index) {
   $('#challenge-level').textContent = `LEVEL ${ch.level.id} · ${ch.level.name.toUpperCase()}`;
   $('#challenge-count').textContent = `${index + 1} / ${CHALLENGES.length}`;
   $('#challenge-title').textContent = ch.title;
+  const kind = KINDS[ch.type];
+  $('#challenge-type').className = 'type-badge k-' + ch.type;
+  $('#challenge-type').innerHTML = `<b>${kind.mark}</b>${esc(kind.label.toUpperCase())} · ${esc(kind.tip)}`;
   $('#challenge-goal').textContent = ch.goal;
   $('#challenge-brief').innerHTML = ch.brief;
-  $('#hint').hidden = true; $('#hint').textContent = ch.hint; $('#hint-button').textContent = 'Show hint';
-  ta.value = store.get('code:' + ch.id, ch.starter);
+  $('#hint').hidden = true; $('#hint').textContent = ch.hint || ''; $('#hint-button').textContent = 'Show hint';
+  $('#hint-button').hidden = !ch.hint;
+  $('#reset-code').hidden = ch.type === 'observe' || ch.type === 'predict';
+  $('#reset-code').textContent = ch.type === 'parsons' ? 'Shuffle again ↺' : 'Reset code ↺';
+  S.assessment = null;
+  ta.value = readOnlyType(ch) ? ch.starter : store.get('code:' + ch.id, ch.starter);
+  setupPredict(ch);
+  setupParsons(ch);
   S.breakpoints.clear();
   consoleEl.innerHTML = ''; S.outEl = null;
   logLine('c-info', `${ch.level.name}: ${ch.level.intro}`);
@@ -245,6 +263,7 @@ function loadChallenge(index) {
 }
 $('#hint-button').onclick = () => { const h = $('#hint'); h.hidden = !h.hidden; $('#hint-button').textContent = h.hidden ? 'Show hint' : 'Hide hint'; };
 $('#reset-code').onclick = () => {
+  if (S.challenge.type === 'parsons') { stop(true); S.parsons = null; store.set('parsons:' + S.challenge.id, null); setupParsons(S.challenge); return; }
   if (ta.value !== S.challenge.starter && !confirmReset()) return;
   stop(true);
   ta.value = S.challenge.starter; store.set('code:' + S.challenge.id, ta.value);
@@ -263,14 +282,14 @@ function resetScene(newSeed = false) {
   const ch = S.challenge;
   if (newSeed || ch.randomized) S.seed = ch.randomized ? (Math.random() * 1e9) >>> 0 : 1;
   const { world, target } = prepare(ch, S.seed);
-  S.world = world; S.target = target; S.runner = null; S.gen = null; S.event = null; S.result = null;
-  view.update(world, { target, reset: true });
+  S.world = world; S.target = target; S.runner = null; S.gen = null; S.event = null; S.result = null; S.assessment = null;
+  view.update(world, { target, reset: true, labels: !!ch.labels, say: null });
   $('#result').hidden = true;
   renderAll();
 }
 function renderProgress() {
   const chip = $('#progress-chip');
-  if (S.challenge.sandbox) { chip.innerHTML = `<b>${S.world.blockCount()}</b> blocks`; return; }
+  if (S.challenge.sandbox || !Object.keys(S.target).length) { chip.innerHTML = S.world.blockCount() ? `<b>${S.world.blockCount()}</b> blocks` : ''; return; }
   const r = compare(S.world, S.target);
   chip.innerHTML = `<b>${r.correct}</b> / ${r.total} target blocks${r.wrong.length + r.extra.length ? ` · <span style="color:#ff9a9a">${r.wrong.length + r.extra.length} wrong</span>` : ''}`;
 }
@@ -334,18 +353,154 @@ function renderControls() {
   $('#run').firstElementChild.textContent = running ? '❚❚' : '▶';
   $('#run').classList.toggle('paused', running);
   $('#stop').disabled = !(running || paused);
-  ta.readOnly = running || paused;
-  $('#editing-note').hidden = !(running || paused);
+  const ch = S.challenge, parsons = ch.type === 'parsons';
+  ta.readOnly = running || paused || readOnlyType(ch) || parsons;
+  const note = $('#editing-note');
+  let html = '';
+  if (parsons && S.parsonsView === 'code') html = running || paused ? 'Running the program built from your lines.' : 'This code was built from your lines. <button id="back-to-blocks" class="tiny-dark">← Edit the lines</button>';
+  else if (running || paused) html = 'The program is running. Press <b>Stop</b> to edit the code.';
+  else if (readOnlyType(ch)) html = ch.type === 'predict' ? 'Read the code carefully: this program cannot be edited. Predict, then run.' : 'Read-only: follow the program with Step (F10).';
+  note.innerHTML = html; note.hidden = !html;
+  $('#back-to-blocks')?.addEventListener('click', () => { stop(true); showParsonsBlocks(); });
+  $('#run').disabled = $('#step').disabled = ch.type === 'predict' && S.prediction == null && !(running || paused);
   $('#drone-status').textContent = `DRONE (${S.world.drone.x}, ${S.world.drone.z})${S.world.height() ? ` · HEIGHT ${S.world.height()}` : ''}`;
 }
 function renderAll({ instant = false } = {}) {
-  view.update(S.world, { target: S.target, result: S.result, instant });
+  view.update(S.world, { target: S.target, result: S.result, instant, labels: !!S.challenge.labels, say: S.runner?.output.at(-1)?.text ?? null });
   renderCode(); renderMemory(); renderNow(); renderTrace(); renderOutput(); renderProgress(); renderControls();
   if (S.event && (S.mode === 'running' || S.mode === 'paused')) scrollToLine(S.event.line);
 }
 
+// ─── Challenge types ─────────────────────────────────────────────────────────
+function readOnlyType(ch) { return ch.type === 'observe' || ch.type === 'predict'; }
+
+function setupPredict(ch) {
+  S.prediction = null;
+  const box = $('#predict');
+  box.hidden = ch.type !== 'predict';
+  if (ch.type !== 'predict') return;
+  $('#predict-q').textContent = ch.question.prompt;
+  $('#predict-options').innerHTML = ch.question.options.map(o => `<button class="option" role="radio" aria-checked="false" data-v="${esc(o)}">${esc(o)}</button>`).join('');
+  $('#predict-note').textContent = 'Choose an answer, then press Run or Step.';
+  box.classList.remove('locked');
+}
+$('#predict-options').addEventListener('click', e => {
+  const b = e.target.closest('.option');
+  if (!b || $('#predict').classList.contains('locked')) return;
+  S.prediction = b.dataset.v;
+  for (const o of document.querySelectorAll('#predict .option')) { o.classList.toggle('chosen', o === b); o.setAttribute('aria-checked', o === b); }
+  $('#predict-note').textContent = 'Now run the program and see if you were right.';
+  renderRequirements(); renderControls();
+});
+function lockPredict(locked, result = null) {
+  const box = $('#predict');
+  box.classList.toggle('locked', locked);
+  for (const o of document.querySelectorAll('#predict .option')) {
+    o.classList.toggle('right', !!result && o.dataset.v === result.actual);
+    o.classList.toggle('wrong', !!result && o.dataset.v === result.chosen && !result.ok);
+  }
+  if (result) $('#predict-note').textContent = result.ok ? 'Correct! Change nothing and try the next one.' : 'The green answer is what really happened. Step through it to see why.';
+  else if (!locked && S.prediction != null) $('#predict-note').textContent = 'Now run the program and see if you were right.';
+}
+
+// Parsons: lines to order. items = all lines (correct + distractors), shuffled once.
+function shuffleSeeded(arr, seedText) {
+  let h = 2166136261;
+  for (const ch of seedText) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const rand = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296;
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function setupParsons(ch) {
+  const panel = $('.code-panel');
+  panel.classList.toggle('is-parsons', ch.type === 'parsons');
+  if (ch.type !== 'parsons') { S.parsons = null; $('#parsons').hidden = true; panel.classList.remove('show-blocks'); return; }
+  const items = [...ch.parsons.lines, ...(ch.parsons.distractors || [])];
+  const saved = store.get('parsons:' + ch.id, null);
+  if (saved && saved.program && saved.pool && saved.program.length + saved.pool.length === items.length) S.parsons = { items, ...saved };
+  else S.parsons = { items, program: [], pool: shuffleSeeded(items.map((_, i) => i), ch.id + (Math.random() * 1e6 | 0)) };
+  showParsonsBlocks();
+}
+function saveParsons() { store.set('parsons:' + S.challenge.id, { program: S.parsons.program, pool: S.parsons.pool }); }
+function showParsonsBlocks() {
+  S.parsonsView = 'blocks';
+  $('#parsons').hidden = false;
+  $('.code-panel').classList.add('show-blocks');
+  renderParsons();
+  if (S.challenge && S.world) renderControls();
+}
+function showParsonsCode() {
+  S.parsonsView = 'code';
+  $('#parsons').hidden = true;
+  $('.code-panel').classList.remove('show-blocks');
+}
+function renderParsons() {
+  const P = S.parsons;
+  let depth = 0;
+  const prog = P.program.map((i, pos) => {
+    const t = P.items[i].trim();
+    if (t.startsWith('}')) depth = Math.max(0, depth - 1);
+    const d = depth;
+    if (t.endsWith('{')) depth++;
+    return `<li class="pline" data-i="${i}" data-pos="${pos}" style="--depth:${d}"><span class="grip" aria-hidden="true">⋮⋮</span><code>${highlight(t, { comment: false })}</code><span class="pactions"><button class="mv" data-dir="-1" aria-label="Move up">↑</button><button class="mv" data-dir="1" aria-label="Move down">↓</button><button class="rm" aria-label="Remove line">×</button></span></li>`;
+  }).join('');
+  $('#parsons-program').innerHTML = prog || '<li class="pempty">Click the lines on the right to build your program here.</li>';
+  $('#parsons-pool').innerHTML = P.pool.map(i => `<li><button class="pline pool-line" data-i="${i}"><code>${highlight(P.items[i].trim(), { comment: false })}</code></button></li>`).join('') || '<li class="pempty">All lines are in your program.</li>';
+  $('#code-stats').textContent = `${P.program.length} LINE${P.program.length === 1 ? '' : 'S'}`;
+}
+$('#parsons-pool').addEventListener('click', e => {
+  const b = e.target.closest('.pool-line'); if (!b || S.mode === 'running' || S.mode === 'paused') return;
+  const i = Number(b.dataset.i);
+  S.parsons.pool = S.parsons.pool.filter(x => x !== i); S.parsons.program.push(i);
+  saveParsons(); renderParsons();
+});
+$('#parsons-program').addEventListener('click', e => {
+  const li = e.target.closest('.pline'); if (!li) return;
+  const P = S.parsons, pos = Number(li.dataset.pos);
+  if (e.target.closest('.rm')) { const [i] = P.program.splice(pos, 1); P.pool.push(i); }
+  else if (e.target.closest('.mv')) {
+    const to = pos + Number(e.target.closest('.mv').dataset.dir);
+    if (to < 0 || to >= P.program.length) return;
+    [P.program[pos], P.program[to]] = [P.program[to], P.program[pos]];
+  } else return;
+  saveParsons(); renderParsons();
+});
+// Drag to reorder with pointer events (works with mouse and touch)
+$('#parsons-program').addEventListener('pointerdown', e => {
+  const li = e.target.closest('.pline');
+  if (!li || e.target.closest('button') || e.button > 0) return;
+  e.preventDefault();
+  const list = $('#parsons-program'), from = Number(li.dataset.pos);
+  const rows = [...list.querySelectorAll('.pline')];
+  const mids = rows.map(r => { const b = r.getBoundingClientRect(); return b.top + b.height / 2; });
+  const y0 = e.clientY;
+  let to = from;
+  li.classList.add('dragging');
+  li.setPointerCapture(e.pointerId);
+  const move = ev => {
+    li.style.transform = `translateY(${ev.clientY - y0}px)`;
+    to = mids.filter(m => m < ev.clientY).length;
+    if (to > from) to--;
+    rows.forEach((r, k) => r.classList.toggle('drop-before', k === (to >= from ? to + 1 : to) && k !== from));
+  };
+  const up = () => {
+    li.removeEventListener('pointermove', move); li.removeEventListener('pointerup', up); li.removeEventListener('pointercancel', up);
+    const P = S.parsons;
+    if (to !== from) { const [i] = P.program.splice(from, 1); P.program.splice(to, 0, i); saveParsons(); }
+    renderParsons();
+  };
+  li.addEventListener('pointermove', move); li.addEventListener('pointerup', up); li.addEventListener('pointercancel', up);
+});
+
 // ─── Running ─────────────────────────────────────────────────────────────────
 function build() {
+  if (S.challenge.type === 'parsons') {
+    if (!S.parsons.program.length) { logLine('c-info', 'Add some lines to your program first.'); return false; }
+    ta.value = assembleParsons(S.parsons.program.map(i => S.parsons.items[i]));
+    showParsonsCode();
+  }
+  if (S.challenge.type === 'predict') lockPredict(true);
   S.errorLines.clear();
   consoleEl.innerHTML = ''; S.outEl = null;
   const compiled = compile(ta.value);
@@ -406,7 +561,13 @@ function loop() {
   renderAll();
   if (S.mode === 'running') S.timer = setTimeout(loop, ms);
 }
+function needsPrediction() {
+  if (S.challenge.type !== 'predict' || S.prediction != null || S.mode === 'running' || S.mode === 'paused') return false;
+  const box = $('#predict'); box.classList.remove('nudge'); void box.offsetWidth; box.classList.add('nudge');
+  return true;
+}
 function run() {
+  if (needsPrediction()) return;
   if (S.mode === 'running') { S.mode = 'paused'; clearTimer(); renderAll(); return; }
   if (S.mode === 'paused') { S.mode = 'running'; loop(); return; }
   if (!build()) return;
@@ -414,6 +575,7 @@ function run() {
   loop();
 }
 function step() {
+  if (needsPrediction()) return;
   if (S.mode === 'running') { S.mode = 'paused'; clearTimer(); renderAll(); return; }
   if (S.mode !== 'paused') { if (!build()) return; S.mode = 'paused'; }
   if (advance()) renderAll();
@@ -425,42 +587,54 @@ function stop(silent = false) {
   S.mode = 'idle';
   if (S.challenge) {
     if (wasActive && !silent) logLine('c-info', 'Program stopped.');
+    if (S.challenge.type === 'predict') lockPredict(false);
     resetScene();
   }
 }
 function finish() {
   S.mode = 'finished';
   const r = S.runner, ch = S.challenge;
-  logLine('c-info', `Program finished · ${r.steps} steps · ${S.world.actions} drone actions`);
-  if (ch.sandbox) { S.result = null; showResult('ok', 'Program finished', `${S.world.blockCount()} blocks built in ${r.steps} steps.`, false); renderRequirements(S.compiled.stats, null); renderAll({ instant: SPEEDS[S.speed].ms === 0 }); return; }
-  const result = compare(S.world, S.target);
-  const reqs = checkRequirements(ch, S.compiled.stats);
-  if (result.ok && ch.randomized) {
+  logLine('c-info', `Program finished · ${r.steps} steps${S.world.actions ? ` · ${S.world.actions} drone actions` : ''}`);
+  const instant = SPEEDS[S.speed].ms === 0;
+  if (ch.sandbox) { S.result = null; showResult('ok', 'Program finished', `${S.world.blockCount()} blocks built in ${r.steps} steps.`, false); renderRequirements(S.compiled.stats, null); renderAll({ instant }); return; }
+  const a = S.assessment = assess(ch, { compiled: S.compiled, runner: r, world: S.world, target: S.target, prediction: S.prediction });
+  const shape = a.shape || { ok: true, missing: [], wrong: [], extra: [], total: 0 };
+  if (a.ok && ch.randomized) {
     const seeds = [1, 2, 3].map(() => (Math.random() * 1e9) >>> 0);
     const checks = verifySeeds(ch, ta.value, seeds);
-    result.verified = checks.every(c => c.ok);
-    result.verifiedCount = checks.filter(c => c.ok).length;
+    shape.verified = checks.every(c => c.ok);
+    shape.verifiedCount = checks.filter(c => c.ok).length;
   }
-  S.result = result;
-  renderRequirements(S.compiled.stats, result);
-  const success = result.ok && reqs.every(q => q.ok) && (!ch.randomized || result.verified);
-  if (success) {
-    S.done.add(ch.id); store.set('done', [...S.done]);
-    renderLevels();
+  S.result = shape;
+  renderRequirements(S.compiled.stats, shape);
+  const success = a.ok && (!ch.randomized || shape.verified);
+  const next = S.index < CHALLENGES.length - 1;
+  if (success) { S.done.add(ch.id); store.set('done', [...S.done]); renderLevels(); }
+  if (ch.type === 'predict') {
+    const p = a.prediction;
+    if (p.ok) { S.correct.add(ch.id); store.set('correct', [...S.correct]); renderLevels(); }
+    showResult(p.ok ? 'ok' : 'info', p.ok ? 'You predicted it!' : 'Surprise!',
+      `${p.ok ? `Yes: ${p.actual}.` : `You said ${p.chosen}, but the answer is ${p.actual}.`} ${ch.question.explain}`, next);
+    lockPredict(true, p);
+  } else if (ch.type === 'observe') {
+    showResult('ok', 'Well observed', `The program ran ${r.steps} steps, one line at a time, from top to bottom. Try it again with Step and watch the Memory and Execution panels.`, next);
+  } else if (success) {
     const extra = ch.randomized ? ' It also worked on 3 other random worlds.' : '';
-    showResult('ok', 'Challenge complete', `${result.total} blocks in ${r.steps} steps with ${S.compiled.stats.statements} instructions.${extra}`, S.index < CHALLENGES.length - 1);
+    const what = shape.total ? `${shape.total} blocks in ${r.steps} steps` : `Done in ${r.steps} steps`;
+    showResult('ok', 'Challenge complete', `${what} with ${S.compiled.stats.statements} instructions.${extra}`, next);
   } else {
     const bits = [];
-    if (result.missing.length) bits.push(`${result.missing.length} missing`);
-    if (result.wrong.length) bits.push(`${result.wrong.length} wrong color`);
-    if (result.extra.length) bits.push(`${result.extra.length} extra`);
+    if (shape.missing.length) bits.push(`${shape.missing.length} missing`);
+    if (shape.wrong.length) bits.push(`${shape.wrong.length} wrong color`);
+    if (shape.extra.length) bits.push(`${shape.extra.length} extra`);
     let msg = bits.length ? `Blocks: ${bits.join(' · ')}. Ghost blocks show what is still missing; red outlines mark wrong blocks.` : '';
-    const failed = reqs.filter(q => !q.ok).map(q => q.label);
+    if (a.output && !a.output.ok) msg += `${msg ? ' ' : ''}Expected the Console to show "${a.output.want.join(' / ')}" but it showed "${a.output.got.join(' / ') || '(nothing)'}".`;
+    const failed = a.requirements.filter(q => !q.ok).map(q => q.label);
     if (failed.length) msg += `${msg ? ' ' : ''}Still to do: ${failed.join(', ')}.`;
-    if (result.ok && ch.randomized && !result.verified) msg = `It works on this world, but only on ${result.verifiedCount} of 3 other random worlds. Read the world with the drone instead of using fixed numbers.`;
-    showResult('bad', result.ok ? 'Almost there' : 'Not yet', msg, false);
+    if (a.ok && ch.randomized && !shape.verified) msg = `It works on this world, but only on ${shape.verifiedCount} of 3 other random worlds. Read the world with the drone instead of using fixed numbers.`;
+    showResult('bad', a.ok || shape.ok ? 'Almost there' : 'Not yet', msg, false);
   }
-  renderAll({ instant: SPEEDS[S.speed].ms === 0 });
+  renderAll({ instant });
 }
 function fail(err) {
   S.mode = 'error';
@@ -472,7 +646,7 @@ function fail(err) {
 function showResult(kind, title, text, next) {
   const el = $('#result');
   el.className = 'result ' + kind;
-  el.innerHTML = `<span class="result-icon">${kind === 'ok' ? '✓' : '!'}</span><p class="result-text"><strong>${esc(title)}</strong>${esc(text)}</p>${next ? '<button class="next">Next challenge →</button>' : ''}<button class="tiny close" aria-label="Close">×</button>`;
+  el.innerHTML = `<span class="result-icon">${kind === 'ok' ? '✓' : kind === 'info' ? '?' : '!'}</span><p class="result-text"><strong>${esc(title)}</strong>${esc(text)}</p>${next ? '<button class="next">Next challenge →</button>' : ''}<button class="tiny close" aria-label="Close">×</button>`;
   el.hidden = false;
   el.querySelector('.next')?.addEventListener('click', () => loadChallenge(S.index + 1));
   el.querySelector('.close').addEventListener('click', () => { el.hidden = true; });

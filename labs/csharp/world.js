@@ -52,6 +52,17 @@ export class World {
     this.events.push({ type: 'place', x: this.drone.x, z: this.drone.z, y: col.length - 1, color });
     return `placed ${color} at (${this.drone.x}, ${this.drone.z}) · column height ${col.length}`;
   }
+  // Builds a tower of n blocks here, then steps one tile right (if there is room) for the next tower.
+  build(n, color = 'White') {
+    if (n < 0) throw new DroneException('ArgumentOutOfRangeException', `A tower can't have a negative height (it was ${n}).`, 'Check the calculation: the result is below zero.');
+    if (color === 'None') throw new DroneException('ArgumentException', 'Color.None is not a block color.', 'Choose a color such as Color.Red.');
+    const x = this.drone.x, z = this.drone.z, have = this.column().length;
+    if (have + n > this.maxHeight) throw new DroneException('DroneException', `A tower of ${n} doesn't fit: the maximum height is ${this.maxHeight} blocks.`, 'Check the calculation: the result is bigger than you expected.');
+    for (let i = 0; i < n; i++) this.place(color);
+    if (n === 0) this.actions++;
+    if (x < this.size - 1) { this.drone = { x: x + 1, z }; this.events.push({ type: 'move', from: { x, z }, to: { x: x + 1, z } }); }
+    return `built a tower of ${n} at (${x}, ${z})`;
+  }
   blockCount() { let n = 0; for (const c of this.columns.values()) n += c.length; return n; }
 }
 

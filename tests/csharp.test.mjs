@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compile, Runner, formatValue } from '../labs/csharp/interpreter.js';
 import { World } from '../labs/csharp/world.js';
-import { CHALLENGES } from '../labs/csharp/levels.js';
+import { CHALLENGES, assembleParsons } from '../labs/csharp/levels.js';
 import { runHeadless, verifySeeds } from '../labs/csharp/evaluate.js';
 
 function run(code, world = new World()) {
@@ -17,19 +17,55 @@ const errors = code => compile(code).errors.map(e => e.code);
 
 test('every challenge solution passes, including extra random seeds', () => {
   for (const ch of CHALLENGES.filter(c => !c.sandbox)) {
-    const r = runHeadless(ch, ch.solution, 7);
-    assert.equal(r.ok, true, `${ch.id}: ${r.error?.message || r.compiled.errors.map(e => e.message).join(', ') || JSON.stringify(r.result) + JSON.stringify(r.requirements)}`);
+    const r = runHeadless(ch, ch.solution, 7, ch.question?.answer);
+    assert.equal(r.ok, true, `${ch.id}: ${r.error?.message || r.compiled.errors.map(e => e.message).join(', ') || JSON.stringify({ shape: r.shape, output: r.output, req: r.requirements })}`);
     if (ch.randomized) assert.ok(verifySeeds(ch, ch.solution, [11, 23, 42]).every(s => s.ok), ch.id);
   }
 });
 
-test('starter programs compile (except the error-reading challenges) and do not already solve the challenge', () => {
+test('predict questions: the declared answer is what really happens, and it is one of the options', () => {
+  for (const ch of CHALLENGES.filter(c => c.type === 'predict')) {
+    const r = runHeadless(ch, ch.starter, 1, ch.question.answer);
+    assert.equal(r.prediction.actual, ch.question.answer, ch.id);
+    assert.ok(ch.question.options.includes(ch.question.answer), ch.id);
+    assert.equal(r.prediction.ok, true, ch.id);
+    const wrong = ch.question.options.find(o => o !== ch.question.answer);
+    assert.equal(runHeadless(ch, ch.starter, 1, wrong).prediction.ok, false, ch.id);
+  }
+});
+
+test('starters: create/fix/complete need work, observe/predict run as given', () => {
   for (const ch of CHALLENGES) {
+    if (ch.type === 'parsons') { assert.equal(ch.starter, ''); continue; }
     const c = compile(ch.starter);
-    if (['1-3', '2-3'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
+    if (ch.type === 'observe' || ch.type === 'predict') { assert.equal(runHeadless(ch, ch.starter).error, null, ch.id); continue; }
+    if (ch.type === 'complete') { assert.ok(c.errors.some(e => e.message === 'Fill in the blank ___'), ch.id); continue; }
+    if (['1-3', '2-3', '0-7'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
     assert.equal(c.ok, true, `${ch.id}: ${c.errors.map(e => e.message)}`);
     if (!ch.sandbox) assert.equal(runHeadless(ch, ch.starter, 3).ok, false, ch.id);
   }
+});
+
+test('parsons: distractors break the program and the lines alone solve it', () => {
+  for (const ch of CHALLENGES.filter(c => c.type === 'parsons')) {
+    const reversed = assembleParsons([...ch.parsons.lines].reverse());
+    assert.equal(runHeadless(ch, reversed).ok, false, ch.id);
+    const withDistractor = assembleParsons([...ch.parsons.lines.slice(0, -1), ch.parsons.distractors[0], ch.parsons.lines.at(-1)]);
+    assert.equal(runHeadless(ch, withDistractor).ok, false, ch.id);
+  }
+});
+
+test('the broken calculator shows the classic string + number trap', () => {
+  assert.deepEqual(out('Console.WriteLine("2 + 3 = " + 2 + 3);'), ['2 + 3 = 23']);
+});
+
+test('drone.Build builds a tower and steps right, staying on the grid', () => {
+  const w = new World();
+  run('for (int i = 0; i < 10; i++) { drone.Build(1); }', w);
+  assert.equal(w.columns.size, 8);
+  assert.equal(w.column(7, 0).length, 3);
+  assert.throws(() => run('drone.Build(9);'), /doesn't fit/);
+  assert.throws(() => run('drone.Build(2 - 5);'), /negative/);
 });
 
 test('the sandbox pyramid runs without errors', () => {

@@ -396,6 +396,7 @@ export const METHODS = {
   'Drone.Move': { overloads: [['Direction'], ['Direction', 'int']], returns: 'void' },
   'Drone.MoveTo': { overloads: [['int', 'int']], returns: 'void' },
   'Drone.Place': { overloads: [[], ['Color']], returns: 'void' },
+  'Drone.Build': { overloads: [['int'], ['int', 'Color']], returns: 'void' },
   'Console.WriteLine': { overloads: [[], ['any']], returns: 'void' },
   'Console.Write': { overloads: [['any']], returns: 'void' },
   'Math.Abs': { overloads: [['number']], returns: 'arg' },
@@ -592,9 +593,10 @@ class Checker {
 
   unknownName(e) {
     const name = e.name;
+    if (/^_{2,}$/.test(name)) { this.error('LAB', 'Fill in the blank ___', e, 'Replace ___ with a value, a variable or a calculation.'); return; }
     let hint = '';
     if (name === 'True' || name === 'False') hint = `In C#, ${name.toLowerCase()} is written in lowercase.`;
-    else if (['Move', 'MoveTo', 'Place'].includes(name)) hint = `${name} belongs to the drone. Write drone.${name}(...).`;
+    else if (['Move', 'MoveTo', 'Place', 'Build'].includes(name)) hint = `${name} belongs to the drone. Write drone.${name}(...).`;
     else if (['Red', 'Blue', 'Green', 'Yellow', 'White', 'Orange', 'Purple', 'Black'].includes(name)) hint = `Colors are written Color.${name}.`;
     else if (DIRECTIONS.includes(name)) hint = `Directions are written Direction.${name}.`;
     else {
@@ -1093,6 +1095,7 @@ export class Runner {
       case 'Drone.Move': return wrap(() => w.move(args[0], args.length > 1 ? args[1] : 1));
       case 'Drone.MoveTo': return wrap(() => w.moveTo(args[0], args[1]));
       case 'Drone.Place': return wrap(() => w.place(args.length ? args[0] : 'White'));
+      case 'Drone.Build': return wrap(() => w.build(args[0], args.length > 1 ? args[1] : 'White'));
       case 'Console.WriteLine': case 'Console.Write': {
         const text = args.length ? formatValue(args[0], e.args[0].ty) : '';
         if (e.method === 'Console.Write' && this.output.length && !this.output.at(-1).done) this.output.at(-1).text += text;
