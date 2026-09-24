@@ -1,4 +1,4 @@
-import {buildLayout, EDGES, FACES, PRESETS} from './unfold.js';
+import {buildLayout, EDGES, FACES, PRESETS} from './unfold.js?v=2';
 
 export const MODELS = Object.freeze({
  cube:[{id:'cube',name:'Cube',size:[2,2,2],position:[0,0,0],color:'#e9a667'}],

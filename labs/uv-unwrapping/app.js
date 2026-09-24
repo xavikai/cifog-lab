@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from '../../vendor/OrbitControls.js';
-import {FACES,FACE_ORDER,EDGES,PRESETS,buildLayout} from './unfold.js';
-import {MODELS,defaultCuts,buildCharts,packCharts,averageIslandScale,faceUV,faceUVPoint,stretchMetrics,edgeName} from './workbench.js';
+import {FACES,FACE_ORDER,EDGES,PRESETS,buildLayout} from './unfold.js?v=2';
+import {MODELS,defaultCuts,buildCharts,packCharts,averageIslandScale,faceUV,faceUVPoint,stretchMetrics,edgeName} from './workbench.js?v=2';
 
 const $=selector=>document.querySelector(selector);
 const ns='http://www.w3.org/2000/svg';
