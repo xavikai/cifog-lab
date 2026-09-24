@@ -18,25 +18,40 @@ The sequence follows how beginners learn: read and predict before writing (PRIMM
 - **Order ⇅** (Parsons problems) — the correct lines are given, shuffled, with one or two traps. Students practise logic without fighting syntax.
 - **Fix !** — compiler errors and logic errors (the program runs but does the wrong thing).
 - **Complete _** — fill in the `___` gaps of a worked example.
+- **Classify ≡** — choose a category for each item (valid name? works or error?). The compiler, or a naming rule, decides.
 - **Create ■** — write the program.
 
-## Level 0 · Numbers
+## Level 0 · Calculator (no statements yet)
 
-1. **Your first program** (observe) — top to bottom, one line at a time; comments; `drone.Build(n)` turns a number into a tower.
+Each line is a single calculation, without `;` or method calls, like C# Interactive. The result appears next to the line with its type; in some challenges the drone builds it as a tower. This keeps the very first contact free of syntax.
+
+1. **The calculator** (observe) — one line at a time, top to bottom; comments.
 2. **Which goes first?** (predict) — `2 + 3 * 4` is 14.
-3. **Fill the gaps** (complete) — expressions that produce 6, 8 and 3.
-4. **Whole numbers** (predict) — `7 / 2` prints 3.
-5. **What is left over** (predict) — `17 % 5` is 2.
-6. **Put it in order** (order) — first contact with Parsons problems.
-7. **The broken calculator** (fix) — a compiler error plus the classic logic error `"2 + 3 = " + 2 + 3` → `2 + 3 = 23`.
+3. **Make 12** (create) — only the numbers 3 and 4 are allowed; several answers work.
+4. **Fill the gaps** (complete).
+5. **Whole numbers** (predict) — `7 / 2` is 3; try `7.0 / 2`.
+6. **What is left over** (predict) — `17 % 5` is 2.
+7. **Kinds of values** (predict) — int, double, string, bool; `"3" + 4` is `"34"`.
 
-## Level 1 · Instructions (sequence)
+## Level 1 · Names
+
+1. **Capital letters matter** (classify) — `true`/`True`, double quotes, decimal point, `Math`/`math`. The real checker decides.
+2. **Valid names** (classify) — digits first, spaces, `-`, reserved words (`class` is invalid, `Class` is valid).
+3. **Name styles** (classify) — camelCase for variables, PascalCase for methods and types.
+4. **A box with a name** (predict) — `age + 1` calculates, `age = age + 1` stores.
+5. **Fix the names** (fix) — spaces in names, `Int`, `playerscore` vs `playerScore`.
+
+## Level 2 · First instructions
+
+Now `;` and method calls appear: `Console.WriteLine("Hello!");` — who (`Console`), what (`WriteLine`), with what (the value in brackets). Then a Parsons problem and the broken calculator (`"2 + 3 = " + 2 + 3`).
+
+## Level 3 · The drone (sequence)
 
 1. **First block** — programs run top to bottom, one instruction at a time. Each `Move` is one tile.
 2. **Order matters** — the starter stacks the tower upside down. The computer does exactly what is written.
 3. **Read the errors** — three mistakes: a missing `;`, `place` vs `Place`, `green` vs `Green`. Syntax errors appear one at a time; after fixing the `;`, the checker lists the other two together. C# is case-sensitive.
 
-## Level 2 · Variables
+## Level 4 · Variables
 
 - **A box, not an equation** (predict) — `x = x + 1` stores, it is not an equation.
 - **A copy, not a link** (predict) — `int b = a;` copies the value; changing `a` later does not change `b`. One of the most common beginner misconceptions.
@@ -46,7 +61,7 @@ The sequence follows how beginners learn: read and predict before writing (PRIMM
 2. **Whole numbers** — `7 / 2` is `3` for `int`. The Console prints `middle = 3`. Discuss `7 / 2.0`, `double` and `(int)` casts. The end tile is `width - 1` (counting from 0).
 3. **Types** — `Color roof = "Red";` fails with CS0029: a string is not a Color. Reuse the variables for the second tower and reassign `label` (no type the second time, or CS0128 appears).
 
-## Level 3 · Loops
+## Level 5 · Loops
 
 - **Count the turns** (predict) — `i <= 4` from 0 runs five times (off-by-one).
 - **Loop inside a loop** (order, before The floor) — braces are lines too; indentation appears automatically.
@@ -57,7 +72,7 @@ The sequence follows how beginners learn: read and predict before writing (PRIMM
 4. **The floor** — two nested loops cover a grid: the pattern behind instancing, tiling and procedural placement.
 5. **Fill it up** — the starting heights are random. `while (drone.Height < 6)` repeats an unknown number of times. The program is verified on three other random worlds.
 
-## Level 4 · Conditions
+## Level 6 · Conditions
 
 - **Which path?** (predict) — an `if / else if / else` chain runs only the first true branch; `&&` needs both sides.
 

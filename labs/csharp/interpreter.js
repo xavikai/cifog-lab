@@ -390,6 +390,32 @@ class Parser {
   }
 }
 
+// Calculator mode: every line is one calculation, declaration or assignment.
+// No semicolons needed (like C# Interactive). Used for the very first lessons.
+function parseCalc(tokens) {
+  const body = [], groups = new Map();
+  for (const t of tokens) {
+    if (t.t === 'eof') continue;
+    if (!groups.has(t.line)) groups.set(t.line, []);
+    groups.get(t.line).push(t);
+  }
+  for (const [line, toks] of groups) {
+    const last = toks.at(-1);
+    const p = new Parser([...toks, { t: 'eof', v: '', line, col: last.endCol, endLine: line, endCol: last.endCol }]);
+    if (p.tok.t === 'kw' && !TYPE_KEYWORDS.has(p.tok.v) && !['true', 'false'].includes(p.tok.v))
+      p.fail('LAB', `'${p.tok.v}' is not used in the calculator.`, p.tok, 'Here each line is just a calculation, like 2 + 3.');
+    const stmt = p.isDeclStart() ? p.declaration() : p.simple();
+    p.eat(';');
+    if (p.tok.t !== 'eof') {
+      if (stmt.type === 'VarDecl' && p.tok.t === 'id') p.fail('LAB', "A name can't contain spaces", p.tok, `Join the words and start each new word with a capital letter: ${stmt.decls.at(-1).name}${p.tok.v[0].toUpperCase()}${p.tok.v.slice(1)}`);
+      if (p.is(',') && toks.some(t => t.t === 'num')) p.fail('LAB', "Decimals use a point, not a comma", p.tok, 'Write 3.5, not 3,5.');
+      p.fail('LAB', `Unexpected '${p.tok.v}'`, p.tok, 'Write one calculation per line. Did you forget an operator such as + or *?');
+    }
+    body.push({ type: 'Calc', stmt, line, col: toks[0].col });
+  }
+  return { type: 'Program', body, line: 1, col: 1, calc: true };
+}
+
 // ─── Lab API (the drone, Console, Math) ──────────────────────────────────────
 export const DRONE_PROPS = { X: 'int', Z: 'int', Height: 'int', Ground: 'Color' };
 export const METHODS = {
@@ -415,7 +441,7 @@ class Checker {
     this.errors = []; this.warnings = [];
     this.scopes = [];
     this.loops = 0;
-    this.stats = { features: new Set(), declTypes: new Set(), statements: 0, methods: new Set() };
+    this.stats = { features: new Set(), declTypes: new Set(), statements: 0, methods: new Set(), numbers: [] };
     this.reportedUnassigned = new Set();
   }
   error(code, message, at, hint = '') {
@@ -440,8 +466,11 @@ class Checker {
   body(s, A) { return s.type === 'Block' ? this.block(s, A) : this.stmt(s, A); }
 
   stmt(s, A) {
-    if (s.type !== 'Block' && s.type !== 'Empty') this.stats.statements++;
+    if (s.type !== 'Block' && s.type !== 'Empty' && s.type !== 'Calc') this.stats.statements++;
     switch (s.type) {
+      case 'Calc':
+        if (s.stmt.type === 'ExprStmt') { this.stats.statements++; this.type(s.stmt.expr, A); return A; }
+        return this.stmt(s.stmt, A);
       case 'Block': return this.block(s, A);
       case 'Empty': return A;
       case 'VarDecl': return this.varDecl(s, A);
@@ -613,7 +642,7 @@ class Checker {
   type(e, A) { const t = this.infer(e, A); e.ty = t; return t; }
   infer(e, A) {
     switch (e.type) {
-      case 'Num': return e.ty;
+      case 'Num': this.stats.numbers.push(e.value); return e.ty;
       case 'Str': return 'string';
       case 'Bool': return 'bool';
       case 'Interp': for (const p of e.parts) if (typeof p !== 'string') { const t = this.type(p, A); if (t === 'void') this.error('CS0029', "Cannot implicitly convert type 'void' to 'object'", p); } return 'string';
@@ -779,9 +808,9 @@ class Checker {
 }
 
 // ─── Compile ─────────────────────────────────────────────────────────────────
-export function compile(src) {
+export function compile(src, { mode = 'program' } = {}) {
   let ast;
-  try { ast = new Parser(tokenize(src)).program(); }
+  try { ast = mode === 'calc' ? parseCalc(tokenize(src)) : new Parser(tokenize(src)).program(); }
   catch (err) {
     if (err instanceof CSharpError) return { ok: false, errors: [err], warnings: [], ast: null, stats: null };
     throw err;
@@ -826,8 +855,10 @@ class Signal { constructor(kind) { this.kind = kind; } }
 const BREAK = new Signal('break'), CONTINUE = new Signal('continue');
 
 export class Runner {
-  constructor(ast, world, { maxSteps = 20000 } = {}) {
-    this.ast = ast; this.world = world; this.maxSteps = maxSteps;
+  constructor(ast, world, { maxSteps = 20000, calcTowers = false } = {}) {
+    this.ast = ast; this.world = world; this.maxSteps = maxSteps; this.calcTowers = calcTowers;
+    this.results = [];
+    this.resultsByLine = new Map();
     this.scopes = [];
     this.output = [];
     this.steps = 0;
@@ -885,6 +916,11 @@ export class Runner {
         return;
       }
       case 'Empty': return;
+      case 'Calc': {
+        yield this.at(s);
+        this.calcLine(s);
+        return;
+      }
       case 'VarDecl': case 'Assign': case 'IncDec': case 'ExprStmt':
         yield this.at(s);
         this.simple(s);
@@ -940,6 +976,29 @@ export class Runner {
       case 'Break': yield this.at(s); this.note(s.line, 'break → leave the loop'); return BREAK;
       case 'Continue': yield this.at(s); this.note(s.line, 'continue → next turn'); return CONTINUE;
     }
+  }
+
+  calcLine(s) {
+    const st = s.stmt;
+    let entry;
+    if (st.type === 'ExprStmt') {
+      const e = st.expr, value = this.eval(e), type = e.ty;
+      const text = type === 'void' ? '' : literal(value, type);
+      entry = { line: s.line, value, type, text, expression: true };
+      if (e.type === 'Call' && type === 'void') this.note(s.line, this.lastCallNote || show(e));
+      else this.note(s.line, `${show(e)} → ${text}`, `${show(e)} is ${text}`);
+      if (this.calcTowers && type === 'int') {
+        if (value >= 0 && this.world.height() + value <= this.world.maxHeight) this.world.build(value);
+        else entry.noTower = true;
+      }
+    } else {
+      this.simple(st);
+      const name = st.type === 'VarDecl' ? st.decls.at(-1).name : st.target.name;
+      const v = this.lookup(name);
+      entry = { line: s.line, value: v.value, type: v.type, text: `${name} = ${literal(v.value, v.type)}`, expression: false };
+    }
+    this.results.push(entry);
+    this.resultsByLine.set(s.line, entry);
   }
 
   cond(test, line) { this.line = line; return this.eval(test); }

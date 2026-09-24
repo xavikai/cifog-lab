@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compile, Runner, formatValue } from '../labs/csharp/interpreter.js';
 import { World } from '../labs/csharp/world.js';
-import { CHALLENGES, assembleParsons } from '../labs/csharp/levels.js';
+import { CHALLENGES, assembleParsons, judge } from '../labs/csharp/levels.js';
 import { runHeadless, verifySeeds } from '../labs/csharp/evaluate.js';
 
 function run(code, world = new World()) {
@@ -16,7 +16,7 @@ const out = code => run(code).output.map(o => o.text);
 const errors = code => compile(code).errors.map(e => e.code);
 
 test('every challenge solution passes, including extra random seeds', () => {
-  for (const ch of CHALLENGES.filter(c => !c.sandbox)) {
+  for (const ch of CHALLENGES.filter(c => !c.sandbox && c.type !== 'classify')) {
     const r = runHeadless(ch, ch.solution, 7, ch.question?.answer);
     assert.equal(r.ok, true, `${ch.id}: ${r.error?.message || r.compiled.errors.map(e => e.message).join(', ') || JSON.stringify({ shape: r.shape, output: r.output, req: r.requirements })}`);
     if (ch.randomized) assert.ok(verifySeeds(ch, ch.solution, [11, 23, 42]).every(s => s.ok), ch.id);
@@ -36,11 +36,11 @@ test('predict questions: the declared answer is what really happens, and it is o
 
 test('starters: create/fix/complete need work, observe/predict run as given', () => {
   for (const ch of CHALLENGES) {
-    if (ch.type === 'parsons') { assert.equal(ch.starter, ''); continue; }
-    const c = compile(ch.starter);
+    if (ch.type === 'parsons' || ch.type === 'classify') { assert.equal(ch.starter, ''); continue; }
+    const c = compile(ch.starter, { mode: ch.mode });
     if (ch.type === 'observe' || ch.type === 'predict') { assert.equal(runHeadless(ch, ch.starter).error, null, ch.id); continue; }
     if (ch.type === 'complete') { assert.ok(c.errors.some(e => e.message === 'Fill in the blank ___'), ch.id); continue; }
-    if (['1-3', '2-3', '0-7'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
+    if (['1-3', '2-3', '0-7', 'n-5'].includes(ch.id)) { assert.equal(c.ok, false, ch.id); continue; }
     assert.equal(c.ok, true, `${ch.id}: ${c.errors.map(e => e.message)}`);
     if (!ch.sandbox) assert.equal(runHeadless(ch, ch.starter, 3).ok, false, ch.id);
   }
@@ -152,4 +152,44 @@ test('a hard-coded answer fails the randomized challenge on other floors', () =>
   const hardcoded = cols.map(([k, n]) => `drone.MoveTo(${k.split(',')[0]}, 0);` + ' drone.Place(Color.Blue);'.repeat(n)).join('\n');
   assert.equal(runHeadless(ch, hardcoded, 5).result.ok, true);
   assert.ok(verifySeeds(ch, hardcoded, [11, 23, 42]).some(s => !s.ok));
+});
+
+test('classify: the compiler/judge agrees with every expected answer', () => {
+  for (const ch of CHALLENGES.filter(c => c.type === 'classify')) {
+    for (const item of ch.classify.items) {
+      const j = judge(ch.classify.judge, item.text);
+      assert.equal(j.answer, item.answer, `${ch.id}: ${item.text} → ${j.answer} (${j.why})`);
+      assert.ok(ch.classify.categories.includes(item.answer), ch.id);
+      assert.ok(j.why.length > 5, ch.id);
+    }
+  }
+});
+
+test('calculator mode: one calculation per line, no semicolons, results with types', () => {
+  const c = compile('// note\n2 + 3 * 4\n7 / 2\n7.0 / 2\n"3" + 4\nint age = 16\nage + 1\nage = age + 1\nage * 2', { mode: 'calc' });
+  assert.equal(c.ok, true);
+  const r = new Runner(c.ast, new World());
+  r.runToEnd();
+  assert.deepEqual(r.results.map(x => x.text), ['14', '3', '3.5', '"34"', 'age = 16', '17', 'age = 17', '34']);
+  assert.deepEqual(r.results.slice(0, 4).map(x => x.type), ['int', 'int', 'double', 'string']);
+  assert.equal(r.lineCounts.get(2), 1);
+});
+
+test('calculator mode: beginner-friendly errors', () => {
+  const msg = src => compile(src, { mode: 'calc' }).errors[0];
+  assert.match(msg('int player score = 10').message, /spaces/);
+  assert.match(msg('int player score = 10').hint, /playerScore/);
+  assert.match(msg('3,5').message, /point/);
+  assert.equal(msg('True').code, 'CS0103');
+  assert.equal(msg('Int bonus = 5').code, 'CS0246');
+  assert.match(msg('2 3').hint, /operator/);
+  assert.match(msg('if (true) 3').message, /not used in the calculator/);
+});
+
+test('Make 12 only accepts the numbers 3 and 4', () => {
+  const ch = CHALLENGES.find(c => c.id === 'k-3');
+  assert.equal(runHeadless(ch, '3 * 4').ok, true);
+  assert.equal(runHeadless(ch, '4 + 4 + 4').ok, true);
+  assert.equal(runHeadless(ch, '12').ok, false);
+  assert.equal(runHeadless(ch, '6 * 2').ok, false);
 });

@@ -1,3 +1,5 @@
+import { compile } from './interpreter.js';
+
 // Levels and challenges for the C# Code Lab.
 // Each challenge builds a target in an 8 × 8 voxel world.
 // setup(rand) returns { start, columns, ground, target }. Randomized challenges
@@ -15,31 +17,221 @@ function fill(fn) {
 const repeat = (color, n) => Array(n).fill(color);
 
 export const API = [
-  { level: 0, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
-  { level: 0, code: 'drone.Build(3);', text: 'Builds a tower of 3 blocks, then moves one tile right, ready for the next tower. Optional color: <code>drone.Build(3, Color.Red);</code>' },
   { level: 0, code: '2 + 3 * 4', text: 'Operators: <code>+</code> <code>-</code> <code>*</code> <code>/</code> <code>%</code> (remainder). <code>*</code> <code>/</code> <code>%</code> go before <code>+</code> <code>-</code>. Use <code>( )</code> to change the order.' },
-  { level: 1, code: 'drone.Move(Direction.Right);', text: 'Moves one tile. Directions: <code>Right</code>, <code>Left</code>, <code>Forward</code>, <code>Back</code>.' },
-  { level: 1, code: 'drone.Place(Color.Red);', text: 'Places a block on top of the column under the drone. Colors: White, Red, Orange, Yellow, Green, Blue, Purple, Black.' },
-  { level: 2, code: 'int distance = 3;', text: 'Creates a variable: a named box with a type and a value. Types: <code>int</code> 3 · <code>double</code> 2.5 · <code>float</code> 2.5f · <code>bool</code> true · <code>string</code> "text" · <code>Color</code>.' },
-  { level: 2, code: 'drone.Move(Direction.Right, distance);', text: 'Moves several tiles at once.' },
-  { level: 3, code: 'for (int i = 0; i < 5; i++)\n{\n    \n}', text: 'Repeats the block. <code>i = 0</code> start · <code>i &lt; 5</code> keep going while true · <code>i++</code> add 1 after each turn.' },
-  { level: 3, code: 'drone.MoveTo(x, z);', text: 'Flies straight to a tile. X goes right, Z goes forward.' },
-  { level: 3, code: 'while (drone.Height < 6)\n{\n    \n}', text: 'Repeats while the condition is true. Use it when you don\'t know how many turns you need.' },
-  { level: 3, code: 'drone.Height', text: 'How many blocks are in the column under the drone (int). Also <code>drone.X</code> and <code>drone.Z</code>.' },
-  { level: 4, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
-  { level: 4, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
-  { level: 4, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
+  { level: 0, code: '7 / 2      7.0 / 2', text: 'int ÷ int gives a whole number (3). With a decimal number (double) you get 3.5.' },
+  { level: 0, code: '3   3.5   "3"   true', text: 'Types of values: <code>int</code>, <code>double</code>, <code>string</code> (text in double quotes), <code>bool</code>.' },
+  { level: 1, code: 'int age = 16', text: 'A variable: type, name, value. Names use <b>camelCase</b>: <code>playerScore</code>. C# is case-sensitive.' },
+  { level: 2, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
+  { level: 2, code: 'drone.Build(3);', text: 'Builds a tower of 3 blocks, then moves one tile right, ready for the next tower. Optional color: <code>drone.Build(3, Color.Red);</code>' },
+  { level: 3, code: 'drone.Move(Direction.Right);', text: 'Moves one tile. Directions: <code>Right</code>, <code>Left</code>, <code>Forward</code>, <code>Back</code>.' },
+  { level: 3, code: 'drone.Place(Color.Red);', text: 'Places a block on top of the column under the drone. Colors: White, Red, Orange, Yellow, Green, Blue, Purple, Black.' },
+  { level: 4, code: 'int distance = 3;', text: 'Creates a variable: a named box with a type and a value. Types: <code>int</code> 3 · <code>double</code> 2.5 · <code>float</code> 2.5f · <code>bool</code> true · <code>string</code> "text" · <code>Color</code>.' },
+  { level: 4, code: 'drone.Move(Direction.Right, distance);', text: 'Moves several tiles at once.' },
+  { level: 5, code: 'for (int i = 0; i < 5; i++)\n{\n    \n}', text: 'Repeats the block. <code>i = 0</code> start · <code>i &lt; 5</code> keep going while true · <code>i++</code> add 1 after each turn.' },
+  { level: 5, code: 'drone.MoveTo(x, z);', text: 'Flies straight to a tile. X goes right, Z goes forward.' },
+  { level: 5, code: 'while (drone.Height < 6)\n{\n    \n}', text: 'Repeats while the condition is true. Use it when you don\'t know how many turns you need.' },
+  { level: 5, code: 'drone.Height', text: 'How many blocks are in the column under the drone (int). Also <code>drone.X</code> and <code>drone.Z</code>.' },
+  { level: 6, code: 'if (x == 0)\n{\n    \n}\nelse\n{\n    \n}', text: 'Runs one block or the other depending on the condition.' },
+  { level: 6, code: 'x % 2 == 0', text: 'Compare with <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>%</code> is the remainder of a division. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).' },
+  { level: 6, code: 'drone.Ground', text: 'The color painted on the floor under the drone. <code>Color.None</code> if the tile is empty.' },
 ];
 
 export const LEVELS = [
   {
-    id: 0, name: 'Numbers', concept: 'Calculate',
-    intro: 'Computers are very fast calculators. Before moving anything, let\'s see how C# calculates, and how a program runs line by line.',
+    id: 0, name: 'Calculator', concept: 'Values', mode: 'calc',
+    intro: 'Before writing programs, let\'s see how C# calculates. Here each line is just a calculation, and its result appears next to it.',
     challenges: [
       {
-        id: '0-1', type: 'observe', title: 'Your first program',
-        goal: 'Run the program with Step (F10) and follow it line by line.',
-        brief: '<p>Nothing to write yet: <b>read</b> and <b>watch</b>. Press <b>Step</b> several times. The yellow line is the next one to run. Each <code>drone.Build(n)</code> builds a tower of <b>n</b> blocks, so every number becomes something you can see.</p>',
+        id: 'k-1', type: 'observe', title: 'The calculator', mode: 'calc', calcTowers: true,
+        goal: 'Press Step (F10) and watch each result appear.',
+        brief: '<p>Each line is a <b>calculation</b>. The computer works them out <b>one at a time, from top to bottom</b>. The result appears at the end of the line, and the drone builds it as a tower so you can see how big it is.</p><p>Lines starting with <code>//</code> are <b>comments</b>: notes for people. The computer ignores them.</p>',
+        hint: 'Keep pressing Step. Run does everything at once.',
+        starter: `// Each line is a calculation.
+2 + 3
+10 - 4
+3 * 2
+8 / 2
+`,
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 16, viewHeight: 6, target: {} }),
+      },
+      {
+        id: 'k-2', type: 'predict', title: 'Which goes first?', mode: 'calc', calcTowers: true,
+        goal: 'Predict the result, then run it.',
+        brief: '<p>Before running, decide what you think will happen. Being wrong is fine: it is how you find out how the computer really thinks.</p>',
+        starter: `2 + 3 * 4
+`,
+        question: {
+          prompt: 'What is 2 + 3 * 4 in C#?',
+          options: ['20', '14', '9'], answer: '14',
+          actual: ({ results }) => results[0]?.text,
+          explain: '* and / are calculated before + and -, just like in maths: 3 * 4 = 12, then 2 + 12 = 14. To add first, use brackets: (2 + 3) * 4 is 20.',
+        },
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 24, viewHeight: 14, target: {} }),
+      },
+      {
+        id: 'k-3', type: 'create', title: 'Make 12', mode: 'calc', calcTowers: true,
+        goal: 'Write one calculation that gives 12, using only the numbers 3 and 4.',
+        brief: '<p>Your turn to write. Change the line so the result is <b>12</b>. You can use <code>+</code> <code>-</code> <code>*</code> <code>/</code> and brackets, but the only numbers allowed are 3 and 4. There is more than one answer!</p>',
+        hint: '3 * 4 is one answer. Can you find another? (4 + 4 + 4…)',
+        starter: `3 + 4
+`,
+        solution: `3 * 4`,
+        requires: [{ onlyNumbers: [3, 4], label: 'Use only the numbers 3 and 4' }],
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 16, viewHeight: 12, target: { '0,0': Array(12).fill('White') } }),
+      },
+      {
+        id: 'k-4', type: 'complete', title: 'Fill the gaps', mode: 'calc', calcTowers: true,
+        goal: 'Replace each ___ so the results are 6, 8 and 3.',
+        brief: '<p>Each <code>___</code> is a gap. Replace it with a number so every tower matches its ghost. The labels show the height of each tower.</p>',
+        hint: '4 + 2 = 6 · 4 * 2 = 8 · (1 + 2) * 1 = 3',
+        starter: `4 + ___
+___ * 2
+(1 + 2) * ___
+`,
+        solution: `4 + 2
+4 * 2
+(1 + 2) * 1`,
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 16, viewHeight: 8, target: { '0,0': Array(6).fill('White'), '1,0': Array(8).fill('White'), '2,0': Array(3).fill('White') } }),
+      },
+      {
+        id: 'k-5', type: 'predict', title: 'Whole numbers', mode: 'calc',
+        goal: 'Predict the result of 7 / 2.',
+        brief: '<p>7 divided by 2 is 3.5… or is it? In C#, a number written without a decimal point is an <code>int</code>: a <b>whole number</b>. Look at the grey label next to each result: it tells you the <b>type</b>.</p>',
+        starter: `7 / 2
+`,
+        question: {
+          prompt: 'What is 7 / 2 in C#?',
+          options: ['3.5', '3', '4'], answer: '3',
+          actual: ({ results }) => results[0]?.text,
+          explain: 'An int divided by an int gives an int: the decimals are cut off (not rounded). Try adding a line with 7.0 / 2: with a decimal number (double) the result is 3.5.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'k-6', type: 'predict', title: 'What is left over', mode: 'calc', calcTowers: true,
+        goal: 'Predict the result of 17 % 5.',
+        brief: '<p><code>%</code> is the <b>remainder</b> operator: what is left over after dividing. It is used all the time to repeat patterns: every 2nd tile, every 5th floor…</p>',
+        starter: `17 % 5
+`,
+        question: {
+          prompt: 'What is 17 % 5?',
+          options: ['3', '2', '3.4'], answer: '2',
+          actual: ({ results }) => results[0]?.text,
+          explain: '17 / 5 is 3 (because 3 × 5 = 15) and 2 is left over. So 17 % 5 is 2. A number is even when n % 2 is 0.',
+        },
+        labels: true,
+        setup: () => ({ size: 6, maxHeight: 20, viewHeight: 5, target: {} }),
+      },
+      {
+        id: 'k-7', type: 'predict', title: 'Kinds of values', mode: 'calc',
+        goal: 'Look at the type of each value and predict the last result.',
+        brief: '<p>Values have a <b>type</b>: <code>int</code> whole numbers, <code>double</code> decimal numbers, <code>string</code> text (between double quotes) and <code>bool</code> true or false. <code>"3"</code> looks like a number, but it is <b>text</b>.</p>',
+        starter: `3
+3.5
+"3"
+true
+"3" + 4
+`,
+        question: {
+          prompt: 'What is "3" + 4?',
+          options: ['7', '"34"', 'An error'], answer: '"34"',
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: 'When text and a number meet with +, C# joins them as text: "3" + 4 is "34". To calculate, both sides must be numbers.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+    ],
+  },
+  {
+    id: 1, name: 'Names', concept: 'Words', mode: 'calc',
+    intro: 'C# is very strict with how things are written. Capital letters, quotes and names all matter.',
+    challenges: [
+      {
+        id: 'n-1', type: 'classify', title: 'Capital letters matter', mode: 'calc',
+        goal: 'Decide which lines C# accepts and which give an error.',
+        brief: '<p>C# is <b>case-sensitive</b>: <code>true</code> and <code>True</code> are different words. Text goes between <b>double</b> quotes, and decimals use a <b>point</b>. Choose an answer for every line, then press <b>Check</b>. The real C# compiler decides.</p>',
+        hint: 'Keywords like true are lowercase. Built-in names like Math and Max start with a capital letter.',
+        classify: { categories: ['Works', 'Error'], judge: 'calc', items: [
+          { text: 'true', answer: 'Works' }, { text: 'True', answer: 'Error' },
+          { text: '"Hello"', answer: 'Works' }, { text: "'Hello'", answer: 'Error' },
+          { text: '3.5', answer: 'Works' }, { text: '3,5', answer: 'Error' },
+          { text: 'Math.Max(2, 5)', answer: 'Works' }, { text: 'math.max(2, 5)', answer: 'Error' },
+        ] },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'n-2', type: 'classify', title: 'Valid names',
+        goal: 'Decide which names can be used for a variable.',
+        brief: '<p>Soon you will give names to values. A name can contain letters, digits and <code>_</code>, but it <b>cannot start with a digit</b>, cannot contain <b>spaces</b> or symbols like <code>-</code>, and cannot be a <b>reserved word</b> of C# (like <code>int</code> or <code>class</code>). The compiler checks each one as <code>int name = 0;</code></p>',
+        hint: 'Watch out for the tricky ones: Class (capital C) is not the same word as class.',
+        classify: { categories: ['Valid', 'Invalid'], judge: 'name', items: [
+          { text: 'score', answer: 'Valid' }, { text: 'playerScore', answer: 'Valid' },
+          { text: '2players', answer: 'Invalid' }, { text: 'player score', answer: 'Invalid' },
+          { text: 'my-name', answer: 'Invalid' }, { text: 'total2', answer: 'Valid' },
+          { text: 'class', answer: 'Invalid' }, { text: 'Class', answer: 'Valid' },
+          { text: '_count', answer: 'Valid' },
+        ] },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'n-3', type: 'classify', title: 'Name styles',
+        goal: 'Classify each name by its style.',
+        brief: '<p>Names can\'t have spaces, so programmers join words with capital letters:</p><p><b>camelCase</b> starts lowercase: <code>playerScore</code>. In C# it is used for <b>variables</b>.<br><b>PascalCase</b> starts uppercase: <code>PlayerScore</code>. It is used for <b>methods and types</b>: <code>Console</code>, <code>WriteLine</code>, <code>Color</code>.</p><p>Other styles work, but are not the C# way.</p>',
+        hint: 'Look only at the first letter and at how the words are joined.',
+        classify: { categories: ['camelCase', 'PascalCase', 'Other style'], judge: 'style', items: [
+          { text: 'playerScore', answer: 'camelCase' }, { text: 'PlayerScore', answer: 'PascalCase' },
+          { text: 'WriteLine', answer: 'PascalCase' }, { text: 'totalBlocks', answer: 'camelCase' },
+          { text: 'player_score', answer: 'Other style' }, { text: 'Console', answer: 'PascalCase' },
+          { text: 'MAXSPEED', answer: 'Other style' }, { text: 'score', answer: 'camelCase' },
+        ] },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'n-4', type: 'predict', title: 'A box with a name', mode: 'calc',
+        goal: 'Follow the box called age and predict the last result.',
+        brief: '<p><code>int age = 16</code> creates a <b>variable</b>: a box with a <b>type</b> (int), a <b>name</b> (age) and a <b>value</b> (16). Watch it in the <b>Memory</b> panel. Careful: calculating with a variable is not the same as <b>changing</b> it.</p>',
+        starter: `int age = 16
+age + 1
+age = age + 1
+age * 2
+`,
+        question: {
+          prompt: 'What will the last line (age * 2) give?',
+          options: ['32', '34', '36'], answer: '34',
+          actual: ({ results }) => results.at(-1)?.text,
+          explain: 'Line 2 calculates 17 but does not store it: age is still 16. Line 3 stores the result with =, so age becomes 17. Then 17 * 2 = 34.',
+        },
+        setup: () => ({ size: 6, target: {} }),
+      },
+      {
+        id: 'n-5', type: 'fix', title: 'Fix the names', mode: 'calc',
+        goal: 'Fix the three lines so the last one gives 15.',
+        brief: '<p>Three small naming mistakes. Read each error in the Console: it gives the line and a hint. Use <b>camelCase</b> for your variable names.</p>',
+        hint: 'playerScore (no space) · int (lowercase) · the name must be written exactly the same every time.',
+        starter: `int player score = 10
+Int bonus = 5
+playerscore + bonus
+`,
+        solution: `int playerScore = 10
+int bonus = 5
+playerScore + bonus`,
+        expectLast: '15',
+        setup: () => ({ size: 6, target: {} }),
+      },
+    ],
+  },
+  {
+    id: 2, name: 'First instructions', concept: 'Statements',
+    intro: 'Programs are lists of instructions. Each one ends with ; and many of them call a method to do something.',
+    challenges: [
+      {
+        id: '0-1', type: 'observe', title: 'Your first instructions',
+        goal: 'Follow the program with Step (F10): each instruction runs in order.',
+        brief: '<p>Until now each line was a calculation. Real programs are made of <b>instructions</b>: orders that <b>do</b> something. Each instruction ends with a semicolon <code>;</code>.</p><p><code>Console.WriteLine("Hello!")</code> <b>calls</b> a method: <code>Console</code> is who does it, <code>WriteLine</code> is what it does, and the value in brackets is what it works with. <code>drone.Build(3)</code> asks the drone to build a tower of 3. Press <b>Step</b> and follow it.</p>',
         hint: 'Keep pressing Step until the Console says "Done". You can also press Run to see it all at once.',
         starter: `// Lines that start with // are comments: the computer ignores them.
 Console.WriteLine("Hello!");
@@ -50,65 +242,6 @@ Console.WriteLine("Done");
 `,
         labels: true,
         setup: () => ({ size: 6, maxHeight: 16, viewHeight: 5, target: {} }),
-      },
-      {
-        id: '0-2', type: 'predict', title: 'Which goes first?',
-        goal: 'Predict the height of the tower, then run the program.',
-        brief: '<p>Before running, decide what you think will happen. Being wrong is fine: it is how you find out how the computer really thinks.</p>',
-        starter: `drone.Build(2 + 3 * 4);
-`,
-        question: {
-          prompt: 'How many blocks tall will the tower be?',
-          options: ['20', '14', '9'], answer: '14',
-          actual: ({ world }) => String(world.column(0, 0).length),
-          explain: '* and / are calculated before + and -, just like in maths: 3 * 4 = 12, then 2 + 12 = 14. To add first, write (2 + 3) * 4.',
-        },
-        labels: true,
-        setup: () => ({ size: 6, maxHeight: 24, viewHeight: 14, target: {} }),
-      },
-      {
-        id: '0-3', type: 'complete', title: 'Fill the gaps',
-        goal: 'Replace each ___ so the towers are 6, 8 and 3 blocks tall.',
-        brief: '<p>Each <code>___</code> is a gap. Replace it with a number so every tower matches its ghost. The labels above the towers show their height.</p>',
-        hint: '4 + 2 = 6 · 4 * 2 = 8 · (1 + 2) * 1 = 3',
-        starter: `drone.Build(4 + ___);
-drone.Build(___ * 2);
-drone.Build((1 + 2) * ___);
-`,
-        solution: `drone.Build(4 + 2);
-drone.Build(4 * 2);
-drone.Build((1 + 2) * 1);`,
-        labels: true,
-        setup: () => ({ size: 6, maxHeight: 16, viewHeight: 8, target: { '0,0': Array(6).fill('White'), '1,0': Array(8).fill('White'), '2,0': Array(3).fill('White') } }),
-      },
-      {
-        id: '0-4', type: 'predict', title: 'Whole numbers',
-        goal: 'Predict what the Console will print.',
-        brief: '<p>7 divided by 2 is 3.5… or is it? In C#, numbers without a decimal point are <code>int</code>: whole numbers.</p>',
-        starter: `Console.WriteLine(7 / 2);
-`,
-        question: {
-          prompt: 'What will the Console print?',
-          options: ['3.5', '3', '4'], answer: '3',
-          actual: ({ output }) => output[0] || '',
-          explain: 'An int divided by an int gives an int: the decimals are cut off (not rounded). 7 / 2 is 3. Write 7 / 2.0 or 7.0 / 2 to get 3.5.',
-        },
-        setup: () => ({ size: 6, maxHeight: 16, viewHeight: 4, target: {} }),
-      },
-      {
-        id: '0-5', type: 'predict', title: 'What is left over',
-        goal: 'Predict the height of the tower.',
-        brief: '<p><code>%</code> is the <b>remainder</b> operator: what is left after dividing. It is used all the time to repeat patterns (every 2nd tile, every 5th floor…).</p>',
-        starter: `drone.Build(17 % 5);
-`,
-        question: {
-          prompt: 'How many blocks tall will the tower be?',
-          options: ['3', '2', '0'], answer: '2',
-          actual: ({ world }) => String(world.column(0, 0).length),
-          explain: '17 / 5 is 3 (3 × 5 = 15) and 2 is left over. So 17 % 5 is 2. A number is even when n % 2 == 0.',
-        },
-        labels: true,
-        setup: () => ({ size: 6, maxHeight: 20, viewHeight: 5, target: {} }),
       },
       {
         id: '0-6', type: 'parsons', title: 'Put it in order',
@@ -136,7 +269,7 @@ Console.WriteLine("10 / 4 = " + 10 / 4.0);`,
     ],
   },
   {
-    id: 1, name: 'Instructions', concept: 'Sequence',
+    id: 3, name: 'The drone', concept: 'Sequence',
     intro: 'A program is a list of instructions. The computer runs them in order, top to bottom, one at a time.',
     challenges: [
       {
@@ -197,7 +330,7 @@ drone.Place(Color.Green);`,
     ],
   },
   {
-    id: 2, name: 'Variables', concept: 'Store values',
+    id: 4, name: 'Variables', concept: 'Store values',
     intro: 'A variable is a named box that stores a value. Every variable has a type that says what it can hold.',
     challenges: [
       {
@@ -331,7 +464,7 @@ drone.Place(roof);`,
     ],
   },
   {
-    id: 3, name: 'Loops', concept: 'Repeat',
+    id: 5, name: 'Loops', concept: 'Repeat',
     intro: 'A loop repeats a block of code. The loop variable changes on every turn, so each turn can do something slightly different.',
     challenges: [
       {
@@ -478,7 +611,7 @@ for (int x = 0; x < 8; x++)
     ],
   },
   {
-    id: 4, name: 'Conditions', concept: 'Decide',
+    id: 6, name: 'Conditions', concept: 'Decide',
     intro: 'An if statement lets the program decide. The condition is evaluated to true or false, and only one path runs.',
     challenges: [
       {
@@ -619,7 +752,7 @@ else
     ],
   },
   {
-    id: 5, name: 'Free build', concept: 'Sandbox',
+    id: 7, name: 'Free build', concept: 'Sandbox',
     intro: 'No goal: experiment with everything you have learned.',
     challenges: [
       {
@@ -653,6 +786,7 @@ export const TYPES = {
   parsons: { label: 'Order', mark: '⇅', tip: 'Put the lines in the right order.' },
   fix: { label: 'Fix', mark: '!', tip: 'Find and fix the mistakes.' },
   complete: { label: 'Complete', mark: '_', tip: 'Fill in the gaps marked ___.' },
+  classify: { label: 'Classify', mark: '≡', tip: 'Choose an answer for each item, then check.' },
   create: { label: 'Create', mark: '■', tip: 'Write the program yourself.' },
 };
 
@@ -670,9 +804,10 @@ export function assembleParsons(lines) {
 
 export const CHALLENGES = LEVELS.flatMap(level => level.challenges.map(c => {
   const type = c.type || (c.sandbox ? 'create' : 'create');
-  const ch = { ...c, type, level };
+  const ch = { ...c, type, level, mode: c.mode || 'program' };
   if (type === 'parsons') { ch.solution = assembleParsons(c.parsons.lines); ch.starter = ''; }
   if ((type === 'observe' || type === 'predict') && !ch.solution) ch.solution = ch.starter;
+  if (type === 'classify') { ch.starter = ''; ch.solution = ''; }
   return ch;
 }));
 
@@ -682,6 +817,29 @@ export function checkRequirements(challenge, stats) {
     if (r.feature) ok = stats.features.has(r.feature);
     if (r.maxStatements) ok = stats.statements <= r.maxStatements;
     if (r.declType) ok = stats.declTypes.has(r.declType);
+    if (r.onlyNumbers) ok = stats.numbers.length > 0 && stats.numbers.every(n => r.onlyNumbers.includes(n));
     return { ...r, ok };
   });
+}
+
+// Classify challenges: the answer is decided by the real checker, not by a list.
+export function judge(kind, text) {
+  if (kind === 'name') {
+    const c = compile(`int ${text} = 0;`);
+    return { answer: c.ok ? 'Valid' : 'Invalid', why: c.ok ? `int ${text} = 0; compiles.` : `${c.errors[0].code && c.errors[0].code !== 'LAB' ? c.errors[0].code + ': ' : ''}${c.errors[0].message}` };
+  }
+  if (kind === 'calc') {
+    const c = compile(text, { mode: 'calc' });
+    return { answer: c.ok ? 'Works' : 'Error', why: c.ok ? 'The compiler accepts it.' : `${c.errors[0].message.replace(/\.$/, '')}. ${c.errors[0].hint}` };
+  }
+  if (kind === 'style') {
+    const camel = /^[a-z][a-z0-9]*([A-Z][a-z0-9]*)*$/.test(text);
+    const pascal = /^[A-Z][a-z0-9]+([A-Z][a-z0-9]*)*$/.test(text);
+    const answer = camel ? 'camelCase' : pascal ? 'PascalCase' : 'Other style';
+    const why = camel ? 'Starts lowercase, each new word starts with a capital: used for variables.'
+      : pascal ? 'Starts with a capital, each new word too: used for methods and types.'
+      : text.includes('_') ? 'Words joined with _ (snake_case) is common in Python, not in C#.' : 'ALL CAPS is not a C# naming style.';
+    return { answer, why };
+  }
+  return { answer: null, why: '' };
 }

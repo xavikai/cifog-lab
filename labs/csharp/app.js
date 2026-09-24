@@ -1,5 +1,5 @@
 import { compile, Runner, CSharpError, literal } from './interpreter.js';
-import { LEVELS, CHALLENGES, API, TYPES as KINDS, checkRequirements, assembleParsons } from './levels.js';
+import { LEVELS, CHALLENGES, API, TYPES as KINDS, checkRequirements, assembleParsons, judge } from './levels.js';
 import { prepare, verifySeeds, assess } from './evaluate.js';
 import { compare } from './world.js';
 import { IsoView, PALETTE } from './render.js';
@@ -67,8 +67,11 @@ function renderCode() {
     if (isCur) cls += ev.kind === 'cond' ? (ev.value ? ' current-cond-true' : ' current-cond-false') : ' current';
     if (S.errorLines.has(n)) cls += ' error';
     if (n === fresh && active) cls += ' fresh';
-    const note = notes?.get(n);
-    code += `<div class="${cls}">${highlight(l, st) || ' '}${note ? `<span class="annot">// ${esc(note)}</span>` : ''}</div>`;
+    const note = notes?.get(n), res = r?.resultsByLine?.get(n);
+    let tail = '';
+    if (res && res.text) tail = `<span class="result-chip${res.expression ? '' : ' decl'}"><span class="rv">${res.expression ? '→ ' : ''}${esc(res.text)}</span><i>${esc(res.type)}</i></span>`;
+    else if (note && !res) tail = `<span class="annot">// ${esc(note)}</span>`;
+    code += `<div class="${cls}">${highlight(l, st) || ' '}${tail}</div>`;
     const cnt = counts?.get(n);
     gut += `<div class="gl${S.breakpoints.has(n) ? ' bp' : ''}${isCur ? ' current' : ''}${S.errorLines.has(n) ? ' error' : ''}" data-line="${n}" title="Toggle breakpoint"><span class="cnt">${cnt ? '×' + cnt : ''}</span><span class="n">${n}</span></div>`;
   });
@@ -139,8 +142,10 @@ function onCodeInput() {
 ta.addEventListener('input', onCodeInput);
 function updateStats() {
   if (S.challenge?.type === 'parsons' && S.parsonsView === 'blocks') return;
-  const c = compile(ta.value);
-  $('#code-stats').textContent = c.stats ? `${c.stats.statements} INSTRUCTION${c.stats.statements === 1 ? '' : 'S'}` : '—';
+  if (S.challenge?.type === 'classify') { $('#code-stats').textContent = `${S.challenge.classify.items.length} ITEMS`; return; }
+  const c = compile(ta.value, { mode: S.challenge?.mode });
+  const calc = S.challenge?.mode === 'calc';
+  $('#code-stats').textContent = c.stats ? `${c.stats.statements} ${calc ? 'LINE' : 'INSTRUCTION'}${c.stats.statements === 1 ? '' : 'S'}` : '—';
 }
 gutter.addEventListener('click', e => {
   const g = e.target.closest('.gl'); if (!g) return;
@@ -207,6 +212,8 @@ function renderRequirements(stats = null, result = null) {
   if (ch.type === 'predict') items.push({ label: 'Choose your prediction', ok: S.prediction != null ? true : null }, { label: 'Run the program and compare', ok: result ? true : null });
   if (ch.type === 'observe') items.push({ label: 'Run the program to the end (try Step)', ok: result ? true : null });
   if (!ch.sandbox && Object.keys(S.target || {}).length) items.push({ label: 'Build the target shape', ok: result ? (a?.shape?.ok ?? result.ok) : null });
+  if (ch.expectLast != null) items.push({ label: `The last line gives ${ch.expectLast}`, ok: result ? !!a?.output?.ok : null });
+  if (ch.type === 'classify') items.push({ label: 'Answer every item', ok: S.classify && Object.keys(S.classify.choices).length === ch.classify.items.length ? true : null }, { label: 'Get them all right', ok: S.classify?.checked ? S.classify.allRight : null });
   if (ch.expectOutput) items.push({ label: `Print exactly: ${ch.expectOutput.join(' · ')}`, ok: result ? !!a?.output?.ok : null });
   const reqs = stats ? checkRequirements(ch, stats) : (ch.requires || []).map(r => ({ ...r, ok: null }));
   items.push(...reqs.map(r => ({ label: r.label, ok: r.ok })));
@@ -216,7 +223,7 @@ function renderRequirements(stats = null, result = null) {
 function renderToolbox() {
   const lvl = S.challenge.level.id;
   $('#toolbox-items').innerHTML = API.filter(a => a.level <= lvl).map((a, i) =>
-    `<button class="tool${a.level === lvl && lvl < 5 ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
+    `<button class="tool${a.level === lvl && lvl < 7 ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
 }
 $('#toolbox-items').addEventListener('click', e => {
   const b = e.target.closest('.tool'); if (!b || ta.readOnly) return;
@@ -246,11 +253,12 @@ function loadChallenge(index) {
   $('#hint').hidden = true; $('#hint').textContent = ch.hint || ''; $('#hint-button').textContent = 'Show hint';
   $('#hint-button').hidden = !ch.hint;
   $('#reset-code').hidden = ch.type === 'observe' || ch.type === 'predict';
-  $('#reset-code').textContent = ch.type === 'parsons' ? 'Shuffle again ↺' : 'Reset code ↺';
+  $('#reset-code').textContent = ch.type === 'parsons' ? 'Shuffle again ↺' : ch.type === 'classify' ? 'Clear answers ↺' : 'Reset code ↺';
   S.assessment = null;
   ta.value = readOnlyType(ch) ? ch.starter : store.get('code:' + ch.id, ch.starter);
   setupPredict(ch);
   setupParsons(ch);
+  setupClassify(ch);
   S.breakpoints.clear();
   consoleEl.innerHTML = ''; S.outEl = null;
   logLine('c-info', `${ch.level.name}: ${ch.level.intro}`);
@@ -263,6 +271,7 @@ function loadChallenge(index) {
 }
 $('#hint-button').onclick = () => { const h = $('#hint'); h.hidden = !h.hidden; $('#hint-button').textContent = h.hidden ? 'Show hint' : 'Hide hint'; };
 $('#reset-code').onclick = () => {
+  if (S.challenge.type === 'classify') { S.classify = null; store.set('classify:' + S.challenge.id, null); setupClassify(S.challenge); renderRequirements(); return; }
   if (S.challenge.type === 'parsons') { stop(true); S.parsons = null; store.set('parsons:' + S.challenge.id, null); setupParsons(S.challenge); return; }
   if (ta.value !== S.challenge.starter && !confirmReset()) return;
   stop(true);
@@ -306,7 +315,8 @@ const varRow = (type, name, value, { changed = false, assigned = true } = {}) =>
 
 function renderMemory() {
   const w = S.world, r = S.runner, lvl = S.challenge.level.id;
-  let html = `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= 3 ? varRow('int', 'Height', w.height()) : ''}${lvl >= 4 ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
+  const showDrone = lvl >= 2 || S.challenge.calcTowers;
+  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= 5 ? varRow('int', 'Height', w.height()) : ''}${lvl >= 6 ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
   const scopes = r?.scopes || [];
   if (!scopes.length) html += '<p class="empty">Variables appear here while the program runs. Each one is a box with a <b>type</b>, a <b>name</b> and a <b>value</b>.</p>';
   else {
@@ -359,10 +369,12 @@ function renderControls() {
   let html = '';
   if (parsons && S.parsonsView === 'code') html = running || paused ? 'Running the program built from your lines.' : 'This code was built from your lines. <button id="back-to-blocks" class="tiny-dark">← Edit the lines</button>';
   else if (running || paused) html = 'The program is running. Press <b>Stop</b> to edit the code.';
+  else if (ch.type === 'classify') html = '';
   else if (readOnlyType(ch)) html = ch.type === 'predict' ? 'Read the code carefully: this program cannot be edited. Predict, then run.' : 'Read-only: follow the program with Step (F10).';
   note.innerHTML = html; note.hidden = !html;
   $('#back-to-blocks')?.addEventListener('click', () => { stop(true); showParsonsBlocks(); });
   $('#run').disabled = $('#step').disabled = ch.type === 'predict' && S.prediction == null && !(running || paused);
+  if (ch.type === 'classify') { $('#run-label').textContent = 'Check'; $('#run').firstElementChild.textContent = '✓'; $('#step').disabled = true; }
   $('#drone-status').textContent = `DRONE (${S.world.drone.x}, ${S.world.drone.z})${S.world.height() ? ` · HEIGHT ${S.world.height()}` : ''}`;
 }
 function renderAll({ instant = false } = {}) {
@@ -372,7 +384,7 @@ function renderAll({ instant = false } = {}) {
 }
 
 // ─── Challenge types ─────────────────────────────────────────────────────────
-function readOnlyType(ch) { return ch.type === 'observe' || ch.type === 'predict'; }
+function readOnlyType(ch) { return ch.type === 'observe' || ch.type === 'predict' || ch.type === 'classify'; }
 
 function setupPredict(ch) {
   S.prediction = null;
@@ -493,6 +505,64 @@ $('#parsons-program').addEventListener('pointerdown', e => {
   li.addEventListener('pointermove', move); li.addEventListener('pointerup', up); li.addEventListener('pointercancel', up);
 });
 
+// Classify: choose a category for each item; the real compiler (or a rule) decides.
+function setupClassify(ch) {
+  const panel = $('.code-panel');
+  const on = ch.type === 'classify';
+  panel.classList.toggle('show-classify', on);
+  $('#classify').hidden = !on;
+  if (!on) { S.classify = null; return; }
+  const saved = store.get('classify:' + ch.id, null);
+  S.classify = { choices: saved?.choices || {}, checked: false, allRight: false, verdicts: {} };
+  renderClassify();
+}
+function renderClassify() {
+  const ch = S.challenge, C = S.classify;
+  $('#classify-list').innerHTML = `<p class="classify-intro">${esc(KINDS.classify.tip)}</p>` + ch.classify.items.map((it, i) => {
+    const v = C.verdicts[i];
+    const state = v ? (v.ok ? ' right' : ' wrong') : '';
+    return `<div class="crow${state}"><code class="ctext">${highlight(it.text, { comment: false })}</code>
+      <div class="cbtns" role="radiogroup">${ch.classify.categories.map(c => `<button class="cbtn${C.choices[i] === c ? ' chosen' : ''}" data-i="${i}" data-c="${esc(c)}" role="radio" aria-checked="${C.choices[i] === c}">${esc(c)}</button>`).join('')}</div>
+      ${v ? `<p class="cwhy">${v.ok ? '✓' : '✗ Answer: ' + esc(v.answer) + '.'} ${esc(v.why)}</p>` : ''}</div>`;
+  }).join('');
+}
+$('#classify-list').addEventListener('click', e => {
+  const b = e.target.closest('.cbtn'); if (!b) return;
+  const i = Number(b.dataset.i);
+  S.classify.choices[i] = b.dataset.c;
+  delete S.classify.verdicts[i];
+  S.classify.checked = false;
+  store.set('classify:' + S.challenge.id, { choices: S.classify.choices });
+  renderClassify(); renderRequirements();
+});
+function checkClassify() {
+  const ch = S.challenge, C = S.classify, items = ch.classify.items;
+  consoleEl.innerHTML = ''; S.outEl = null;
+  const missing = items.filter((_, i) => !C.choices[i]).length;
+  if (missing) {
+    logLine('c-info', `Choose an answer for every item first (${missing} left).`);
+    showResult('info', 'Not finished', `Choose an answer for every item first: ${missing} left.`, false);
+    return;
+  }
+  let right = 0;
+  items.forEach((it, i) => {
+    const j = judge(ch.classify.judge, it.text);
+    const ok = C.choices[i] === j.answer;
+    if (ok) right++;
+    C.verdicts[i] = { ok, answer: j.answer, why: j.why };
+    if (ch.classify.judge !== 'style') logLine(ok ? 'c-ok' : 'c-info', `${ok ? '✓' : '✗'} ${it.text}  →  ${j.answer}${j.answer === 'Error' || j.answer === 'Invalid' ? ` · ${j.why}` : ''}`);
+  });
+  C.checked = true; C.allRight = right === items.length;
+  setBuild(`${right} / ${items.length} right`, C.allRight ? 'ok' : 'bad');
+  renderClassify(); renderRequirements();
+  if (C.allRight) {
+    S.done.add(ch.id); store.set('done', [...S.done]); renderLevels();
+    showResult('ok', 'All correct', `${right} of ${items.length}. ${ch.classify.judge === 'style' ? 'In C#: camelCase for variables, PascalCase for methods and types.' : 'The compiler agrees with every answer.'}`, S.index < CHALLENGES.length - 1);
+  } else {
+    showResult('bad', `${right} of ${items.length} right`, 'Read the explanation under each red item, change your answer and press Check again.', false);
+  }
+}
+
 // ─── Running ─────────────────────────────────────────────────────────────────
 function build() {
   if (S.challenge.type === 'parsons') {
@@ -503,7 +573,7 @@ function build() {
   if (S.challenge.type === 'predict') lockPredict(true);
   S.errorLines.clear();
   consoleEl.innerHTML = ''; S.outEl = null;
-  const compiled = compile(ta.value);
+  const compiled = compile(ta.value, { mode: S.challenge.mode });
   S.compiled = compiled;
   logLine('c-info', 'Build started…');
   for (const w of compiled.warnings) logProblem(w, 'warning');
@@ -521,7 +591,7 @@ function build() {
   logLine('c-ok', `Build succeeded · ${compiled.warnings.length} warning${compiled.warnings.length === 1 ? '' : 's'}`);
   S.outEl = document.createElement('div'); consoleEl.append(S.outEl);
   resetScene();
-  S.runner = new Runner(compiled.ast, S.world);
+  S.runner = new Runner(compiled.ast, S.world, { calcTowers: !!S.challenge.calcTowers });
   S.gen = S.runner.run();
   return true;
 }
@@ -567,6 +637,7 @@ function needsPrediction() {
   return true;
 }
 function run() {
+  if (S.challenge.type === 'classify') { checkClassify(); return; }
   if (needsPrediction()) return;
   if (S.mode === 'running') { S.mode = 'paused'; clearTimer(); renderAll(); return; }
   if (S.mode === 'paused') { S.mode = 'running'; loop(); return; }
@@ -575,6 +646,7 @@ function run() {
   loop();
 }
 function step() {
+  if (S.challenge.type === 'classify') return;
   if (needsPrediction()) return;
   if (S.mode === 'running') { S.mode = 'paused'; clearTimer(); renderAll(); return; }
   if (S.mode !== 'paused') { if (!build()) return; S.mode = 'paused'; }
@@ -628,7 +700,7 @@ function finish() {
     if (shape.wrong.length) bits.push(`${shape.wrong.length} wrong color`);
     if (shape.extra.length) bits.push(`${shape.extra.length} extra`);
     let msg = bits.length ? `Blocks: ${bits.join(' · ')}. Ghost blocks show what is still missing; red outlines mark wrong blocks.` : '';
-    if (a.output && !a.output.ok) msg += `${msg ? ' ' : ''}Expected the Console to show "${a.output.want.join(' / ')}" but it showed "${a.output.got.join(' / ') || '(nothing)'}".`;
+    if (a.output && !a.output.ok) msg += a.output.last ? `${msg ? ' ' : ''}The last line should give ${a.output.want[0]}, but it gives ${a.output.got[0] || 'nothing'}.` : `${msg ? ' ' : ''}Expected the Console to show "${a.output.want.join(' / ')}" but it showed "${a.output.got.join(' / ') || '(nothing)'}".`;
     const failed = a.requirements.filter(q => !q.ok).map(q => q.label);
     if (failed.length) msg += `${msg ? ' ' : ''}Still to do: ${failed.join(', ')}.`;
     if (a.ok && ch.randomized && !shape.verified) msg = `It works on this world, but only on ${shape.verifiedCount} of 3 other random worlds. Read the world with the drone instead of using fixed numbers.`;

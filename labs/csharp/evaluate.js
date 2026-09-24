@@ -20,6 +20,7 @@ function variables(runner) {
 // Returns { ok, shape, output, requirements, prediction }.
 export function assess(challenge, { compiled, runner, world, target, prediction = null }) {
   const output = runner.output.map(o => o.text);
+  const results = runner.results.filter(r => r.text);
   const shape = Object.keys(target).length ? compare(world, target) : null;
   const requirements = checkRequirements(challenge, compiled.stats);
   let outputCheck = null;
@@ -27,9 +28,13 @@ export function assess(challenge, { compiled, runner, world, target, prediction 
     const want = challenge.expectOutput;
     outputCheck = { ok: want.length === output.length && want.every((l, i) => l === output[i]), want, got: output };
   }
+  if (challenge.expectLast != null) {
+    const got = results.at(-1)?.text ?? '';
+    outputCheck = { ok: got === challenge.expectLast, want: [challenge.expectLast], got: [got], last: true };
+  }
   let predictionCheck = null;
   if (challenge.question) {
-    const actual = challenge.question.actual({ output, world, vars: variables(runner) });
+    const actual = challenge.question.actual({ output, results, world, vars: variables(runner) });
     predictionCheck = { actual, chosen: prediction, ok: prediction != null && String(prediction) === String(actual) };
   }
   // Predict and observe challenges are complete once the program has run: being wrong is part of learning.
@@ -39,10 +44,10 @@ export function assess(challenge, { compiled, runner, world, target, prediction 
 
 // Runs a program without animation. Used for tests and for checking randomized challenges.
 export function runHeadless(challenge, code, seed = 1, prediction = null) {
-  const compiled = compile(code);
+  const compiled = compile(code, { mode: challenge.mode });
   if (!compiled.ok) return { compiled, ok: false };
   const { world, target } = prepare(challenge, seed);
-  const runner = new Runner(compiled.ast, world);
+  const runner = new Runner(compiled.ast, world, { calcTowers: !!challenge.calcTowers });
   let error = null;
   try { runner.runToEnd(); }
   catch (e) { if (e instanceof CSharpError) error = e; else throw e; }
