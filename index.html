@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#191b1e">
+  <meta name="description" content="CIFOG Lab: hands-on browser experiments for learning 3D materials and visual design.">
+  <title>CIFOG Lab · Learn by experimenting</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./home.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="CIFOG Lab home"><span class="brand-mark">cifog<span>LAB</span></span></a>
+    <span class="header-divider" aria-hidden="true"></span>
+    <span class="header-label">INTERACTIVE LEARNING</span>
+    <a class="header-link" href="#labs">Explore labs <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="live-dot"></span> CIFOG / INTERACTIVE STUDIES</p>
+        <h1 id="hero-title">Learn by<br><em>changing things.</em></h1>
+        <p class="hero-intro">Small interactive labs to explore what happens when you change a material, a texture or a connection. Open one, experiment, and bring the result back to class.</p>
+        <a class="primary-link" href="#labs">Explore the labs <span aria-hidden="true">↘</span></a>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="visual-grid"></div>
+        <div class="visual-orbit orbit-a"></div><div class="visual-orbit orbit-b"></div>
+        <div class="material-sphere"></div>
+        <div class="visual-card visual-card-one"><span class="visual-card-label">TEXTURE</span><span class="visual-swatch"></span><span class="visual-card-title">Brick wall</span><i></i></div>
+        <div class="visual-card visual-card-two"><span class="visual-card-label">MATERIAL</span><span class="visual-card-title">Roughness</span><span class="visual-slider"><b></b></span><span class="visual-value">0.80</span></div>
+        <span class="visual-tag">CHANGE A VALUE · SEE THE EFFECT</span>
+      </div>
+    </section>
+
+    <section class="labs-section" id="labs" aria-labelledby="labs-title">
+      <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2 id="labs-title">Explore the labs</h2></div><p>Each lab is a place to test one idea for yourself.</p></div>
+      <div class="lab-grid">
+        <article class="lab-card">
+          <div class="card-visual" aria-hidden="true"><div class="card-sphere"></div><span class="card-wire wire-one"></span><span class="card-wire wire-two"></span><span class="card-node node-one">UV</span><span class="card-node node-two">Mapping</span><span class="card-node node-three">Material</span></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">01 / 3D MATERIALS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Material Lab</h3><p>Connect Blender style nodes. Change the color, roughness, normal map and texture repetition, then watch the object react in 3D.</p><div class="card-bottom"><span>Blender 5.2 concepts · English interface</span><a href="./labs/materials/" aria-label="Open Material Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+        </article>
+        <div class="next-lab-card" aria-label="Space for future labs"><div class="next-icon" aria-hidden="true">+</div><span class="lab-number">THE NEXT EXPERIMENT</span><h3>More labs will live here.</h3><p>This is the home for future interactive activities that support CIFOG lessons and presentations.</p><span class="next-foot">ONE COLLECTION · MANY THINGS TO TRY</span></div>
+      </div>
+    </section>
+    <section class="method" aria-label="How to use the labs"><span class="method-label">A SIMPLE LOOP</span><div><b>01</b> Open a lab</div><span class="method-arrow" aria-hidden="true">→</span><div><b>02</b> Change something</div><span class="method-arrow" aria-hidden="true">→</span><div><b>03</b> Observe the result</div></section>
+  </main>
+  <footer><span>cifog <strong>LAB</strong></span><span>Interactive studies for the classroom</span><a href="#labs">Back to labs ↑</a></footer>
+</body>
+</html>

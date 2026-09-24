@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#191b1e">
+  <meta name="description" content="A hands-on material lab for CIFOG. Explore textures, roughness, metallic surfaces and normal maps with Blender-style nodes.">
+  <title>Material Lab · CIFOG</title>
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="../../" aria-label="CIFOG Lab home"><span class="brand-mark">cifog<span>LAB</span></span></a>
+    <div class="app-title"><span class="eyebrow">INTERACTIVE STUDIES / 01</span><h1>Material Lab</h1></div>
+    <div class="header-actions"><a class="lab-home" href="../../">All labs</a><span class="reference">Blender 5.2 concepts</span><button id="help" class="quiet">How it works <span aria-hidden="true">?</span></button><button id="reset" class="reset">Reset scene <span aria-hidden="true">↺</span></button></div>
+  </header>
+  <main class="workspace">
+    <section class="preview-panel" aria-label="Material preview">
+      <div class="panel-bar"><h2>Material preview</h2><span class="small-label">LIVE 3D</span></div>
+      <div class="preset-row" role="group" aria-label="Material presets">
+        <button data-preset="brick" class="preset active" aria-pressed="true"><span class="swatch brick"></span>Brick</button>
+        <button data-preset="concrete" class="preset" aria-pressed="false"><span class="swatch concrete"></span>Concrete</button>
+        <button data-preset="metal" class="preset" aria-pressed="false"><span class="swatch metal"></span>Metal</button>
+        <button data-preset="plain" class="preset" aria-pressed="false"><span class="swatch plain"></span>Plain</button>
+      </div>
+      <div id="viewer" class="viewer" aria-label="3D material preview. Drag to orbit and scroll to zoom.">
+        <div id="render-status" class="render-status" role="status">Preparing material…</div>
+        <div class="view-top"><span id="material-name">Brick / PBR</span><button id="rotate" aria-pressed="false" title="Toggle automatic rotation">Auto rotate</button></div>
+        <div class="view-bottom"><div class="shape-picker" role="group" aria-label="Preview object"><button data-shape="sphere" class="active" aria-pressed="true">Sphere</button><button data-shape="cube" aria-pressed="false">Cube</button><button data-shape="plane" aria-pressed="false">Plane</button></div><span class="orbit-hint">Drag to orbit · Scroll to zoom</span></div>
+      </div>
+      <div class="study-panel">
+        <div class="study-heading"><h2>Try a small experiment</h2><span id="study-count">01 / 03</span></div>
+        <div class="study-tabs" role="group" aria-label="Material experiments"><button data-study="roughness" class="active" aria-pressed="true">01 Roughness</button><button data-study="normal" aria-pressed="false">02 Normal</button><button data-study="tiling" aria-pressed="false">03 Tiling</button></div>
+        <h3 id="study-title">One material. Different reflections.</h3>
+        <p id="study-copy">Choose Metal, then move Roughness from 0 to 1 in the Principled BSDF node. Watch the reflection become softer.</p>
+        <button id="start-study" class="study-action">Set up experiment <span aria-hidden="true">↗</span></button>
+      </div>
+    </section>
+    <section class="editor-panel" aria-label="Shader node editor">
+      <div class="panel-bar editor-bar"><div><h2>Shader Editor</h2><span class="small-label">MATERIAL</span></div><div class="graph-tools"><button id="zoom-out" aria-label="Zoom out node editor">−</button><output id="zoom-label">100%</output><button id="zoom-in" aria-label="Zoom in node editor">+</button><button id="fit">Fit nodes</button></div></div>
+      <div class="editor-guide"><span><i class="legend-dot color"></i>Color</span><span><i class="legend-dot vector"></i>Vector</span><span><i class="legend-dot shader"></i>Shader</span><span class="guide-copy">Connect two sockets · Click an input to disconnect</span></div>
+      <div id="graph-viewport" class="graph-viewport" tabindex="0" aria-label="Node canvas. Drag the background to pan. Use the zoom buttons or Control and scroll to zoom.">
+        <div id="graph-world" class="graph-world"><svg id="wires" viewBox="0 0 980 600" aria-hidden="true"></svg><div id="nodes"></div></div>
+      </div>
+      <div class="editor-status"><span id="connection-status" role="status" aria-live="polite">Ready. Change a value or connect a socket.</span><span id="link-count">9 connections</span></div>
+      <div class="insight"><span class="insight-symbol" aria-hidden="true">i</span><p id="insight-copy"><strong>Images carry different kinds of data.</strong> Use sRGB for Base Color and Non-Color for roughness and normal maps.</p></div>
+    </section>
+  </main>
+  <footer class="app-footer"><span>CIFOG · Color, lighting & finishing</span><span>A learning subset of Blender’s nodes. Rendering may differ from Blender.</span><button id="credits">Sources & credits</button></footer>
+  <dialog id="help-dialog"><button class="dialog-close" aria-label="Close help">×</button><span class="eyebrow">MATERIAL LAB</span><h2>Follow the connections.</h2><p>A texture supplies data. The shader uses that data to calculate how the surface reacts to light.</p><ol><li><strong>Connect:</strong> click an output socket, then a compatible input. Dragging between sockets works too.</li><li><strong>Disconnect:</strong> click an input that already has a connection. Press Escape to cancel a connection.</li><li><strong>Explore:</strong> move a node by its header, drag the background to pan, and use + / − to zoom.</li><li><strong>Use your images:</strong> choose Open in an Image Texture node. Images stay in your browser and are never uploaded.</li></ol><p>Roughness and Base Color values are replaced by a connected texture, as in Blender. Disconnect the input to use its slider or color picker.</p><p><strong>Coordinates:</strong> start with UV → Mapping → Image Texture. Mapping changes Location, Rotation and Scale in XYZ. Images use Flat projection and Repeat: with UV input, Z translation or scaling alone does not change the image. Object coordinates use the preview mesh.</p><p class="muted">This lab implements a focused subset of Blender 5.2 node concepts with a browser renderer. It does not run Blender or open .blend files.</p><button class="primary dialog-close-action">Back to the lab</button></dialog>
+  <dialog id="credits-dialog"><button class="dialog-close" aria-label="Close credits">×</button><h2>Sources & credits</h2><p><a href="https://docs.blender.org/manual/en/5.2/render/shader_nodes/shader/principled.html" target="_blank" rel="noopener">Blender 5.2 · Principled BSDF</a><br>Node names, sockets and material concepts.</p><p><a href="https://polyhaven.com/a/brick_wall_001" target="_blank" rel="noopener">Brick Wall 001 · Poly Haven</a><br>Color, roughness and OpenGL normal maps. CC0.</p><p>Concrete base-color image generated with OpenAI ImageGen for this lesson. It is a starting image, not a complete PBR material.</p><p><a href="https://threejs.org/" target="_blank" rel="noopener">Three.js</a> · MIT license. Browser rendering and orbit controls.</p><button class="primary dialog-close-action">Back to the lab</button></dialog>
+  <noscript><p class="no-script">Enable JavaScript to use the interactive material editor.</p></noscript>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+
