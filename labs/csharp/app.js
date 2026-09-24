@@ -3,6 +3,9 @@ import { LEVELS, CHALLENGES, API, TYPES as KINDS, checkRequirements, assemblePar
 import { prepare, verifySeeds, assess } from './evaluate.js';
 import { compare } from './world.js';
 import { IsoView, PALETTE } from './render.js';
+import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
+import dictionary from './i18n.js';
+addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -164,8 +167,8 @@ function logProblem(err, kind) {
   const loc = err.kind === 'runtime'
     ? `Unhandled exception · line ${err.line}`
     : `Program.cs(${err.line},${err.col}): ${kind} ${err.code && err.code !== 'LAB' ? err.code : ''}`.trim();
-  const msg = err.kind === 'runtime' ? `System.${err.exception}: ${err.message}`.replace('System.DroneException', 'DroneException') : err.message;
-  d.innerHTML = `<div class="c-loc">${esc(loc)}</div><div class="c-msg">${esc(msg)}</div>${err.hint ? `<div class="c-hint">${esc(err.hint)}</div>` : ''}`;
+  const msg = err.kind === 'runtime' ? `${err.exception === 'DroneException' ? '' : 'System.'}${err.exception}: ${t(err.message)}` : t(err.message);
+  d.innerHTML = `<div class="c-loc">${esc(loc)}</div><div class="c-msg">${esc(msg)}</div>${err.hint ? `<div class="c-hint"><b class="hl">${esc(t('Hint'))} · </b>${esc(t(err.hint))}</div>` : ''}`;
   d.title = 'Go to the line';
   d.onclick = () => goToLine(err.line, err.col);
   consoleEl.append(d); consoleEl.scrollTop = consoleEl.scrollHeight;
@@ -237,6 +240,12 @@ $('#toolbox-items').addEventListener('click', e => {
   else insertText(indent + body, s, end);
 });
 
+function renderChallengeHeader() {
+  const ch = S.challenge, kind = KINDS[ch.type];
+  $('#challenge-level').textContent = tr('LEVEL {n} · {name}', { n: ch.level.id, name: t(ch.level.name).toUpperCase() });
+  $('#challenge-type').className = 'type-badge k-' + ch.type;
+  $('#challenge-type').innerHTML = `<b>${kind.mark}</b>${esc(t(kind.label).toUpperCase())} · ${esc(t(kind.tip))}`;
+}
 function loadChallenge(index) {
   if (index < 0 || index >= CHALLENGES.length) return;
   stop(true);
@@ -244,12 +253,10 @@ function loadChallenge(index) {
   const ch = S.challenge = CHALLENGES[index];
   store.set('index', index);
   history.replaceState(null, '', '#' + ch.id);
-  $('#challenge-level').textContent = `LEVEL ${ch.level.id} · ${ch.level.name.toUpperCase()}`;
+  renderChallengeHeader();
   $('#challenge-count').textContent = `${index + 1} / ${CHALLENGES.length}`;
   $('#challenge-title').textContent = ch.title;
-  const kind = KINDS[ch.type];
-  $('#challenge-type').className = 'type-badge k-' + ch.type;
-  $('#challenge-type').innerHTML = `<b>${kind.mark}</b>${esc(kind.label.toUpperCase())} · ${esc(kind.tip)}`;
+
   $('#challenge-goal').textContent = ch.goal;
   $('#challenge-brief').innerHTML = ch.brief;
   $('#hint').hidden = true; $('#hint').textContent = ch.hint || ''; $('#hint-button').textContent = 'Show hint';
@@ -263,7 +270,7 @@ function loadChallenge(index) {
   setupClassify(ch);
   S.breakpoints.clear();
   consoleEl.innerHTML = ''; S.outEl = null;
-  logLine('c-info', `${ch.level.name}: ${ch.level.intro}`);
+  logLine('c-info', `${t(ch.level.name)}: ${t(ch.level.intro)}`).dataset.levelIntro = ch.level.id;
   logLine('c-info', 'Press Run ▶ (F5) to run everything, or Step (F10) to go line by line.');
   setBuild('Ready');
   renderLevels(); renderToolbox(); renderRequirements();
@@ -300,20 +307,21 @@ function resetScene(newSeed = false) {
 }
 function renderProgress() {
   const chip = $('#progress-chip');
-  if (S.challenge.sandbox || !Object.keys(S.target).length) { chip.innerHTML = S.world.blockCount() ? `<b>${S.world.blockCount()}</b> blocks` : ''; return; }
+  if (S.challenge.sandbox || !Object.keys(S.target).length) { chip.textContent = S.world.blockCount() ? tr('{n} blocks', { n: S.world.blockCount() }) : ''; return; }
   const r = compare(S.world, S.target);
-  chip.innerHTML = `<b>${r.correct}</b> / ${r.total} target blocks${r.wrong.length + r.extra.length ? ` · <span style="color:#ff9a9a">${r.wrong.length + r.extra.length} wrong</span>` : ''}`;
+  const [a, b] = tr('{a} / {b} target blocks', { a: '\u0001', b: r.total }).split('\u0001');
+  chip.innerHTML = `${esc(a)}<b>${r.correct}</b>${esc(b)}${r.wrong.length + r.extra.length ? ` · <span style="color:#ff9a9a">${esc(tr('{n} wrong', { n: r.wrong.length + r.extra.length }))}</span>` : ''}`;
 }
 
 // ─── Memory & execution panels ───────────────────────────────────────────────
 function valueHtml(type, value, assigned = true) {
-  if (!assigned || value === undefined) return '<span class="vl unassigned">unassigned</span>';
+  if (!assigned || value === undefined) return `<span class="vl unassigned">${esc(t('unassigned'))}</span>`;
   const cls = type === 'string' ? 'str' : ['int', 'float', 'double'].includes(type) ? 'num' : type === 'bool' ? 'bool' : '';
   const sw = type === 'Color' && value !== 'None' ? `<i class="swatch" style="background:${PALETTE[value]}"></i>` : '';
   return `<span class="vl ${cls}">${sw}${esc(literal(value, type))}</span>`;
 }
 const varRow = (type, name, value, { changed = false, assigned = true } = {}) =>
-  `<div class="var${changed ? ' changed' : ''}"><span class="ty t-${type}">${esc(type || '?')}</span><span class="nm">${esc(name)}</span>${valueHtml(type, value, assigned)}</div>`;
+  `<div class="var${changed ? ' changed' : ''}" data-no-i18n><span class="ty t-${type}">${esc(type || '?')}</span><span class="nm">${esc(name)}</span>${valueHtml(type, value, assigned)}</div>`;
 
 function renderMemory() {
   const w = S.world, r = S.runner, lvl = S.challenge.level.id;
@@ -339,25 +347,25 @@ function renderMemory() {
 function lineText(n) { return (ta.value.split('\n')[n - 1] || '').trim(); }
 function renderNow() {
   const ev = S.event, el = $('#now');
-  if (S.mode === 'idle' || !S.runner) { el.innerHTML = '<span class="label">READY</span>Press <b>Run</b> to run the whole program, or <b>Step</b> to run it one line at a time.'; return; }
-  if (S.mode === 'error') { el.innerHTML = `<span class="label">RUNTIME ERROR · LINE ${S.runner.line}</span>The program stopped here. Read the Console to see why.`; return; }
-  if (S.mode === 'finished') { el.innerHTML = `<span class="label">FINISHED · ${S.runner.steps} STEPS</span>The program reached the last line. Its variables stay in memory only while it runs (faded).`; return; }
+  if (S.mode === 'idle' || !S.runner) { el.innerHTML = `<span class="label">${t('READY')}</span>${t('Press <b>Run</b> to run the whole program, or <b>Step</b> to run it one line at a time.')}`; return; }
+  if (S.mode === 'error') { el.innerHTML = `<span class="label">${esc(tr('RUNTIME ERROR · LINE {n}', { n: S.runner.line }))}</span>${esc(t('The program stopped here. Read the Console to see why.'))}`; return; }
+  if (S.mode === 'finished') { el.innerHTML = `<span class="label">${esc(tr('FINISHED · {n} STEPS', { n: S.runner.steps }))}</span>${esc(t('The program reached the last line. Its variables stay in memory only while it runs (faded).'))}`; return; }
   if (!ev) return;
   const lastRes = S.runner.results.at(-1);
   if (ev.kind === 'line' && lastRes?.steps && S.challenge.mode === 'calc') {
     const st = lastRes.steps;
-    el.innerHTML = `<span class="label">LINE ${lastRes.line} · HOW IT WAS WORKED OUT</span><div class="eval">${st.map((p, i) => i === st.length - 1 ? `<span class="${lastRes.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>')}</div><div class="outcome">Next: line ${ev.line}</div>`;
+    el.innerHTML = `<span class="label">${esc(tr('LINE {n} · HOW IT WAS WORKED OUT', { n: lastRes.line }))}</span><div class="eval">${st.map((p, i) => i === st.length - 1 ? `<span class="${lastRes.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>')}</div><div class="outcome">${esc(tr('Next: line {n}', { n: ev.line }))}</div>`;
     return;
   }
   if (ev.kind === 'cond') {
     const parts = ev.text.split('  →  ');
     const chips = parts.map((p, i) => i === parts.length - 1 ? `<span class="${ev.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>');
-    el.innerHTML = `<span class="label">CONDITION · LINE ${ev.line}</span><div class="eval">${chips}</div><div class="outcome">${esc(ev.outcome)}</div>`;
+    el.innerHTML = `<span class="label">${esc(tr('CONDITION · LINE {n}', { n: ev.line }))}</span><div class="eval">${chips}</div><div class="outcome">${esc(t(ev.outcome))}</div>`;
   } else {
     let extra = '';
-    if (ev.phase === 'init') extra = '<div class="outcome">Loop start: runs once, before the first turn.</div>';
-    if (ev.phase === 'update') extra = '<div class="outcome">Loop step: runs after every turn, then the condition is checked again.</div>';
-    el.innerHTML = `<span class="label">NEXT · LINE ${ev.line}</span><code>${esc(lineText(ev.line))}</code>${extra}`;
+    if (ev.phase === 'init') extra = `<div class="outcome">${esc(t('Loop start: runs once, before the first turn.'))}</div>`;
+    if (ev.phase === 'update') extra = `<div class="outcome">${esc(t('Loop step: runs after every turn, then the condition is checked again.'))}</div>`;
+    el.innerHTML = `<span class="label">${esc(tr('NEXT · LINE {n}', { n: ev.line }))}</span><code>${esc(lineText(ev.line))}</code>${extra}`;
   }
 }
 function renderTrace() {
@@ -556,7 +564,7 @@ function renderClassify() {
     const state = v ? (v.ok ? ' right' : ' wrong') : '';
     return `<div class="crow${state}"><code class="ctext">${highlight(it.text, { comment: false })}</code>
       <div class="cbtns" role="radiogroup">${ch.classify.categories.map(c => `<button class="cbtn${C.choices[i] === c ? ' chosen' : ''}" data-i="${i}" data-c="${esc(c)}" role="radio" aria-checked="${C.choices[i] === c}">${esc(c)}</button>`).join('')}</div>
-      ${v ? `<p class="cwhy">${v.ok ? '✓' : '✗ Answer: ' + esc(v.answer) + '.'} ${esc(v.why)}</p>` : ''}</div>`;
+      ${v ? `<p class="cwhy">${v.ok ? '✓' : '✗ ' + esc(tr('Answer: {a}.', { a: t(v.answer) }))} ${esc(whyText(v))}</p>` : ''}</div>`;
   }).join('');
 }
 $('#classify-list').addEventListener('click', e => {
@@ -568,6 +576,10 @@ $('#classify-list').addEventListener('click', e => {
   store.set('classify:' + S.challenge.id, { choices: S.classify.choices });
   renderClassify(); renderRequirements();
 });
+function whyText(v) {
+  const why = t(v.why) || '';
+  return `${why}${why && !/[.!?]$/.test(why) ? '.' : ''}${v.hint ? ' ' + t(v.hint) : ''}`;
+}
 function checkClassify() {
   const ch = S.challenge, C = S.classify, items = ch.classify.items;
   consoleEl.innerHTML = ''; S.outEl = null;
@@ -582,17 +594,17 @@ function checkClassify() {
     const j = judge(ch.classify.judge, it.text);
     const ok = C.choices[i] === j.answer;
     if (ok) right++;
-    C.verdicts[i] = { ok, answer: j.answer, why: j.why };
-    if (ch.classify.judge !== 'style') logLine(ok ? 'c-ok' : 'c-info', `${ok ? '✓' : '✗'} ${it.text}  →  ${j.answer}${j.answer === 'Error' || j.answer === 'Invalid' ? ` · ${j.why}` : ''}`);
+    C.verdicts[i] = { ok, answer: j.answer, why: j.why, hint: j.hint };
+    if (ch.classify.judge !== 'style') logLine(ok ? 'c-ok' : 'c-info', `${ok ? '✓' : '✗'} ${it.text}  →  ${t(j.answer)}${j.answer === 'Error' || j.answer === 'Invalid' ? ` · ${whyText(j)}` : ''}`).dataset.noI18n = '';
   });
   C.checked = true; C.allRight = right === items.length;
   setBuild(`${right} / ${items.length} right`, C.allRight ? 'ok' : 'bad');
   renderClassify(); renderRequirements();
   if (C.allRight) {
     S.done.add(ch.id); store.set('done', [...S.done]); renderLevels();
-    showResult('ok', 'All correct', `${right} of ${items.length}. ${ch.classify.judge === 'style' ? 'In C#: camelCase for variables, PascalCase for methods and types.' : 'The compiler agrees with every answer.'}`, S.index < CHALLENGES.length - 1);
+    showResult('ok', 'All correct', () => `${tr('{a} of {b}.', { a: right, b: items.length })} ${t(ch.classify.judge === 'style' ? 'In C#: camelCase for variables, PascalCase for methods and types.' : 'The compiler agrees with every answer.')}`, S.index < CHALLENGES.length - 1);
   } else {
-    showResult('bad', `${right} of ${items.length} right`, 'Read the explanation under each red item, change your answer and press Check again.', false);
+    showResult('bad', tr('{a} of {b} right', { a: right, b: items.length }), 'Read the explanation under each red item, change your answer and press Check again.', false);
   }
 }
 
@@ -622,7 +634,7 @@ function build() {
   }
   setBuild('Build succeeded', 'ok');
   logLine('c-ok', `Build succeeded · ${compiled.warnings.length} warning${compiled.warnings.length === 1 ? '' : 's'}`);
-  S.outEl = document.createElement('div'); consoleEl.append(S.outEl);
+  S.outEl = document.createElement('div'); S.outEl.dataset.noI18n = ''; consoleEl.append(S.outEl);
   resetScene();
   S.runner = new Runner(compiled.ast, S.world, { calcTowers: !!S.challenge.calcTowers });
   S.gen = S.runner.run();
@@ -701,7 +713,7 @@ function finish() {
   const r = S.runner, ch = S.challenge;
   logLine('c-info', `Program finished · ${r.steps} steps${S.world.actions ? ` · ${S.world.actions} drone actions` : ''}`);
   const instant = SPEEDS[S.speed].ms === 0;
-  if (ch.sandbox) { S.result = null; showResult('ok', 'Program finished', `${S.world.blockCount()} blocks built in ${r.steps} steps.`, false); renderRequirements(S.compiled.stats, null); renderAll({ instant }); return; }
+  if (ch.sandbox) { S.result = null; showResult('ok', 'Program finished', () => tr('{n} blocks built in {s} steps.', { n: S.world.blockCount(), s: r.steps }), false); renderRequirements(S.compiled.stats, null); renderAll({ instant }); return; }
   const a = S.assessment = assess(ch, { compiled: S.compiled, runner: r, world: S.world, target: S.target, prediction: S.prediction });
   const shape = a.shape || { ok: true, missing: [], wrong: [], extra: [], total: 0 };
   if (a.ok && ch.randomized) {
@@ -719,26 +731,33 @@ function finish() {
     const p = a.prediction;
     if (p.ok) { S.correct.add(ch.id); store.set('correct', [...S.correct]); renderLevels(); }
     showResult(p.ok ? 'ok' : 'info', p.ok ? 'You predicted it!' : 'Surprise!',
-      `${p.ok ? `Yes: ${p.actual}.` : `You said ${p.chosen}, but the answer is ${p.actual}.`} ${ch.question.explain}`, next);
+      () => `${p.ok ? tr('Yes: {v}.', { v: t(p.actual) }) : tr('You said {a}, but the answer is {b}.', { a: t(p.chosen), b: t(p.actual) })} ${t(ch.question.explain)}`, next);
     lockPredict(true, p);
   } else if (ch.type === 'observe') {
-    showResult('ok', 'Well observed', `The program ran ${r.steps} steps, one line at a time, from top to bottom. Try it again with Step and watch the Memory and Execution panels.`, next);
+    showResult('ok', 'Well observed', () => tr('The program ran {n} steps, one line at a time, from top to bottom. Try it again with Step and watch the Memory and Execution panels.', { n: r.steps }), next);
   } else if (success) {
-    const extra = ch.randomized ? ' It also worked on 3 other random worlds.' : '';
-    const what = shape.total ? `${shape.total} blocks in ${r.steps} steps` : `Done in ${r.steps} steps`;
-    showResult('ok', 'Challenge complete', `${what} with ${S.compiled.stats.statements} instructions.${extra}`, next);
+    const stmts = S.compiled.stats.statements;
+    showResult('ok', 'Challenge complete', () => (shape.total ? tr('{n} blocks in {s} steps with {i} instructions.', { n: shape.total, s: r.steps, i: stmts }) : tr('Done in {s} steps with {i} instructions.', { s: r.steps, i: stmts })) + (ch.randomized ? ' ' + t('It also worked on 3 other random worlds.') : ''), next);
   } else {
-    const bits = [];
-    if (shape.missing.length) bits.push(`${shape.missing.length} missing`);
-    if (shape.wrong.length) bits.push(`${shape.wrong.length} wrong color`);
-    if (shape.extra.length) bits.push(`${shape.extra.length} extra`);
-    let msg = bits.length ? `Blocks: ${bits.join(' · ')}. Ghost blocks show what is still missing; red outlines mark wrong blocks.` : '';
-    if (a.output && !a.output.ok && a.output.tail) msg += `${msg ? ' ' : ''}The last lines should give ${a.output.want.join(', ')}, but they give ${a.output.got.join(', ') || 'nothing'}.`;
-    else if (a.output && !a.output.ok) msg += a.output.last ? `${msg ? ' ' : ''}The last line should give ${a.output.want[0]}, but it gives ${a.output.got[0] || 'nothing'}.` : `${msg ? ' ' : ''}Expected the Console to show "${a.output.want.join(' / ')}" but it showed "${a.output.got.join(' / ') || '(nothing)'}".`;
     const failed = a.requirements.filter(q => !q.ok).map(q => q.label);
-    if (failed.length) msg += `${msg ? ' ' : ''}Still to do: ${failed.join(', ')}.`;
-    if (a.ok && ch.randomized && !shape.verified) msg = `It works on this world, but only on ${shape.verifiedCount} of 3 other random worlds. Read the world with the drone instead of using fixed numbers.`;
-    showResult('bad', a.ok || shape.ok ? 'Almost there' : 'Not yet', msg, false);
+    const text = () => {
+      if (a.ok && ch.randomized && !shape.verified) return tr('It works on this world, but only on {n} of 3 other random worlds. Read the world with the drone instead of using fixed numbers.', { n: shape.verifiedCount });
+      const out = [];
+      const bits = [];
+      if (shape.missing.length) bits.push(tr('{n} missing', { n: shape.missing.length }));
+      if (shape.wrong.length) bits.push(tr('{n} wrong color', { n: shape.wrong.length }));
+      if (shape.extra.length) bits.push(tr('{n} extra', { n: shape.extra.length }));
+      if (bits.length) out.push(tr('Blocks: {bits}. Ghost blocks show what is still missing; red outlines mark wrong blocks.', { bits: bits.join(' · ') }));
+      const o = a.output;
+      if (o && !o.ok) {
+        if (o.tail) out.push(tr('The last lines should give {want}, but they give {got}.', { want: o.want.join(', '), got: o.got.join(', ') || t('nothing') }));
+        else if (o.last) out.push(tr('The last line should give {want}, but it gives {got}.', { want: o.want[0], got: o.got[0] || t('nothing') }));
+        else out.push(tr('Expected the Console to show "{want}" but it showed "{got}".', { want: o.want.join(' / '), got: o.got.join(' / ') || t('(nothing)') }));
+      }
+      if (failed.length) out.push(tr('Still to do: {list}.', { list: failed.map(t).join(', ') }));
+      return out.join(' ');
+    };
+    showResult('bad', a.ok || shape.ok ? 'Almost there' : 'Not yet', text, false);
   }
   renderAll({ instant });
 }
@@ -746,13 +765,15 @@ function fail(err) {
   S.mode = 'error';
   S.errorLines.set(err.line, err);
   logProblem(err, 'error');
-  showResult('bad', `Runtime error on line ${err.line}`, err.message, false);
+  showResult('bad', tr('Runtime error on line {n}', { n: err.line }), () => t(err.message), false);
   renderAll();
 }
 function showResult(kind, title, text, next) {
+  S.lastResult = { kind, title, text, next };
   const el = $('#result');
+  const body = typeof text === 'function' ? text() : t(text);
   el.className = 'result ' + kind;
-  el.innerHTML = `<span class="result-icon">${kind === 'ok' ? '✓' : kind === 'info' ? '?' : '!'}</span><p class="result-text"><strong>${esc(title)}</strong>${esc(text)}</p>${next ? '<button class="next">Next challenge →</button>' : ''}<button class="tiny close" aria-label="Close">×</button>`;
+  el.innerHTML = `<span class="result-icon">${kind === 'ok' ? '✓' : kind === 'info' ? '?' : '!'}</span><p class="result-text"><strong>${esc(t(title))}</strong>${esc(body)}</p>${next ? `<button class="next">${esc(t('Next challenge →'))}</button>` : ''}<button class="tiny close" aria-label="Close">×</button>`;
   el.hidden = false;
   el.querySelector('.next')?.addEventListener('click', () => loadChallenge(S.index + 1));
   el.querySelector('.close').addEventListener('click', () => { el.hidden = true; });
@@ -785,6 +806,16 @@ window.addEventListener('hashchange', () => {
 });
 
 if (window.matchMedia('(max-width: 760px)').matches) $('#toolbox').open = false;
+
+// Language change: redraw the texts that the lab builds itself.
+onLangChange(() => {
+  renderChallengeHeader();
+  renderLevels(); renderToolbox(); renderRequirements(S.compiled?.stats || null, S.result);
+  if (S.challenge.type === 'classify') renderClassify();
+  if (S.challenge.type === 'parsons' && S.parsonsView === 'blocks') renderParsons();
+  renderAll();
+  if (S.lastResult && !$('#result').hidden) { const r = S.lastResult; showResult(r.kind, r.title, r.text, r.next); }
+});
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 const fromHash = CHALLENGES.findIndex(c => c.id === location.hash.slice(1));

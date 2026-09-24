@@ -1,6 +1,6 @@
 # UV Unwrap Lab — teaching notes
 
-The lab uses English face and tool names and the layout of Blender 5.2's **UV Editing** workspace: UV Editor on the left, 3D Viewport on the right, an Edit Mode header on top and a status bar at the bottom that always lists the keys that work right now. Keys go to the editor under the mouse pointer, as in Blender.
+The lab uses English face and tool names and the layout of Blender's **UV Editing** workspace: UV Editor on the left, 3D Viewport on the right, an Edit Mode header on top and a status bar at the bottom that always lists the keys that work right now. Keys go to the editor under the mouse pointer, as in Blender.
 
 A rigid paper cube is the first example: each colored square in the UV Editor is exactly one square on the 3D cube.
 
@@ -15,7 +15,7 @@ A rigid paper cube is the first example: each colored square in the UV Editor is
 
 The **Quick Seam** tool (left toolbar) toggles a seam with one click. It is useful on tablets and for quick exploration, and the lab states that Blender has no such tool. **Cube Projection** in the U menu ignores seams, which is also true in Blender.
 
-The [Blender 5.2 manual](https://docs.blender.org/manual/en/5.2/modeling/meshes/uv/unwrapping/seams.html) explains that seams guide the unwrap and that the UV map is discontinuous at seams. The lab uses a paper cube, so it treats a connected loop or overlap as an invalid net; Blender can unwrap more complex surfaces by allowing distortion, and it only unwraps the selected faces (press **A** before **U › Unwrap**).
+The [Blender manual](https://docs.blender.org/manual/en/latest/modeling/meshes/uv/unwrapping/seams.html) explains that seams guide the unwrap and that the UV map is discontinuous at seams. The lab uses a paper cube, so it treats a connected loop or overlap as an invalid net; Blender can unwrap more complex surfaces by allowing distortion, and it only unwraps the selected faces (press **A** before **U › Unwrap**).
 
 ## Apply Scale: when UVs and model don't match
 

@@ -1056,11 +1056,11 @@ export function checkRequirements(challenge, stats) {
 export function judge(kind, text) {
   if (kind === 'name') {
     const c = compile(`int ${text} = 0;`);
-    return { answer: c.ok ? 'Valid' : 'Invalid', why: c.ok ? `int ${text} = 0; compiles.` : `${c.errors[0].code && c.errors[0].code !== 'LAB' ? c.errors[0].code + ': ' : ''}${c.errors[0].message}` };
+    return { answer: c.ok ? 'Valid' : 'Invalid', why: c.ok ? `int ${text} = 0; compiles.` : `${c.errors[0].code && c.errors[0].code !== 'LAB' ? c.errors[0].code + ': ' : ''}${c.errors[0].message}`, hint: c.ok ? '' : c.errors[0].hint };
   }
   if (kind === 'calc') {
     const c = compile(text, { mode: 'calc' });
-    return { answer: c.ok ? 'Works' : 'Error', why: c.ok ? 'The compiler accepts it.' : `${c.errors[0].message.replace(/\.$/, '')}. ${c.errors[0].hint}` };
+    return { answer: c.ok ? 'Works' : 'Error', why: c.ok ? 'The compiler accepts it.' : c.errors[0].message, hint: c.ok ? '' : c.errors[0].hint };
   }
   if (kind === 'bool') {
     const c = compile(`int age = 16\nbool member = true\n${text}`, { mode: 'calc' });

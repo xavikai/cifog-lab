@@ -1,6 +1,6 @@
 # Material Lab — teaching notes
 
-The interface uses English so students can transfer the terminology to Blender 5.2.
+The interface uses English so students can transfer the terminology to Blender.
 
 ## 1. Texture and material
 

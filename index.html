@@ -40,11 +40,11 @@
       <div class="lab-grid">
         <article class="lab-card">
           <div class="card-visual" aria-hidden="true"><div class="card-sphere"></div><span class="card-wire wire-one"></span><span class="card-wire wire-two"></span><span class="card-node node-one">UV</span><span class="card-node node-two">Mapping</span><span class="card-node node-three">Material</span></div>
-          <div class="card-content"><div class="card-topline"><span class="lab-number">01 / 3D MATERIALS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Material Lab</h3><p>Connect Blender style nodes. Change the color, roughness, normal map and texture repetition, then watch the object react in 3D.</p><div class="card-bottom"><span>Blender 5.2 concepts · English interface</span><a href="./labs/materials/" aria-label="Open Material Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">01 / 3D MATERIALS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Material Lab</h3><p>Connect Blender style nodes. Change the color, roughness, normal map and texture repetition, then watch the object react in 3D.</p><div class="card-bottom"><span>Blender concepts · English interface</span><a href="./labs/materials/" aria-label="Open Material Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
         </article>
         <article class="lab-card uv-card">
           <div class="card-visual uv-visual" aria-hidden="true"><div class="uv-net"><i class="uv-tile uv-front">F</i><i class="uv-tile uv-left">L</i><i class="uv-tile uv-right">R</i><i class="uv-tile uv-top">T</i><i class="uv-tile uv-bottom">D</i><i class="uv-tile uv-back">B</i></div><span class="uv-decor">3D → 2D</span></div>
-          <div class="card-content"><div class="card-topline"><span class="lab-number">02 / UV MAPPING</span><span class="available"><span></span> AVAILABLE</span></div><h3>UV Unwrap Lab</h3><p>Work in a Blender-style UV Editing workspace: select edges, press U to Mark Seam and Unwrap, and find the same face in the 3D Viewport and the UV map.</p><div class="card-bottom"><span>Seams · UV islands · Blender 5.2 concepts</span><a href="./labs/uv-unwrapping/" aria-label="Open UV Unwrap Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">02 / UV MAPPING</span><span class="available"><span></span> AVAILABLE</span></div><h3>UV Unwrap Lab</h3><p>Work in a Blender-style UV Editing workspace: select edges, press U to Mark Seam and Unwrap, and find the same face in the 3D Viewport and the UV map.</p><div class="card-bottom"><span>Seams · UV islands · Blender concepts</span><a href="./labs/uv-unwrapping/" aria-label="Open UV Unwrap Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
         </article>
         <article class="lab-card code-card">
           <div class="card-visual code-visual" aria-hidden="true"><pre class="code-snippet"><b>for</b> (<b>int</b> x = 0; x &lt; 4; x++)
@@ -60,5 +60,6 @@
     <section class="method" aria-label="How to use the labs"><span class="method-label">A SIMPLE LOOP</span><div><b>01</b> Open a lab</div><span class="method-arrow" aria-hidden="true">→</span><div><b>02</b> Change something</div><span class="method-arrow" aria-hidden="true">→</span><div><b>03</b> Observe the result</div></section>
   </main>
   <footer><span>cifog <strong>LAB</strong></span><span>Interactive studies for the classroom</span><a href="#labs">Back to labs ↑</a></footer>
+  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
 </body>
 </html>
