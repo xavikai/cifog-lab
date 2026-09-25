@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#191b1e">
+  <meta name="description" content="Animate a bouncing ball with a Blender-style Timeline and Graph Editor: timing, squash and stretch, and weight with F-curves.">
+  <title>Animation Lab · CIFOG</title>
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css?v=1">
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="../../" aria-label="CIFOG Lab home"><span class="brand-mark">cifog<span>LAB</span></span></a><span class="header-rule" aria-hidden="true"></span><div class="header-title"><span class="header-label">INTERACTIVE STUDIES / 04</span><strong>Animation Lab</strong></div><a class="home-link" href="../../">All labs ↗</a></header>
+  <main>
+    <section class="lab-top">
+      <div class="lab-lead">
+        <h1>Time it. Squash it. <span>Give it weight.</span></h1>
+        <p>The bouncing ball, one principle at a time. Edit the keys of the <strong>Graph Editor</strong> as in Blender and watch the ball, its <strong>Motion Path</strong> and the <strong>Timeline</strong> react.</p>
+      </div>
+      <div class="model-switch stage-switch" id="stage-switch" role="group" aria-label="Stage">
+        <span class="control-label">STAGE</span>
+      </div>
+    </section>
+
+    <ol class="guide" id="guide" aria-label="Steps"></ol>
+
+    <section class="blender" id="workspace" aria-label="Blender-style animation workspace">
+      <div class="anim-editors">
+        <section class="editor" aria-label="Camera view">
+          <div class="editor-header">
+            <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="4" width="9" height="8" rx="1" fill="none" stroke="currentColor"/><path d="M10.5 7 14.5 5v6l-4-2" fill="none" stroke="currentColor"/></svg>Camera</span><span class="editor-role">SIDE VIEW</span>
+            <div class="view-toggles">
+              <label class="live-toggle" title="In Blender: Object › Motion Paths"><input type="checkbox" id="t-path" checked><span class="switch" aria-hidden="true"></span>Motion Path</label>
+              <label class="live-toggle" title="Lab view: the ball at every other frame"><input type="checkbox" id="t-ghosts"><span class="switch" aria-hidden="true"></span>Ghosts</label>
+              <label class="live-toggle" id="volume-toggle" title="In Blender: Object Constraints › Maintain Volume"><input type="checkbox" id="t-volume"><span class="switch" aria-hidden="true"></span>Maintain Volume</label>
+              <label class="live-toggle" id="ref-toggle" title="A real ball simulated with physics"><input type="checkbox" id="t-ref"><span class="switch" aria-hidden="true"></span>Reference</label>
+            </div>
+          </div>
+          <div class="view-host" id="view-host"><canvas id="view" aria-label="The ball seen from the side"></canvas><div class="view-overlay" id="view-overlay"></div></div>
+        </section>
+
+        <section class="editor" aria-label="Graph Editor">
+          <div class="editor-header">
+            <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 13C5 13 5 3 8 3s3 10 6.5 10" fill="none" stroke="currentColor"/><circle cx="8" cy="3" r="1.4" fill="currentColor"/></svg>Graph Editor</span><span class="editor-role">F-CURVES</span>
+            <div class="menubar">
+              <button type="button" class="menu-button" data-menu="view" aria-haspopup="menu">View</button>
+              <button type="button" class="menu-button" data-menu="select" aria-haspopup="menu">Select</button>
+              <button type="button" class="menu-button" data-menu="key" aria-haspopup="menu">Key</button>
+            </div>
+          </div>
+          <div class="graph-body">
+            <div class="channels" id="channels" aria-label="Channels"></div>
+            <div class="graph-host" id="graph-host"><canvas id="graph" aria-label="F-curves"></canvas><span class="graph-hint">Wheel zoom · MMB pan · Home frame all</span></div>
+            <aside class="sidebar" id="sidebar" aria-label="Sidebar (N)"></aside>
+          </div>
+        </section>
+      </div>
+
+      <section class="editor timeline" aria-label="Timeline">
+        <div class="editor-header">
+          <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h13M4 5v6M8 4v8M12 5v6" fill="none" stroke="currentColor"/></svg>Timeline</span>
+          <div class="play-controls">
+            <button type="button" id="b-start" title="Jump to start (Shift ←)">⏮</button>
+            <button type="button" id="b-prevkey" title="Previous keyframe (↓)">◆◂</button>
+            <button type="button" id="b-play" title="Play (Space)" aria-pressed="false">▶</button>
+            <button type="button" id="b-nextkey" title="Next keyframe (↑)">▸◆</button>
+            <button type="button" id="b-end" title="Jump to end (Shift →)">⏭</button>
+          </div>
+          <label class="frame-field">Frame <input type="number" id="f-cur" class="current" min="0" max="250" value="1"></label>
+          <label class="frame-field">Start <input type="number" id="f-start" min="0" max="249" value="1"></label>
+          <label class="frame-field">End <input type="number" id="f-end" min="2" max="250" value="72"></label>
+          <span class="fps">24 fps · <span id="time-sec">0.00 s</span></span>
+        </div>
+        <div class="timeline-host" id="timeline-host"><canvas id="timeline" aria-label="Timeline with keyframes"></canvas></div>
+      </section>
+
+      <div class="statusbar">
+        <span class="status-keys" id="status-keys"><span><kbd>LMB</kbd>Select / move</span><span><kbd>G</kbd>Move</span><span><kbd>I</kbd>Insert key</span><span><kbd>T</kbd>Interpolation</span><span><kbd>V</kbd>Handle type</span><span><kbd>Space</kbd>Play</span><span><kbd>Ctrl</kbd><kbd>Z</kbd>Undo</span></span>
+        <span id="status-msg" class="status-msg" role="status" aria-live="polite"></span>
+      </div>
+      <div id="menu" class="context-menu" role="menu" hidden></div>
+    </section>
+
+    <section class="below">
+      <div class="step-card" id="step-card"></div>
+    </section>
+
+    <section class="shortcuts" aria-label="Blender shortcuts used in this lab">
+      <div><span class="eyebrow">SAME KEYS AS BLENDER</span><h2>Shortcuts you can use here</h2><p>Keys work while the mouse is over the workspace, just like Blender sends keys to the editor under the pointer.</p></div>
+      <dl>
+        <div><dt><kbd>LMB</kbd></dt><dd>Select a keyframe or handle · <kbd>Shift</kbd> to add · drag to move · drag on empty space to box-select</dd></div>
+        <div><dt><kbd>G</kbd> · <kbd>X</kbd> / <kbd>Y</kbd></dt><dd>Move the selected keys; X only in time, Y only in value. Click or Enter to confirm, Esc to cancel.</dd></div>
+        <div><dt><kbd>A</kbd> · <kbd>Alt</kbd><kbd>A</kbd></dt><dd>Select all / none</dd></div>
+        <div><dt><kbd>I</kbd></dt><dd>Insert a keyframe on the active channel at the current frame</dd></div>
+        <div><dt><kbd>X</kbd> · <kbd>Delete</kbd></dt><dd>Delete the selected keyframes</dd></div>
+        <div><dt><kbd>T</kbd></dt><dd>Interpolation Mode: Constant, Linear, Bezier</dd></div>
+        <div><dt><kbd>V</kbd></dt><dd>Handle Type: Free, Aligned, Vector, Automatic, Auto Clamped</dd></div>
+        <div><dt><kbd>Home</kbd> · <kbd>Numpad .</kbd></dt><dd>Frame all / frame the selected keys</dd></div>
+        <div><dt><kbd>Space</kbd></dt><dd>Play / pause</dd></div>
+        <div><dt><kbd>←</kbd> <kbd>→</kbd> · <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Previous / next frame · next / previous keyframe</dd></div>
+        <div><dt><kbd>Wheel</kbd> · <kbd>MMB</kbd></dt><dd>Zoom / pan the Graph Editor</dd></div>
+        <div><dt><kbd>Ctrl</kbd><kbd>Z</kbd></dt><dd>Undo · <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd> redo</dd></div>
+      </dl>
+    </section>
+
+    <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>The same bounce in Blender</h2><p>This lab shows a simplified Blender: one object, a side camera and a few channels. The curves, handles and keys behave like Blender's F-curves.</p></div><ol><li>Add a UV Sphere, set its origin to the bottom (<strong>Object › Set Origin</strong> or move the mesh up) so it squashes against the floor.</li><li>Open the <strong>Animation</strong> workspace. At frame 1 press <strong>I</strong> › Location with the ball up; key the contacts and the tops.</li><li>In the <strong>Graph Editor</strong>, select all and press <strong>T</strong> › Bezier; select the contacts and press <strong>V</strong> › Vector.</li><li>Make every bounce lower and shorter. Turn on <strong>Motion Paths</strong> (Object properties) to see the spacing.</li><li>Key <strong>Scale</strong> for squash and stretch, or add a <strong>Maintain Volume</strong> constraint.</li><li>Shape weight with the handles: long at the top for light objects, short and sharp for heavy ones.</li></ol></aside>
+  </main>
+  <footer><span>CIFOG · Animation Lab</span><a href="https://docs.blender.org/manual/en/latest/editors/graph_editor/fcurves/introduction.html" target="_blank" rel="noopener">Blender: F-Curves ↗</a><span>Teaching model · simplified Graph Editor.</span><a href="../../">All labs ↑</a></footer>
+  <script type="module" src="./app.js?v=1"></script>
+  <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
+</body>
+</html>

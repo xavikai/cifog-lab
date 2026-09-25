@@ -1,17 +1,23 @@
-import { compile, Runner, CSharpError, literal, isArr, elemOf } from './interpreter.js';
-import { LEVELS, CHALLENGES, API, TYPES as KINDS, checkRequirements, assembleParsons, judge } from './levels.js';
+import { compile, Runner, CSharpError, literal, isArr, elemOf, isObj, isStructVal, isList, listElem } from './interpreter.js';
+import { TYPES as KINDS, checkRequirements, assembleParsons, judge } from './levels.js';
+// Two courses share this app: Code Lab 01 (foundations) and Code Lab 02 (objects, towards Unity).
+const COURSE = document.body.dataset.course || 'basics';
+const course = COURSE === 'objects' ? await import('./levels-objects.js') : await import('./levels.js');
+const { LEVELS, CHALLENGES, API } = course;
 import { prepare, verifySeeds, assess } from './evaluate.js';
 import { compare } from './world.js';
 import { IsoView, PALETTE } from './render.js';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
 import dictionary from './i18n.js';
 addDictionary(dictionary);
+if (course.dictionary) addDictionary(course.dictionary);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PREFIX = COURSE === 'objects' ? 'cifog-csharp:objects:' : 'cifog-csharp:';
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('cifog-csharp:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('cifog-csharp:' + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+  get(k, d) { try { const v = localStorage.getItem(PREFIX + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(PREFIX + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
 };
 const SPEEDS = [{ label: 'Slow', ms: 900 }, { label: 'Normal', ms: 380 }, { label: 'Fast', ms: 130 }, { label: 'Very fast', ms: 35 }, { label: 'Instant', ms: 0 }];
 const LH = 21;
@@ -230,7 +236,7 @@ function renderRequirements(stats = null, result = null) {
 function renderToolbox() {
   const lvl = S.challenge.level.id;
   $('#toolbox-items').innerHTML = API.filter(a => a.level <= lvl).map((a, i) =>
-    `<button class="tool${a.level === lvl && lvl < LV['Free build'] ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
+    `<button class="tool${a.level === lvl && lvl < LEVELS.at(-1).id ? ' new' : ''}" data-i="${API.indexOf(a)}"><pre>${esc(a.code)}</pre><p>${a.text}</p></button>`).join('');
 }
 $('#toolbox-items').addEventListener('click', e => {
   const b = e.target.closest('.tool'); if (!b || ta.readOnly) return;
@@ -303,7 +309,7 @@ function resetScene(newSeed = false) {
   if (newSeed || ch.randomized) S.seed = ch.randomized ? (Math.random() * 1e9) >>> 0 : 1;
   const { world, target } = prepare(ch, S.seed);
   S.world = world; S.target = target; S.runner = null; S.gen = null; S.event = null; S.result = null; S.assessment = null;
-  view.update(world, { target, reset: true, labels: !!ch.labels, say: null });
+  view.update(world, { target, reset: true, labels: !!ch.labels, say: null, scene: [], trails: [], noDrone: !!ch.noDrone });
   $('#result').hidden = true;
   renderAll();
 }
@@ -327,8 +333,18 @@ function arrayHtml(type, arr) {
   }).join('');
   return `<span class="arr">${cells || '<span class="cell empty"><b>empty</b></span>'}</span>`;
 }
+// Objects: every class object gets a number and a colour; variables show an arrow to it.
+const hue = id => (id * 137) % 360;
+function refHtml(v) {
+  if (v === null) return '<span class="vl ref null">null</span>';
+  const name = isList(v) ? `List` : v.__cls.name;
+  return `<span class="vl ref" style="--h:${hue(v.__id)}"><i>→</i>${esc(name)} #${v.__id}</span>`;
+}
 function valueHtml(type, value, assigned = true) {
   if (!assigned || value === undefined) return `<span class="vl unassigned">${esc(t('unassigned'))}</span>`;
+  if (isObj(value) || isList(value) || (value === null && !isArr(type) && type !== 'string')) return refHtml(value);
+  if (isStructVal(value)) return `<span class="vl struct">${esc(literal(value, type))}</span>`;
+  if (isArr(type) && value && value.some?.(x => isObj(x) || x === null)) return `<span class="arr">${value.map((x, i) => `<span class="cell"><b>${refHtml(x)}</b><i>${i}</i></span>`).join('')}</span>`;
   if (isArr(type)) return arrayHtml(type, value);
   const cls = type === 'string' ? 'str' : ['int', 'float', 'double'].includes(type) ? 'num' : type === 'bool' ? 'bool' : '';
   const sw = type === 'Color' && value !== 'None' ? `<i class="swatch" style="background:${PALETTE[value]}"></i>` : '';
@@ -339,8 +355,9 @@ const varRow = (type, name, value, { changed = false, assigned = true } = {}) =>
 
 function renderMemory() {
   const w = S.world, r = S.runner, lvl = S.challenge.level.id;
-  const showDrone = lvl >= LV['First instructions'] || S.challenge.calcTowers;
-  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${lvl >= LV.Loops ? varRow('int', 'Height', w.height()) : ''}${lvl >= LV.Conditions ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
+  const showDrone = COURSE === 'objects' ? !S.challenge.noDrone : lvl >= LV['First instructions'] || S.challenge.calcTowers;
+  const full = COURSE === 'objects';
+  let html = !showDrone ? '' : `<div class="scope object"><div class="scope-head"><span>drone</span><span>object · Drone</span></div>${varRow('int', 'X', w.drone.x)}${varRow('int', 'Z', w.drone.z)}${full || lvl >= LV.Loops ? varRow('int', 'Height', w.height()) : ''}${full || lvl >= LV.Conditions ? varRow('Color', 'Ground', w.groundColor()) : ''}</div>`;
   const scopes = r?.scopes || [];
   if (!scopes.length) html += '<p class="empty">Variables appear here while the program runs. Each one is a box with a <b>type</b>, a <b>name</b> and a <b>value</b>.</p>';
   else {
@@ -369,9 +386,40 @@ function renderMemory() {
       html += droneHtml;
     }
   }
+  html += heapHtml(r);
   const mem = $('#memory');
   mem.innerHTML = html;
   $('.memory').classList.toggle('finished', S.mode === 'finished');
+}
+
+// The heap: every object created with new, with the objects nothing points to any more faded out.
+function heapHtml(r) {
+  if (!r || !r.heap.length) return '';
+  const reach = new Set(), stack = [];
+  const push = v => { if ((isObj(v) || isList(v)) && !reach.has(v)) { reach.add(v); stack.push(v); } else if (isStructVal(v)) Object.values(v.f).forEach(push); else if (Array.isArray(v)) v.forEach(push); };
+  for (const sc of r.scopes) { sc.vars.forEach(v => push(v.value)); push(sc.thisObj); }
+  r.scene.forEach(push);
+  while (stack.length) { const o = stack.pop(); if (isList(o)) o.items.forEach(push); else Object.values(o.f).forEach(push); }
+  const acc = r.access;
+  const cards = r.heap.filter(o => !(isObj(o) && o.__cls.name === 'Transform')).map(o => {
+    const live = reach.has(o), hot = acc && acc.obj === o;
+    let rows;
+    if (isList(o)) rows = `<div class="var array" data-no-i18n><span class="ty">${esc(`List<${o.elem}>`)}</span><span class="nm">Count ${o.items.length}</span>${o.items.length ? `<span class="arr">${o.items.map((x, i) => `<span class="cell"><b>${isObj(x) || x === null ? refHtml(x) : esc(literal(x, o.elem))}</b><i>${i}</i></span>`).join('')}</span>` : '<span class="vl">empty</span>'}</div>`;
+    else {
+      const fields = [];
+      for (const C of chainOf(o.__cls)) for (const [n, f] of C.fields) if (n !== 'transform') fields.push([n, f.type]);
+      rows = fields.map(([n, ty]) => `<div class="var${hot && acc.field === n ? ' changed' : ''}" data-no-i18n><span class="ty t-${ty}">${esc(ty)}</span><span class="nm">${esc(n)}</span>${valueHtml(ty, o.f[n])}</div>`).join('');
+      if (o.f.transform) rows = `<div class="var" data-no-i18n><span class="ty">Vector3</span><span class="nm">transform.position</span>${valueHtml('Vector3', o.f.transform.f.position)}</div>` + rows;
+      if (!rows) rows = `<p class="empty">${esc(t('No fields.'))}</p>`;
+    }
+    return `<div class="scope heap-obj${live ? '' : ' garbage'}${hot ? ' hot' : ''}" style="--h:${hue(o.__id)}"><div class="scope-head"><span data-no-i18n>#${o.__id} ${esc(isList(o) ? `List<${o.elem}>` : o.__cls.name)}</span><span>${esc(t(live ? 'object' : 'no references'))}</span></div>${rows}</div>`;
+  }).join('');
+  return cards ? `<div class="stack-label">${esc(t('HEAP · objects made with new'))}</div>${cards}` : '';
+}
+function chainOf(I) { const out = []; const types = S.compiled?.ast?.types; while (I) { out.unshift(I); I = I.base ? types?.get(I.base) : null; } return out; }
+function sceneNow() {
+  const r = S.runner; if (!r) return [];
+  return r.scene.map(o => { const p = o.f.transform?.f.position; return p ? { id: o.__id, x: p.f.x, y: p.f.y, z: p.f.z, color: typeof o.f.color === 'string' ? o.f.color : 'White' } : null; }).filter(Boolean);
 }
 
 function lineText(n) { return (ta.value.split('\n')[n - 1] || '').trim(); }
@@ -385,6 +433,10 @@ function renderNow() {
   if (ev.kind === 'line' && lastRes?.steps && S.challenge.mode === 'calc') {
     const st = lastRes.steps;
     el.innerHTML = `<span class="label">${esc(tr('LINE {n} · HOW IT WAS WORKED OUT', { n: lastRes.line }))}</span><div class="eval">${st.map((p, i) => i === st.length - 1 ? `<span class="${lastRes.value}">${esc(p)}</span>` : `<span>${esc(p)}</span>`).join('<i>→</i>')}</div><div class="outcome">${esc(tr('Next: line {n}', { n: ev.line }))}</div>`;
+    return;
+  }
+  if (ev.kind === 'frame') {
+    el.innerHTML = `<span class="label">${esc(tr('FRAME {n} · {s} S', { n: ev.frame, s: ev.time.toFixed(2) }))}</span>${esc(t('Like Unity, the lab calls Update() on every object in the scene, once per frame. Time.deltaTime is the time between two frames (0.05 s).'))}`;
     return;
   }
   if (ev.kind === 'call') {
@@ -421,7 +473,7 @@ function renderControls() {
   $('#run').classList.toggle('paused', running);
   $('#stop').disabled = !(running || paused);
   const ch = S.challenge, parsons = ch.type === 'parsons';
-  $('#step-into').hidden = !(ch.level.id >= LV.Methods);
+  $('#step-into').hidden = !(COURSE === 'objects' || ch.level.id >= LV.Methods);
   ta.readOnly = running || paused || readOnlyType(ch) || parsons;
   const note = $('#editing-note');
   let html = '';
@@ -461,7 +513,7 @@ function renderLamps() {
   el.innerHTML = `${steps}<div class="lamp-list">${bools.map(b => `<div class="lamp-row${b === last ? ' latest' : ''}"><span class="lamp ${b.value ? 'on' : 'off'}" aria-label="${b.value}"></span><code>${esc((lines[b.line - 1] || '').trim())}</code><b class="${b.value}">${b.value}</b></div>`).join('')}</div>`;
 }
 function renderAll({ instant = false } = {}) {
-  view.update(S.world, { target: S.target, result: S.result, instant, labels: !!S.challenge.labels, say: S.runner?.output.at(-1)?.text ?? null });
+  view.update(S.world, { target: S.target, result: S.result, instant, labels: !!S.challenge.labels, say: S.runner?.output.at(-1)?.text ?? null, scene: sceneNow(), trails: S.runner?.history || [], noDrone: !!S.challenge.noDrone });
   renderCode(); renderMemory(); renderNow(); renderTrace(); renderOutput(); renderProgress(); renderControls(); renderStrip(); renderLamps();
   if (S.event && (S.mode === 'running' || S.mode === 'paused')) scrollToLine(S.event.line);
 }
@@ -678,7 +730,7 @@ function build() {
   logLine('c-ok', `Build succeeded · ${compiled.warnings.length} warning${compiled.warnings.length === 1 ? '' : 's'}`);
   S.outEl = document.createElement('div'); S.outEl.dataset.noI18n = ''; consoleEl.append(S.outEl);
   resetScene();
-  S.runner = new Runner(compiled.ast, S.world, { calcTowers: !!S.challenge.calcTowers });
+  S.runner = new Runner(compiled.ast, S.world, { calcTowers: !!S.challenge.calcTowers, frames: S.challenge.frames ?? 60 });
   S.gen = S.runner.run();
   return true;
 }
@@ -805,6 +857,7 @@ function finish() {
         else if (o.last) out.push(tr('The last line should give {want}, but it gives {got}.', { want: o.want[0], got: o.got[0] || t('nothing') }));
         else out.push(tr('Expected the Console to show "{want}" but it showed "{got}".', { want: o.want.join(' / '), got: o.got.join(' / ') || t('(nothing)') }));
       }
+      if (a.scene && !a.scene.ok) out.push(t(a.scene.message));
       if (failed.length) out.push(tr('Still to do: {list}.', { list: failed.map(t).join(', ') }));
       return out.join(' ');
     };

@@ -4,7 +4,7 @@ import { checkRequirements } from './levels.js';
 
 export function prepare(challenge, seed = 1) {
   const s = challenge.setup(random(seed));
-  const world = new World({ size: s.size || 8, maxHeight: s.maxHeight || 8, start: s.start || [0, 0], columns: s.columns || {}, ground: s.ground || {} });
+  const world = new World({ size: s.size || 8, maxHeight: s.maxHeight || 8, start: s.start || [0, 0], columns: s.columns || {}, ground: s.ground || {}, plans: s.plans || {} });
   world.viewHeight = s.viewHeight || Math.min(world.maxHeight, 4);
   return { world, target: s.target || {} };
 }
@@ -38,12 +38,15 @@ export function assess(challenge, { compiled, runner, world, target, prediction 
   }
   let predictionCheck = null;
   if (challenge.question) {
-    const actual = challenge.question.actual({ output, results, world, vars: variables(runner) });
+    const actual = challenge.question.actual({ output, results, world, vars: variables(runner), runner });
     predictionCheck = { actual, chosen: prediction, ok: prediction != null && String(prediction) === String(actual) };
   }
+  // Scene challenges (Code Lab 02) check how the objects moved, frame by frame.
+  let sceneCheck = null;
+  if (challenge.expectScene) sceneCheck = challenge.expectScene({ history: runner.history, scene: runner.scene, output, runner });
   // Predict and observe challenges are complete once the program has run: being wrong is part of learning.
-  const ok = (!shape || shape.ok) && (!outputCheck || outputCheck.ok) && requirements.every(r => r.ok);
-  return { ok, shape, output: outputCheck, requirements, prediction: predictionCheck };
+  const ok = (!shape || shape.ok) && (!outputCheck || outputCheck.ok) && (!sceneCheck || sceneCheck.ok) && requirements.every(r => r.ok);
+  return { ok, shape, output: outputCheck, requirements, prediction: predictionCheck, scene: sceneCheck };
 }
 
 // Runs a program without animation. Used for tests and for checking randomized challenges.
@@ -51,7 +54,7 @@ export function runHeadless(challenge, code, seed = 1, prediction = null) {
   const compiled = compile(code, { mode: challenge.mode });
   if (!compiled.ok) return { compiled, ok: false };
   const { world, target } = prepare(challenge, seed);
-  const runner = new Runner(compiled.ast, world, { calcTowers: !!challenge.calcTowers });
+  const runner = new Runner(compiled.ast, world, { calcTowers: !!challenge.calcTowers, frames: challenge.frames ?? 60 });
   let error = null;
   try { runner.runToEnd(); }
   catch (e) { if (e instanceof CSharpError) error = e; else throw e; }

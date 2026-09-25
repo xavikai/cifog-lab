@@ -47,6 +47,8 @@ export const API = [
   { level: 10, code: 'int[] floors = new int[4];', text: 'Creates an array of 4 boxes, all 0 for now. Write into a box with <code>floors[2] = 5;</code>' },
   { level: 10, code: 'for (int i = 0; i < heights.Length; i++)\n{\n    drone.Build(heights[i]);\n}', text: 'Goes through every position with its index <code>i</code>. Use <code>&lt;</code>, not <code>&lt;=</code>: the last position is <code>Length - 1</code>.' },
   { level: 10, code: 'foreach (int h in heights)\n{\n    \n}', text: 'Goes through the items one by one, without an index. <code>h</code> can be read but not changed.' },
+  { level: 11, code: 'int[] plan = drone.Scan();', text: 'Reads the plan of the street where the drone is: one number per plot, from x = 0. The plan changes every run.' },
+  { level: 11, code: 'Color LayerColor(int y)\n{\n    return Color.Green;\n}', text: 'A method can give back any type, also a <code>Color</code>: use it like a value, <code>drone.Place(LayerColor(y));</code>' },
 ];
 
 export const LEVELS = [
@@ -1361,7 +1363,221 @@ void Skyline(int[] heights)
     ],
   },
   {
-    id: 11, name: 'Free build', concept: 'Sandbox',
+    id: 11, name: 'From block to city', concept: 'Project',
+    intro: 'The final project: read a plan with drone.Scan() and generate a whole city with methods, arrays, loops and conditions. The plan changes every run, like in procedural generation.',
+    challenges: [
+      {
+        id: 'p-1', title: 'Read the plan', randomized: true,
+        goal: 'Build one tower for each number of the plan. The plan changes every run.',
+        brief: '<p><code>drone.Scan()</code> reads the <b>plan</b> of the street where the drone is and gives it back as an <code>int[]</code>: one number per plot, from left to right. Every run brings a different plan, and your program is also tested on other plans, so read the numbers: don\'t copy them.</p>',
+        hint: 'foreach (int floors in plan) { drone.Build(floors); }',
+        starter: `// The drone scans the plan of this street: one number per building.
+int[] plan = drone.Scan();
+Console.WriteLine(plan.Length + " buildings");
+
+// Build one tower for each number in the plan.
+`,
+        solution: `int[] plan = drone.Scan();
+Console.WriteLine(plan.Length + " buildings");
+
+foreach (int floors in plan)
+{
+    drone.Build(floors);
+}`,
+        labels: true,
+        setup: rand => {
+          const plan = Array.from({ length: 6 }, () => 1 + Math.floor(rand() * 6));
+          return { maxHeight: 8, viewHeight: 6, plans: { 0: plan }, target: Object.fromEntries(plan.map((h, x) => [`${x},0`, repeat('White', h)])) };
+        },
+      },
+      {
+        id: 'p-2', title: 'Buildings with roofs', randomized: true,
+        goal: 'For each plot: its floors in White and a Red roof on top. A 0 is an empty plot.',
+        brief: '<p>Now each building is more than a tower: <b>floors</b> plus a <b>roof</b>. Put that in a method <code>Building(int floors)</code>, so the main program only reads the plan and calls it. Careful with the plots marked <b>0</b>: nothing is built there, but the drone must still move on.</p>',
+        hint: 'In Building: if (floors > 0) { a loop placing White floors, then drone.Place(Color.Red); } and always drone.Move(Direction.Right); at the end.',
+        starter: `int[] plan = drone.Scan();
+
+foreach (int floors in plan)
+{
+    Building(floors);
+}
+
+// Floors in White, a Red roof, then one step right.
+// A plot with 0 floors stays empty (but the drone still moves).
+void Building(int floors)
+{
+    drone.Build(floors);
+}
+`,
+        solution: `int[] plan = drone.Scan();
+
+foreach (int floors in plan)
+{
+    Building(floors);
+}
+
+void Building(int floors)
+{
+    if (floors > 0)
+    {
+        for (int i = 0; i < floors; i++)
+        {
+            drone.Place(Color.White);
+        }
+        drone.Place(Color.Red);
+    }
+    drone.Move(Direction.Right);
+}`,
+        requires: [{ feature: 'method', label: 'Write a method' }, { feature: 'if', label: 'Use if' }],
+        labels: true,
+        setup: rand => {
+          const plan = Array.from({ length: 6 }, (_, i) => i === 1 || rand() < 0.2 ? 0 : 1 + Math.floor(rand() * 5));
+          return { maxHeight: 8, viewHeight: 6, plans: { 0: plan }, target: Object.fromEntries(plan.map((h, x) => [`${x},0`, h ? [...repeat('White', h), 'Red'] : []]).filter(([, c]) => c.length)) };
+        },
+      },
+      {
+        id: 'p-3', title: 'The whole city', randomized: true,
+        goal: 'Build the four streets (rows 0, 2, 4 and 6). Buildings with 4 floors or more get a Blue roof.',
+        brief: '<p>A city is many streets. The streets are in rows <b>0, 2, 4 and 6</b>: fly to the start of each one with <code>drone.MoveTo(0, z)</code>, scan its plan and build it. And a new rule: tall buildings (<b>4 floors or more</b>) get a <b>Blue</b> roof; the others keep the Red one. This is how procedural cities are made in games and films: a few rules, applied to data.</p>',
+        hint: 'for (int z = 0; z < 8; z += 2) { drone.MoveTo(0, z); int[] plan = drone.Scan(); foreach … } and in Building: if (floors >= 4) Blue roof, else Red.',
+        starter: `// This builds only the first street.
+drone.MoveTo(0, 0);
+int[] plan = drone.Scan();
+foreach (int floors in plan)
+{
+    Building(floors);
+}
+
+void Building(int floors)
+{
+    if (floors > 0)
+    {
+        for (int i = 0; i < floors; i++)
+        {
+            drone.Place(Color.White);
+        }
+        drone.Place(Color.Red);
+    }
+    drone.Move(Direction.Right);
+}
+`,
+        solution: `for (int z = 0; z < 8; z += 2)
+{
+    drone.MoveTo(0, z);
+    int[] plan = drone.Scan();
+    foreach (int floors in plan)
+    {
+        Building(floors);
+    }
+}
+
+void Building(int floors)
+{
+    if (floors > 0)
+    {
+        for (int i = 0; i < floors; i++)
+        {
+            drone.Place(Color.White);
+        }
+        if (floors >= 4)
+        {
+            drone.Place(Color.Blue);
+        }
+        else
+        {
+            drone.Place(Color.Red);
+        }
+    }
+    drone.Move(Direction.Right);
+}`,
+        requires: [{ feature: 'method', label: 'Write a method' }, { feature: 'nestedLoop', label: 'Use a loop inside a loop' }],
+        setup: rand => {
+          const plans = {}, target = {};
+          for (let z = 0; z < 8; z += 2) {
+            plans[z] = Array.from({ length: 6 }, () => rand() < 0.2 ? 0 : 1 + Math.floor(rand() * 6));
+            plans[z].forEach((h, x) => { if (h) target[`${x},${z}`] = [...repeat('White', h), h >= 4 ? 'Blue' : 'Red']; });
+          }
+          return { maxHeight: 8, viewHeight: 7, plans, target };
+        },
+      },
+      {
+        id: 'p-4', title: 'Terrain from a heightmap', randomized: true,
+        goal: 'Every row is a heightmap. Build each column with the color of its altitude; height 0 is water.',
+        brief: '<p>In 3D, a <b>heightmap</b> is a grid of numbers that says how high the ground is at each point. Here each row of the grid is scanned as an <code>int[]</code>. Build every column layer by layer and color each layer by its <b>altitude</b> <code>y</code>: layers 0 and 1 <b>Green</b>, 2 and 3 <b>Orange</b>, 4 and up <b>White</b> (snow). A height of <b>0</b> is water: one <b>Blue</b> block. The main program is ready; complete the two methods. <code>LayerColor</code> is a method that gives back a <code>Color</code>.</p>',
+        hint: 'Column: if (h == 0) place Blue; for (int y = 0; y < h; y++) drone.Place(LayerColor(y)); · LayerColor: if (y < 2) return Color.Green; if (y < 4) return Color.Orange; return Color.White;',
+        starter: `for (int z = 0; z < 8; z++)
+{
+    drone.MoveTo(0, z);
+    int[] heights = drone.Scan();
+    for (int x = 0; x < heights.Length; x++)
+    {
+        drone.MoveTo(x, z);
+        Column(heights[x]);
+    }
+}
+
+void Column(int h)
+{
+    // Water (h == 0): one Blue block.
+    // Otherwise h blocks, each with the color of its layer.
+}
+
+// The color of layer y: 0-1 Green, 2-3 Orange, 4 and up White.
+Color LayerColor(int y)
+{
+    return Color.Green;
+}
+`,
+        solution: `for (int z = 0; z < 8; z++)
+{
+    drone.MoveTo(0, z);
+    int[] heights = drone.Scan();
+    for (int x = 0; x < heights.Length; x++)
+    {
+        drone.MoveTo(x, z);
+        Column(heights[x]);
+    }
+}
+
+void Column(int h)
+{
+    if (h == 0)
+    {
+        drone.Place(Color.Blue);
+    }
+    for (int y = 0; y < h; y++)
+    {
+        drone.Place(LayerColor(y));
+    }
+}
+
+Color LayerColor(int y)
+{
+    if (y < 2)
+    {
+        return Color.Green;
+    }
+    if (y < 4)
+    {
+        return Color.Orange;
+    }
+    return Color.White;
+}`,
+        setup: rand => {
+          const p1 = rand() * 6.28, p2 = rand() * 6.28, fx = 0.6 + rand() * 0.5, fz = 0.5 + rand() * 0.5;
+          const plans = {}, target = {};
+          const layer = y => y < 2 ? 'Green' : y < 4 ? 'Orange' : 'White';
+          for (let z = 0; z < 8; z++) {
+            plans[z] = Array.from({ length: 8 }, (_, x) => Math.max(0, Math.min(6, Math.round(2.6 + 2.8 * Math.sin(x * fx + p1) * Math.cos(z * fz + p2) + (rand() - 0.5)))));
+            plans[z].forEach((h, x) => { target[`${x},${z}`] = h === 0 ? ['Blue'] : Array.from({ length: h }, (_, y) => layer(y)); });
+          }
+          return { maxHeight: 8, viewHeight: 6, plans, target };
+        },
+      },
+    ],
+  },
+  {
+    id: 12, name: 'Free build', concept: 'Sandbox',
     intro: 'No goal: experiment with everything you have learned.',
     challenges: [
       {
@@ -1411,7 +1627,7 @@ export function assembleParsons(lines) {
   }).join('\n');
 }
 
-export const CHALLENGES = LEVELS.flatMap(level => level.challenges.map(c => {
+export const buildChallenges = levels => levels.flatMap(level => level.challenges.map(c => {
   const type = c.type || (c.sandbox ? 'create' : 'create');
   const ch = { ...c, type, level, mode: c.mode || 'program' };
   if (type === 'parsons') { ch.solution = assembleParsons(c.parsons.lines); ch.starter = ''; }
@@ -1419,6 +1635,7 @@ export const CHALLENGES = LEVELS.flatMap(level => level.challenges.map(c => {
   if (type === 'classify') { ch.starter = ''; ch.solution = ''; }
   return ch;
 }));
+export const CHALLENGES = buildChallenges(LEVELS);
 
 export function checkRequirements(challenge, stats) {
   return (challenge.requires || []).map(r => {

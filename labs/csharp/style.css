@@ -260,3 +260,14 @@ dialog::backdrop{background:#0b0c0ecc}dialog h2{font-size:1.6rem;letter-spacing:
 .arr .cell.read{border-color:#5f86c4;background:#22324a}.arr .cell.read i{color:#9db8e3}
 .arr .cell.write{border-color:var(--yellow);background:#4a3f16}.arr .cell.write i{color:#f0d68a}
 .arr .cell.empty b{color:#7f8893;font-style:italic}
+
+/* Code Lab 02: references, structs and the heap */
+.vl.ref{color:hsl(var(--h,200) 80% 78%);border-color:hsl(var(--h,200) 45% 45%);background:hsl(var(--h,200) 30% 18%)}
+.vl.ref i{font-style:normal;margin-right:4px}
+.vl.ref.null{color:#8c95a0;border-style:dashed;background:#23272c}
+.vl.struct{color:var(--num)}
+.scope.heap-obj{border-color:hsl(var(--h) 40% 40%);background:hsl(var(--h) 18% 14%)}
+.scope.heap-obj .scope-head span:first-child{color:hsl(var(--h) 80% 78%)}
+.scope.heap-obj.hot{box-shadow:0 0 0 2px hsl(var(--h) 70% 60%)}
+.scope.heap-obj.garbage{opacity:.45;border-style:dashed}
+.arr .cell .vl.ref{min-width:0;padding:0 4px;font-size:.66rem}

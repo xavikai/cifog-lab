@@ -136,10 +136,19 @@ An array variable is drawn in Memory as a row of boxes with their positions unde
 
 Compiler checks include CS0820 (`var` with `{ … }`), CS0622 (`{ … }` for a non-array), CS0270 (`int[5] a`), CS0029 with a hint when an array is used where one value is expected, CS0200 (`Length` or a string character cannot be assigned), CS1579 (`foreach` over a number) and CS1656.
 
+## Level 11 · From block to city (project)
+
+`drone.Scan()` returns the plan of the row where the drone is as an `int[]` (one number per plot, from x = 0). Every run brings a new plan and each solution is verified on three more random worlds, so students must read the data instead of copying numbers: the idea behind procedural generation in games, films and tools like Houdini or Geometry Nodes.
+
+1. **Read the plan** — `Scan()` + `foreach` + `Build`.
+2. **Buildings with roofs** — a `Building(int floors)` method; `0` is an empty plot (the drone still moves).
+3. **The whole city** — four streets (`z += 2`), nested loops, a rule that changes the roof color (4 floors or more → Blue).
+4. **Terrain from a heightmap** — each row is a heightmap; color every layer by altitude with a method that returns a `Color`; height 0 is water. A good moment to connect with displacement maps and terrain tools in Blender.
+
 ## Free build
 
 A sandbox with a pyramid made from three nested loops and the conditional operator. Good for open-ended tasks: a spiral staircase, a hollow tower, a gradient of colors.
 
 ## Next levels (planned)
 
-Code Lab 01 closes with a project, "From block to city": methods, arrays, loops and conditions together, reading varied plots with `drone.Scan()`. Code Lab 02 (objects, towards Unity) will cover classes and objects, references and `null`, `List<T>` and `foreach`, `struct` vs `class`, `Update()`/`deltaTime` and light inheritance.
+Code Lab 02 (objects, towards Unity) will cover classes and objects, references and `null`, `List<T>` and `foreach`, `struct` vs `class`, `Update()`/`deltaTime` and light inheritance.

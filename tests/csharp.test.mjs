@@ -323,3 +323,15 @@ test('arrays: conditions show the position first, then the value', () => {
   const cond = [...r.run()].find(e => e.kind === 'cond');
   assert.equal(cond.text, 'h[i] > 5  →  h[1] > 5  →  7 > 5  →  true');
 });
+
+test('drone.Scan gives the plan of the current row as a new int[]', () => {
+  const w = new World({ plans: { 0: [3, 0, 2], 2: [1] } });
+  const r = run(`int[] a = drone.Scan();
+a[0] = 9;
+Console.WriteLine(drone.Scan()[0] + " " + a.Length);
+drone.MoveTo(0, 2);
+Console.WriteLine(drone.Scan().Length);
+drone.MoveTo(0, 1);
+Console.WriteLine(drone.Scan().Length);`, w);
+  assert.deepEqual(r.output.map(o => o.text), ['3 3', '1', '0']);
+});

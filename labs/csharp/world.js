@@ -8,12 +8,13 @@ class DroneException extends Error {
 }
 
 export class World {
-  constructor({ size = 8, maxHeight = 8, start = [0, 0], columns = {}, ground = {} } = {}) {
+  constructor({ size = 8, maxHeight = 8, start = [0, 0], columns = {}, ground = {}, plans = {} } = {}) {
     this.size = size;
     this.maxHeight = maxHeight;
     this.drone = { x: start[0], z: start[1] };
     this.columns = new Map(Object.entries(columns).map(([k, v]) => [k, [...v]]));
     this.ground = new Map(Object.entries(ground));
+    this.plans = new Map(Object.entries(plans).map(([z, p]) => [Number(z), [...p]]));
     this.actions = 0;
     this.events = [];
   }
@@ -62,6 +63,11 @@ export class World {
     if (n === 0) this.actions++;
     if (x < this.size - 1) { this.drone = { x: x + 1, z }; this.events.push({ type: 'move', from: { x, z }, to: { x: x + 1, z } }); }
     return `built a tower of ${n} at (${x}, ${z})`;
+  }
+  // The plan of the street where the drone is: one number per plot, from x = 0.
+  scan() {
+    this.actions++;
+    return [...(this.plans.get(this.drone.z) || [])];
   }
   blockCount() { let n = 0; for (const c of this.columns.values()) n += c.length; return n; }
 }

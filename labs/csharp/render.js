@@ -55,9 +55,9 @@ export class IsoView {
   P(x, z, y) { return [this.ox + (x + z) * this.tw / 2, this.oy + (x - z) * this.th / 2 - y * this.bh]; }
 
   // Called whenever the world may have changed. instant = skip animations.
-  update(world, { target = this.target, result = null, instant = false, reset = false, labels = this.labels, say = undefined } = {}) {
+  update(world, { target = this.target, result = null, instant = false, reset = false, labels = this.labels, say = undefined, scene = this.scene || [], trails = this.trails || [], noDrone = false } = {}) {
     const now = performance.now();
-    this.labels = labels;
+    this.labels = labels; this.scene = scene; this.trails = trails; this.noDrone = noDrone;
     if (say !== undefined && say !== this.say) { this.say = say; this.sayAt = now; }
     if (reset || world !== this.world) {
       this.world = world; this.births.clear(); this.known.clear(); this.say = null; this.alt = null;
@@ -157,7 +157,7 @@ export class IsoView {
     items.sort((a, b) => (a.x - a.z) - (b.x - b.z) || a.y - b.y || (a.kind === 'ghost') - (b.kind === 'ghost'));
 
     const droneKey = Math.round(pos.x) - Math.round(pos.z);
-    let droneDrawn = false;
+    let droneDrawn = !!this.noDrone;
     const drawDrone = () => { this.droneShape(pos, now); droneDrawn = true; };
     for (const it of items) {
       if (!droneDrawn && it.x - it.z > droneKey) drawDrone();
@@ -172,10 +172,42 @@ export class IsoView {
       }
     }
     if (!droneDrawn) drawDrone();
+    this.drawScene();
     // Faint silhouette on top so the drone is never lost behind tall towers
-    c.save(); c.globalAlpha = 0.28; this.droneShape(pos, now, true); c.restore();
+    if (!this.noDrone) { c.save(); c.globalAlpha = 0.28; this.droneShape(pos, now, true); c.restore(); }
     if (this.labels) this.heightLabels();
     if (this.say) this.bubble(pos, now);
+  }
+
+  // Code Lab 02: objects in the scene (spheres at transform.position) and their trails, like a motion path.
+  drawScene() {
+    const c = this.ctx, R = 0.32;
+    if (!this.scene?.length && !this.trails?.length) return;
+    const trails = new Map();
+    for (const frame of this.trails || []) for (const o of frame) { if (!trails.has(o.id)) trails.set(o.id, []); trails.get(o.id).push(o); }
+    for (const [, pts] of trails) {
+      c.save();
+      c.strokeStyle = 'rgba(255,255,255,.18)'; c.lineWidth = 1; c.beginPath();
+      pts.forEach((o, i) => { const [x, y] = this.P(o.x + 0.5, o.z + 0.5, o.y + R); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+      c.stroke();
+      for (const o of pts) { const [x, y] = this.P(o.x + 0.5, o.z + 0.5, o.y + R); c.fillStyle = shade(PALETTE[o.color] || '#e7e8eb', 0.9); c.globalAlpha = 0.55; c.beginPath(); c.arc(x, y, 1.8, 0, Math.PI * 2); c.fill(); }
+      c.restore();
+    }
+    const items = [...(this.scene || [])].sort((a, b) => (a.x - a.z) - (b.x - b.z));
+    for (const o of items) {
+      const base = PALETTE[o.color] || '#e7e8eb';
+      const [gx, gy] = this.P(o.x + 0.5, o.z + 0.5, 0);
+      c.save();
+      c.fillStyle = `rgba(0,0,0,${Math.max(0.12, 0.4 - o.y * 0.05)})`;
+      c.beginPath(); c.ellipse(gx, gy, this.tw * R * 0.9, this.th * R * 0.9, 0, 0, Math.PI * 2); c.fill();
+      const [x, y] = this.P(o.x + 0.5, o.z + 0.5, o.y + R);
+      const r = this.tw * R * 0.72;
+      const g = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+      g.addColorStop(0, shade(base, 1.35)); g.addColorStop(0.6, base); g.addColorStop(1, shade(base, 0.45));
+      c.fillStyle = g; c.strokeStyle = 'rgba(15,17,20,.6)'; c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.restore();
+    }
   }
 
   heightLabels() {
