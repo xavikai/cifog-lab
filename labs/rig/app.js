@@ -193,21 +193,55 @@ function shapeCenter(b, w) {
   if (b.type === 'control') return new THREE.Vector3(0, -0.2, -0.14).applyQuaternion(w.q).add(w.h);
   return w.h.clone();
 }
+// Controls win over the bones under them (the foot box sits on the Foot and on the tip of the Shin),
+// so clicking a control always selects it, as custom shapes do in a Blender rig.
+const BOX_CORNERS = [-1, 1].flatMap(x => [-1, 1].flatMap(y => [-1, 1].map(z => [x * 0.275, y * 0.475 - 0.2, z * 0.03 - 0.14])));
+function hull(pts) {
+  pts = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], hi = [];
+  for (const p of pts) { while (lo.length > 1 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of pts.reverse()) { while (hi.length > 1 && cross(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+function nearPolygon(poly, x, y, margin) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  if (inside) return true;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = poly[j], [bx, by] = poly[i], vx = bx - ax, vy = by - ay, L = vx * vx + vy * vy || 1;
+    const u = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / L));
+    if (Math.hypot(ax + vx * u - x, ay + vy * u - y) <= margin) return true;
+  }
+  return false;
+}
 function pickBone(x, y) {
-  const { W } = S.res; let best = null, bd = Infinity;
+  const { W } = S.res;
+  let best = null, bd = Infinity;
   S.rig.bones.forEach((b, i) => {
+    if (b.type === 'bone') return;
     const w = W[i];
     let d;
-    if (b.type === 'bone') {
-      const a = toScreen(w.h), c = toScreen(w.t), vx = c[0] - a[0], vy = c[1] - a[1], L = vx * vx + vy * vy || 1;
-      const u = Math.max(0, Math.min(1, ((x - a[0]) * vx + (y - a[1]) * vy) / L));
-      d = Math.hypot(a[0] + vx * u - x, a[1] + vy * u - y);
-      if (d > 12) return;
+    if (b.type === 'control') {
+      const poly = hull(BOX_CORNERS.map(c => toScreen(new THREE.Vector3(...c).applyQuaternion(w.q).add(w.h))));
+      if (!nearPolygon(poly, x, y, 8)) return;
+      const p = toScreen(shapeCenter(b, w)); d = Math.hypot(p[0] - x, p[1] - y);
     } else {
-      const p = toScreen(shapeCenter(b, w)); d = Math.hypot(p[0] - x, p[1] - y) - 6;
-      if (d > 22) return;
+      const p = toScreen(w.h); d = Math.hypot(p[0] - x, p[1] - y);
+      if (d > 24) return;
     }
     if (d < bd) { bd = d; best = b.name; }
+  });
+  if (best) return best;
+  S.rig.bones.forEach((b, i) => {
+    if (b.type !== 'bone') return;
+    const w = W[i], a = toScreen(w.h), c = toScreen(w.t), vx = c[0] - a[0], vy = c[1] - a[1], L = vx * vx + vy * vy || 1;
+    const u = Math.max(0, Math.min(1, ((x - a[0]) * vx + (y - a[1]) * vy) / L));
+    const d = Math.hypot(a[0] + vx * u - x, a[1] + vy * u - y);
+    if (d <= 12 && d < bd) { bd = d; best = b.name; }
   });
   return best;
 }
@@ -228,7 +262,11 @@ function startModal(kind) {
   let names = [...S.sel];
   if (kind === 'grab') {
     const free = names.filter(n => bone(n).canMove);
-    if (!free.length) return msg(bone(S.active).connected ? 'This bone is connected to its parent: it can only rotate.' : 'This bone is locked in this lab: it can only rotate.', true);
+    if (!free.length) {
+      const a = bone(S.active), parent = a.parentIndex >= 0 ? S.rig.bones[a.parentIndex] : null;
+      if (parent && parent.canMove && parent.type !== 'bone') return msg(tr('{b} follows {c}: select {c} (its box) to move it.', { b: a.name, c: parent.name }), true);
+      return msg(a.connected ? 'This bone is connected to its parent: it can only rotate.' : 'This bone is locked in this lab: it can only rotate.', true);
+    }
     names = free;
   }
   if (!S.pointer) S.pointer = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };

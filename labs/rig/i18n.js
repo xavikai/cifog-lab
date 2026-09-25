@@ -94,6 +94,7 @@ export default {
   "Global": {"ca": "Global", "es": "Global"},
   "Cancelled": {"ca": "Cancel·lat", "es": "Cancelado"},
   "This bone is connected to its parent: it can only rotate.": {"ca": "Aquest os està connectat al seu pare: només pot girar.", "es": "Este hueso está conectado a su padre: solo puede girar."},
+  "{b} follows {c}: select {c} (its box) to move it.": {"ca": "{b} segueix {c}: selecciona {c} (la seva caixa) per moure'l.", "es": "{b} sigue a {c}: selecciona {c} (su caja) para moverlo."},
   "This bone is locked in this lab: it can only rotate.": {"ca": "Aquest os està bloquejat en aquest lab: només pot girar.", "es": "Este hueso está bloqueado en este lab: solo puede girar."},
   "Rotation cleared.": {"ca": "Rotació esborrada.", "es": "Rotación borrada."},
   "Location cleared.": {"ca": "Posició esborrada.", "es": "Posición borrada."},
