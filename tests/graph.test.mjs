@@ -4,7 +4,7 @@ import {DEFAULT_LINKS,COORDINATES,canConnect,connect,resolveGraph,coordinateRout
 import {mappingMatrix} from '../labs/materials/mapping.js';
 import {Vector3} from '../vendor/three.module.js';
 test('default graph routes color, roughness and normal through the shader',()=>{
- assert.deepEqual(resolveGraph(DEFAULT_LINKS),{visible:true,base:'color',rough:'rough',metallic:null,normal:'normalTex'});
+ assert.deepEqual(resolveGraph(DEFAULT_LINKS),{visible:true,base:'color',rough:'rough',roughInvert:false,metallic:null,alpha:null,normal:'normalTex',bump:null,displacement:null});
 });
 test('a normal texture cannot skip the Normal Map conversion',()=>{
  assert.equal(canConnect('normalTex:color','bsdf:normal'),false);
@@ -56,4 +56,17 @@ test('X and Y rotations transform Z, Vector ignores location, Normal uses invers
 test('zero and negative scales remain finite and mirror or collapse the coordinate',()=>{
  close(new Vector3(1,2,3).applyMatrix4(mappingMatrix('Point',[0,0,0],[0,0,0],[-2,0,1])).toArray(),[-2,0,3]);
  close(new Vector3(1,2,3).applyMatrix4(mappingMatrix('Texture',[0,0,0],[0,0,0],[0,2,1])).toArray(),[0,1,3]);
+});
+test('Invert passes the image through and marks it inverted',()=>{
+ const links={...DEFAULT_LINKS};assert.equal(connect(links,'rough:color','invert:color'),true);
+ assert.equal(connect(links,'invert:color','bsdf:roughness'),true);
+ assert.equal(resolveGraph(links).rough,'rough');assert.equal(resolveGraph(links).roughInvert,true);
+ assert.equal(canConnect('invert:color','invert:color'),false);
+});
+test('Bump replaces the normal map and displacement goes to the output',()=>{
+ const links={...DEFAULT_LINKS};connect(links,'height:color','bump:height');connect(links,'bump:normal','bsdf:normal');
+ assert.equal(resolveGraph(links).normal,null);assert.equal(resolveGraph(links).bump,'height');
+ assert.equal(canConnect('height:color','output:displacement'),false);
+ connect(links,'height:color','disp:height');connect(links,'disp:displacement','output:displacement');
+ assert.equal(resolveGraph(links).displacement,'height');
 });

@@ -12,7 +12,7 @@ export function mappingMatrix(type,location,rotation,scale){
 }
 
 export function installCoordinates(material){
- const uniforms={labModes:{value:new THREE.Vector4(2,2,2,2)},labMapped:{value:new THREE.Vector4()},labFields:{value:new THREE.Vector4(-1,-1,-1,-1)},labVector:{value:new THREE.Vector3()},labLocation:{value:new THREE.Vector3()},labRotation:{value:new THREE.Vector3()},labScale:{value:new THREE.Vector3(1,1,1)},labType:{value:0},labBoundsMin:{value:new THREE.Vector3()},labBoundsSize:{value:new THREE.Vector3(1,1,1)},labResolution:{value:new THREE.Vector2(1,1)}};
+ const uniforms={labModes:{value:new THREE.Vector4(2,2,2,2)},labMapped:{value:new THREE.Vector4()},labModes2:{value:new THREE.Vector4(2,2,2,2)},labMapped2:{value:new THREE.Vector4()},labFields:{value:new THREE.Vector4(-1,-1,-1,-1)},labVector:{value:new THREE.Vector3()},labLocation:{value:new THREE.Vector3()},labRotation:{value:new THREE.Vector3()},labScale:{value:new THREE.Vector3(1,1,1)},labType:{value:0},labBoundsMin:{value:new THREE.Vector3()},labBoundsSize:{value:new THREE.Vector3(1,1,1)},labResolution:{value:new THREE.Vector2(1,1)}};
  material.onBeforeCompile=shader=>{
   Object.assign(shader.uniforms,uniforms);
   const varying='varying vec3 labPosition, labNormal, labWorldPosition, labWorldNormal, labViewPosition; varying vec2 labMeshUV;';
@@ -24,7 +24,7 @@ export function installCoordinates(material){
    labViewPosition=(modelViewMatrix*vec4(position,1.0)).xyz;`);
   shader.fragmentShader=varying+'\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <uv_pars_fragment>',`#include <uv_pars_fragment>
-   uniform vec4 labModes,labMapped,labFields;
+   uniform vec4 labModes,labMapped,labModes2,labMapped2,labFields;
    uniform vec3 labVector,labLocation,labRotation,labScale,labBoundsMin,labBoundsSize;
    uniform vec2 labResolution;
    uniform int labType;
@@ -63,14 +63,18 @@ export function installCoordinates(material){
    #define vRoughnessMapUv labUV(labModes.y,labMapped.y)
    #define vMetalnessMapUv labUV(labModes.z,labMapped.z)
    #define vNormalMapUv labUV(labModes.w,labMapped.w)
+   #define vAlphaMapUv labUV(labModes2.x,labMapped2.x)
+   #define vBumpMapUv labUV(labModes2.y,labMapped2.y)
   `);
  };
- material.customProgramCacheKey=()=> 'cifog-coordinates-v1';
+ material.customProgramCacheKey=()=> 'cifog-coordinates-v2';
  uniforms.labMappingMatrix={value:new THREE.Matrix4()};
  return {
   update(links,values,graph,geometry){
    const routes=[graph.base,graph.rough,graph.metallic,graph.normal].map(id=>coordinateRoute(links,id));
    uniforms.labModes.value.fromArray(routes.map(r=>r.source));uniforms.labMapped.value.fromArray(routes.map(r=>Number(r.mapped)));
+   const routes2=[graph.alpha,graph.bump,null,null].map(id=>coordinateRoute(links,id));
+   uniforms.labModes2.value.fromArray(routes2.map(r=>r.source));uniforms.labMapped2.value.fromArray(routes2.map(r=>Number(r.mapped)));
    uniforms.labFields.value.fromArray(['input','location','rotation','scale'].map(key=>COORDINATES.indexOf(links[`mapping:${key}`]?.split(':')[1])));
    for(const key of ['vector','location','rotation','scale'])uniforms['lab'+key[0].toUpperCase()+key.slice(1)].value.fromArray(['X','Y','Z'].map(axis=>values[key+axis]*(key==='rotation'?Math.PI/180:1)));
    uniforms.labType.value=['Point','Texture','Vector','Normal'].indexOf(values.mappingType);
