@@ -14,6 +14,7 @@ A home for small interactive activities that support CIFOG classroom presentatio
 - Baking Lab: https://xavikai.github.io/cifog-lab/labs/baking/
 - Lighting Lab: https://xavikai.github.io/cifog-lab/labs/lighting/
 - Topology Lab: https://xavikai.github.io/cifog-lab/labs/topology/
+- Trim Sheet Lab: https://xavikai.github.io/cifog-lab/labs/trim-sheet/
 
 ## Available labs
 
@@ -53,6 +54,8 @@ Each step is checked automatically, can show a solution and can be undone.
 
 **Topology Lab** (`labs/topology/`) teaches mesh topology in a Blender-style Edit Mode on small meshes. It has vertex, edge and face select modes, click and Shift-click selection, Alt-click edge loops, A / Alt A, Move (G with X / Y / Z), Loop Cut and Slide (Ctrl R, with a live preview of the ring), Connect Vertex Path (J), Dissolve Vertices and Edges (X), Fill (F), Tris to Quads (Alt J), Edge Crease (Shift E), Smooth Vertices, Subdivision Surface (Ctrl 0–3) and snapping to a high poly. Face-type and pole overlays and a Statistics panel read the mesh. The mesh core (`mesh.js`, no DOM) has edge rings and loops, connect, dissolve, fill, and Catmull-Clark subdivision with creases. There are four stages. **Read the mesh**: no n-gons, triangles into quads, find the poles of a bottle cap. **Subdivision Surface**: pinches, holding edges (corner loss under 12%), crease instead of loops. **Deformation**: loops at the elbow of an armature-bent arm, slide the loops to where it bends, Preserve Volume (linear blending vs dual quaternions). **Retopology**: fill the holes of a quad cage on a sculpted stone, snap it to the surface, even out its density.
 
+**Trim Sheet Lab** (`labs/trim-sheet/`) explains trim sheets with a procedural medieval sheet (wood planks, stone course, wood beam, stone molding, iron strap, stone plinth, wood and stone bevels; 1024 px at 512 px/m, 8 px padding). A Blender-style UV Editor (the sheet repeating along U, strip names, island selection in 2D or on the model, G / S / R with X / Y, Ctrl snapping, typed values, Pivot, Follow Active Quads, Align Rotation) sits next to a live 3D view of a wall, a column, a chest and a chamfered beam. A side panel reads each island: texel density, strip, straight, upright, not stretched. Five stages: **Read a trim sheet** (unique, tileable and trim compared; which strip is which; only U repeats); **Design the sheet** (heights from texel density, fill 1024 px, padding for mipmaps with a mip preview); **UVs to the strips** (fit a beam, stack and stagger stone rows, straighten a column with Follow Active Quads, equal texel density); **Bevels with trims** (chamfers on a bevel strip, Flat / Smooth / Smooth by Angle / Weighted Normal, chamfer width equal to the strip height); **One sheet, many props** (Fit to Trim, a texture budget of materials, memory and density, re-skinning every prop with another version of the sheet).
+
 The Blender labs follow Blender conventions where it helps transfer: Material Lab links are made by dragging from an output to an input (compatible inputs light up), removed or moved by dragging a connected input away, and cut with Ctrl + right-drag; the mouse wheel zooms, the middle button pans and Home fits all nodes; values use Blender-style slider bars.
 
 **Languages.** Every page has an EN / CA / ES switch in the header. The explanations, instructions, feedback and hints are translated into Catalan and Spanish; the interface names and technical terms (Blender's Mark Seam, UV Editor, Principled BSDF…, C# keywords and code) stay in English so they match the real software, and real C# compiler messages (with their CS codes) stay in English with a translated hint. The choice is saved in the browser; the first visit follows the browser language. The shared engine is `i18n.js`; each page has its own dictionary (`home.i18n.js`, `labs/<name>/i18n.js`) whose keys are the English texts, with `{placeholders}` for changing values.
@@ -86,12 +89,13 @@ The tests cover material graph connections, Mapping transformations, valid or co
 - `docs/csharp-teaching-notes.md`: level sequence and teaching notes for Code Lab.
 - `labs/animation/`: Animation Lab. `fcurve.js` (F-curve evaluation and handles), `stages.js`, `app.js`.
 - `labs/topology/`: Topology Lab. `mesh.js` (mesh operations and subdivision), `models.js` (models and measurements), `stages.js`, `app.js`.
+- `labs/trim-sheet/`: Trim Sheet Lab. `sheet.js` (strips and layout), `paint.js` (the painted sheet), `uv.js` (island maths, checks and normals), `props.js` (the props and their islands), `stages.js`, `app.js`.
 - `labs/lighting/`: Lighting Lab. `light.js` (light physics, meter, blackbody, HDRIs, False Color), `scene.js` (set, lights, progressive renderer), `stages.js`, `app.js`.
 - `labs/baking/`: Baking Lab. `mesh.js` (high and low poly crate), `bvh.js` (ray caster), `bake.js` (normal, AO, diffuse, world normal, ID, curvature, position and thickness bakes, cage, swizzle, margin), `stages.js`, `app.js`.
 - `labs/photo/`: Photo Lab. `optics.js` (exposure, depth of field, motion blur, Blender conversions), `photo.js` (scene and accumulation renderer), `dslr.js` (cut-away camera), `stages.js`, `app.js`.
 - `labs/rig/`: Rig Lab. `rig.js` (bones, FK, IK solver with pole target), `stages.js`, `app.js`.
 - `labs/skin-weights/`: Skin Weights Lab. `weights.js` (meshes, bones, skinning, brush and Weights menu operators), `stages.js`, `app.js`.
-- `docs/animation-teaching-notes.md`, `docs/csharp-objects-teaching-notes.md`, `docs/skin-weights-teaching-notes.md`, `docs/rig-teaching-notes.md`, `docs/photo-teaching-notes.md`, `docs/baking-teaching-notes.md`, `docs/lighting-teaching-notes.md`, `docs/topology-teaching-notes.md`: teaching notes for the newer labs.
+- `docs/animation-teaching-notes.md`, `docs/csharp-objects-teaching-notes.md`, `docs/skin-weights-teaching-notes.md`, `docs/rig-teaching-notes.md`, `docs/photo-teaching-notes.md`, `docs/baking-teaching-notes.md`, `docs/lighting-teaching-notes.md`, `docs/topology-teaching-notes.md`, `docs/trimsheet-teaching-notes.md`: teaching notes for the newer labs.
 - `server.mjs`: local preview server only.
 
 The `.nojekyll` file allows GitHub Pages to serve the static files directly. There is no build step, CDN dependency, analytics, account requirement or backend. Images that students open in Material Lab stay in their browser.
