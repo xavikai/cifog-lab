@@ -1,8 +1,10 @@
-// Animation Lab: a bouncing ball with a Blender-style Graph Editor and Timeline.
+// Animation Lab: a rigged bouncing ball in a 3D viewport, with a Blender-style Graph Editor and Timeline.
+import * as THREE from 'three';
+import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { recalcHandles, evaluate, moveKey, moveHandle, key, contacts, tops, intervals, hangTime, matchScore, INTERPOLATIONS, HANDLE_TYPES } from './fcurve.js';
-import { STAGES, CHANNELS, FPS, RANGE, REFERENCE, startData, cloneData, scaleX, scaleZ, firstBounce } from './stages.js';
+import { STAGES, CHANNELS, FPS, RANGE, REFERENCE, BALL, startData, cloneData, shape, channelOf, lowestPoint, firstBounce } from './stages.js?v=2';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js';
+import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -14,13 +16,13 @@ const store = {
 const HANDLE_COLORS = { FREE: '#2b2b2b', ALIGNED: '#d56fd1', VECTOR: '#59c35b', AUTO: '#e8c14a', AUTO_CLAMPED: '#d9674a' };
 const HANDLE_LABELS = { FREE: 'Free', ALIGNED: 'Aligned', VECTOR: 'Vector', AUTO: 'Automatic', AUTO_CLAMPED: 'Auto Clamped' };
 const INTERP_LABELS = { CONSTANT: 'Constant', LINEAR: 'Linear', BEZIER: 'Bezier' };
-const BALL_R = 0.5;
 
 const S = {
   stageIndex: store.get('stage', 0), step: 0, data: null, frame: 1, start: RANGE[0], end: RANGE[1],
   playing: false, active: 'locZ', hidden: new Set(), activeKey: null,
   undo: [], redo: [], done: store.get('done', {}), toggles: { path: true, ghosts: false, ref: false },
   view: null, drag: null, grab: null, hover: false,
+  bone: 'Root', override: {}, vgrab: null, tlGrab: null, area: null, vpointer: null,
 };
 const stage = () => STAGES[S.stageIndex];
 
@@ -33,11 +35,11 @@ function loadData() {
   S.activeKey = null; S.undo = []; S.redo = [];
 }
 function pushUndo() { S.undo.push(JSON.stringify(S.data)); if (S.undo.length > 80) S.undo.shift(); S.redo = []; }
-function restore(json) { S.data = JSON.parse(json); S.activeKey = null; changed(false); }
+function restore(json) { S.data = JSON.parse(json); S.activeKey = null; S.override = {}; changed(false); }
 function undo() { if (!S.undo.length) return msg('Nothing to undo.'); S.redo.push(JSON.stringify(S.data)); restore(S.undo.pop()); msg('Undo'); }
 function redo() { if (!S.redo.length) return; S.undo.push(JSON.stringify(S.data)); restore(S.redo.pop()); msg('Redo'); }
 
-const editable = id => !CHANNELS[id].locked && !(id === 'sclX' && S.data.maintainVolume);
+const editable = id => !CHANNELS[id].locked;
 const visibleChannels = () => stage().channels.filter(id => !S.hidden.has(id) && S.data.channels[id]);
 function allKeys(filter = () => true) {
   const out = [];
@@ -46,8 +48,6 @@ function allKeys(filter = () => true) {
 }
 const selected = () => allKeys(editable).filter(e => e.k.select);
 function valueAt(id, f) {
-  if (id === 'sclX') return scaleX(S.data, f);
-  if (id === 'sclZ') return scaleZ(S.data, f);
   const k = S.data.channels[id];
   return k && k.length ? evaluate(k, f) : 0;
 }
@@ -76,65 +76,202 @@ function niceStep(range, px, minPx) {
   return 10 * p;
 }
 
-// ─── Camera view (the ball) ─────────────────────────────────────────────────
-const viewCanvas = $('#view');
-function drawView() {
-  const { ctx, w, h } = fitCanvas(viewCanvas);
-  const X0 = -0.9, X1 = 10.2, Z0 = -0.5, Z1 = 5.4;
-  const sc = Math.min(w / (X1 - X0), h / (Z1 - Z0));
-  const ox = (w - (X1 - X0) * sc) / 2 - X0 * sc, oy = h - ((h - (Z1 - Z0) * sc) / 2) + Z0 * sc;
-  const px = x => ox + x * sc, pz = z => oy - z * sc;
-  ctx.fillStyle = '#3d3d3d'; ctx.fillRect(0, 0, w, h);
-  // floor and grid (1 m)
-  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 1;
-  for (let x = Math.ceil(X0); x <= X1; x++) { ctx.beginPath(); ctx.moveTo(px(x), pz(0)); ctx.lineTo(px(x), pz(Z1)); ctx.stroke(); }
-  for (let z = 1; z <= Z1; z++) { ctx.beginPath(); ctx.moveTo(px(X0), pz(z)); ctx.lineTo(px(X1), pz(z)); ctx.stroke(); }
-  ctx.fillStyle = '#2f2f2f'; ctx.fillRect(0, pz(0), w, h - pz(0));
-  ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, pz(0)); ctx.lineTo(w, pz(0)); ctx.stroke();
-  ctx.fillStyle = '#9a9a9a'; ctx.font = '10px Inter, sans-serif';
-  for (let z = 1; z <= 5; z++) ctx.fillText(`${z} m`, px(X0) + 4, pz(z) - 3);
-  const pose = f => ({ x: valueAt('locX', f), z: Math.max(0, valueAt('locZ', f)), sx: scaleX(S.data, f), sz: scaleZ(S.data, f) });
-  // reference ball (physics)
-  const showRef = S.toggles.ref && stage().id === 'weight';
-  if (showRef) {
-    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#ffbf00aa'; ctx.lineWidth = 1.5; ctx.beginPath();
-    for (let f = S.start; f <= S.end; f += 0.5) { const x = px(valueAt('locX', f)), y = pz(REFERENCE(f) + BALL_R); f === S.start ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
-    ctx.stroke(); ctx.setLineDash([]);
+// ─── 3D Viewport: the rigged ball ───────────────────────────────────────────
+// three.js axes: x = Blender X, y = Blender Z (up), z = -Blender Y.
+const viewCanvas = $('#view'), viewHost = $('#view-host');
+const renderer3 = new THREE.WebGLRenderer({ canvas: viewCanvas, antialias: true, alpha: true });
+renderer3.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+const scene3 = new THREE.Scene();
+const cam3 = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
+scene3.add(new THREE.HemisphereLight(0xffffff, 0x505050, 1.9));
+const sun3 = new THREE.DirectionalLight(0xffffff, 1.6); sun3.position.set(-3, 8, 6); scene3.add(sun3);
+const floorTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#5a5a5a'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#525252'; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(20, 8); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; return t; })();
+const floor3 = new THREE.Mesh(new THREE.PlaneGeometry(40, 16), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95 }));
+floor3.rotation.x = -Math.PI / 2; floor3.position.set(4.5, 0, -4); scene3.add(floor3);
+const backTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#44474c'; g.fillRect(0, 0, 512, 128); g.strokeStyle = '#6d727a'; g.lineWidth = 1; for (let x = 0; x <= 512; x += 512 / 16) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 128); g.stroke(); } for (let y = 0; y <= 128; y += 128 / 4) { g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke(); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const back3 = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshStandardMaterial({ map: backTex, roughness: 1 }));
+back3.position.set(4.5, 2, -1.2); scene3.add(back3); // a 1 m grid wall behind the ball, to read heights
+const ballTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d'); const cols = ['#f0a020', '#fff3d6', '#e0582a', '#fff3d6']; for (let i = 0; i < 8; i++) { g.fillStyle = cols[i % 4]; g.fillRect(i * 32, 0, 32, 128); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const ball3 = new THREE.Mesh(new THREE.SphereGeometry(0.5, 40, 24), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.45 }));
+scene3.add(ball3);
+const shadow3 = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+shadow3.rotation.x = -Math.PI / 2; shadow3.position.y = 0.005; scene3.add(shadow3);
+// Rig controls (custom shapes drawn in front, as bone shapes in Blender)
+const CTRL_COLORS = { Root: 0x4aa3ff, SS_Top: 0x7ee07e, SS_Bottom: 0xe07ee0 };
+function ctrlShape(bone) {
+  let g;
+  if (bone === 'Root') { g = new THREE.EdgesGeometry(new THREE.RingGeometry(0.62, 0.7, 40)); }
+  else {
+    const s = new THREE.Shape(), d = bone === 'SS_Top' ? 1 : -1;
+    s.moveTo(-0.22, 0); s.lineTo(0.22, 0); s.lineTo(0, 0.22 * d); s.closePath();
+    g = new THREE.EdgesGeometry(new THREE.ShapeGeometry(s));
   }
-  if (S.toggles.ghosts) for (let f = S.start; f <= S.end; f += 2) drawBall(ctx, pose(f), px, pz, sc, 0.13);
-  if (S.toggles.path) {
-    const keyFrames = new Set(S.data.channels.locZ.map(k => k.frame));
-    ctx.strokeStyle = '#ffffff30'; ctx.lineWidth = 1; ctx.beginPath();
-    for (let f = S.start; f <= S.end; f++) { const p = pose(f), x = px(p.x), y = pz(p.z + BALL_R * p.sz); f === S.start ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
-    ctx.stroke();
-    for (let f = S.start; f <= S.end; f++) {
-      const p = pose(f), x = px(p.x), y = pz(p.z + BALL_R * p.sz), isKey = keyFrames.has(f);
-      ctx.fillStyle = f === Math.round(S.frame) ? '#6aa8ff' : isKey ? '#ffd24a' : f < S.frame ? '#d8d8d8' : '#9c9c9c';
-      ctx.beginPath(); ctx.arc(x, y, isKey ? 3.4 : 2, 0, Math.PI * 2); ctx.fill();
+  const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: CTRL_COLORS[bone], depthTest: false, transparent: true }));
+  m.renderOrder = 10;
+  if (bone === 'Root') m.rotation.x = -Math.PI / 2;
+  const pick = new THREE.Mesh(bone === 'Root' ? new THREE.RingGeometry(0.5, 0.8, 24) : new THREE.CircleGeometry(0.22, 16), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
+  pick.userData.bone = bone; m.add(pick);
+  scene3.add(m); return m;
+}
+const ctrls3 = { Root: ctrlShape('Root'), SS_Top: ctrlShape('SS_Top'), SS_Bottom: ctrlShape('SS_Bottom') };
+const pathDots = new THREE.Group(), ghosts = new THREE.Group(), refGroup = new THREE.Group(); scene3.add(pathDots, ghosts, refGroup);
+const dotGeo = new THREE.SphereGeometry(0.035, 8, 6), keyDotGeo = new THREE.SphereGeometry(0.06, 10, 8);
+const refBall = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(0.5, 16, 10)), new THREE.LineDashedMaterial({ color: 0xffbf00, dashSize: 0.06, gapSize: 0.04 }));
+refBall.computeLineDistances(); refGroup.add(refBall);
+const controls3 = new OrbitControls(cam3, viewCanvas);
+controls3.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: null };
+controls3.addEventListener('change', () => render3());
+viewHost.addEventListener('pointerdown', e => { controls3.mouseButtons.LEFT = e.button === 0 && e.altKey ? THREE.MOUSE.ROTATE : null; }, true);
+function frameView3(side = false) {
+  const fit = Math.max(1, 1.55 / Math.max(0.6, cam3.aspect));
+  controls3.target.set(4.2, 2.0, 0);
+  cam3.position.set(side ? 4.5 : 2.6, side ? 1.7 : 2.6, (side ? 14 : 13.2) * fit);
+  cam3.up.set(0, 1, 0); cam3.lookAt(controls3.target); controls3.update(); render3();
+}
+let framed3 = false;
+function resize3() {
+  const r = viewHost.getBoundingClientRect(); if (!r.width || !r.height) return;
+  renderer3.setSize(r.width, r.height, false); cam3.aspect = r.width / r.height; cam3.updateProjectionMatrix();
+  if (!framed3) { framed3 = true; frameView3(); } else render3();
+}
+const pose = f => { const sh = shape(S.data, f, Math.round(f) === Math.round(S.frame) && !S.playing ? S.override : {}); return { x: valueAt('locX', f), ...sh }; };
+let lastPathKey = '';
+function drawView() {
+  const p = pose(S.frame);
+  ball3.position.set(p.x, p.center, 0); ball3.scale.set(p.sx, p.sz, p.sx);
+  const sh = Math.max(0.25, 1 - Math.max(0, p.bottom) / 6);
+  shadow3.position.x = p.x; shadow3.scale.setScalar(p.sx * (0.6 + 0.4 * sh)); shadow3.material.opacity = 0.35 * sh;
+  const anim = stage().channels;
+  ctrls3.Root.position.set(p.x, Math.max(0, p.root) + 0.01, 0);
+  ctrls3.SS_Top.position.set(p.x, p.top + 0.08, 0.02); ctrls3.SS_Bottom.position.set(p.x, p.bottom - 0.08, 0.02);
+  ctrls3.SS_Top.visible = anim.includes('topZ'); ctrls3.SS_Bottom.visible = anim.includes('botZ');
+  for (const [b, m] of Object.entries(ctrls3)) { const sel = S.bone === b; m.material.color.set(sel ? 0xffffff : CTRL_COLORS[b]); m.scale.setScalar(sel ? 1.15 : 1); }
+  // motion path, ghosts and reference only need rebuilding when the animation changes
+  const key = JSON.stringify([S.data.channels, S.start, S.end, S.toggles, Math.round(S.frame)]);
+  if (key !== lastPathKey) {
+    lastPathKey = key;
+    pathDots.clear(); ghosts.clear();
+    if (S.toggles.path) {
+      const keyFrames = new Set(S.data.channels.locZ.map(k => k.frame));
+      const pts = [];
+      for (let f = S.start; f <= S.end; f++) {
+        const q = shape(S.data, f), x = valueAt('locX', f), isKey = keyFrames.has(f);
+        pts.push(new THREE.Vector3(x, q.center, 0));
+        const col = f === Math.round(S.frame) ? 0x6aa8ff : isKey ? 0xffd24a : f < S.frame ? 0xdddddd : 0x9c9c9c;
+        const m = new THREE.Mesh(isKey ? keyDotGeo : dotGeo, new THREE.MeshBasicMaterial({ color: col, depthTest: false })); m.renderOrder = 5;
+        m.position.set(x, q.center, 0.55); pathDots.add(m);
+      }
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map(v => v.clone().setZ(0.55))), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, depthTest: false }));
+      pathDots.add(line);
+    }
+    if (S.toggles.ghosts) for (let f = S.start; f <= S.end; f += 2) {
+      const q = shape(S.data, f), g = new THREE.Mesh(ball3.geometry, new THREE.MeshBasicMaterial({ color: 0xf0a020, transparent: true, opacity: 0.12, depthWrite: false }));
+      g.position.set(valueAt('locX', f), q.center, 0); g.scale.set(q.sx, q.sz, q.sx); ghosts.add(g);
+    }
+    refGroup.visible = S.toggles.ref && stage().id === 'weight';
+    if (refGroup.visible) {
+      refGroup.children.filter(c => c !== refBall).forEach(c => refGroup.remove(c));
+      const pts = []; for (let f = S.start; f <= S.end; f += 0.5) pts.push(new THREE.Vector3(valueAt('locX', f), REFERENCE(f) + BALL / 2, 0.5));
+      const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0xffbf00, dashSize: 0.12, gapSize: 0.08 })); l.computeLineDistances(); refGroup.add(l);
     }
   }
-  if (showRef) { const r = { x: valueAt('locX', S.frame), z: REFERENCE(S.frame), sx: 1, sz: 1 }; drawBall(ctx, r, px, pz, sc, 0, '#ffbf00'); }
-  // shadow + ball
-  const p = pose(S.frame);
-  const sh = Math.max(0.25, 1 - p.z / 6);
-  ctx.fillStyle = `rgba(0,0,0,${0.35 * sh})`; ctx.beginPath(); ctx.ellipse(px(p.x), pz(0) + 2, BALL_R * sc * p.sx * sh, 4 * sh, 0, 0, Math.PI * 2); ctx.fill();
-  drawBall(ctx, p, px, pz, sc, 1);
+  if (refGroup.visible) refBall.position.set(valueAt('locX', S.frame), REFERENCE(S.frame) + BALL / 2, 0);
   const secs = ((S.frame - 1) / FPS).toFixed(2);
-  $('#view-overlay').innerHTML = `<b>${esc(tr('Frame {n}', { n: Math.round(S.frame) }))}</b> · ${secs} s<br>${esc(tr('Height {v} m', { v: p.z.toFixed(2) }))} · ${esc(tr('Scale {x} × {z}', { x: p.sx.toFixed(2), z: p.sz.toFixed(2) }))}`;
+  $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(${Math.round(S.frame)}) Armature : <b>${esc(S.bone)}</b></div><div>${secs} s · ${esc(tr('Height {v} m', { v: Math.max(0, p.bottom).toFixed(2) }))} · ${esc(tr('Scale {x} × {z}', { x: p.sx.toFixed(2), z: p.sz.toFixed(2) }))}</div>${Object.keys(S.override).length ? `<div class="unkeyed">${esc(t('Unkeyed change: press I to keep it'))}</div>` : ''}`;
+  render3();
 }
-function drawBall(ctx, p, px, pz, sc, alpha, outline) {
-  const cx = px(p.x), cy = pz(p.z + BALL_R * p.sz), rx = BALL_R * sc * p.sx, ry = BALL_R * sc * p.sz;
-  ctx.save();
-  if (outline) { ctx.strokeStyle = outline; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return; }
-  ctx.globalAlpha = alpha;
-  const g = ctx.createRadialGradient(cx - rx * 0.35, cy - ry * 0.4, rx * 0.1, cx, cy, Math.max(rx, ry));
-  g.addColorStop(0, '#ffe08a'); g.addColorStop(0.55, '#f0a020'); g.addColorStop(1, '#a75b08');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-  if (alpha === 1) {
-    ctx.strokeStyle = '#6b3a05'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = '#ffffff70'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, cy, rx * 0.35, ry, 0, -Math.PI / 2, Math.PI / 2); ctx.stroke();
-  }
-  ctx.restore();
+function render3() { renderer3.render(scene3, cam3); }
+
+// Selecting and posing the controls in the viewport
+const ray3 = new THREE.Raycaster();
+function pickCtrl(e) {
+  const r = viewCanvas.getBoundingClientRect();
+  ray3.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam3);
+  const picks = Object.values(ctrls3).filter(m => m.visible).map(m => m.children[0]);
+  const hit = ray3.intersectObjects(picks, false)[0];
+  if (hit) return hit.object.userData.bone;
+  if (ray3.intersectObject(ball3, false).length) return 'Root';
+  return null;
+}
+function selectBone(bone) {
+  S.bone = bone;
+  const ch = channelOf(bone);
+  if (stage().channels.includes(ch)) { S.active = ch; S.hidden.delete(ch); }
+  renderAll();
+}
+viewCanvas.addEventListener('pointerdown', e => {
+  closeMenu();
+  if (S.vgrab) { e.preventDefault(); endVGrab(e.button === 0); return; }
+  if (e.button !== 0 || e.altKey) return;
+  const b = pickCtrl(e);
+  if (b) selectBone(b);
+});
+viewCanvas.addEventListener('pointermove', e => {
+  const r = viewCanvas.getBoundingClientRect(); S.vpointer = { x: e.clientX - r.left, y: e.clientY - r.top };
+  if (S.vgrab) updateVGrab();
+});
+viewCanvas.addEventListener('contextmenu', e => { if (S.vgrab) { e.preventDefault(); endVGrab(false); } });
+function startVGrab() {
+  const ch = channelOf(S.bone);
+  if (!stage().channels.includes(ch)) return msg('This control is not animated in this stage.', true);
+  if (!S.vpointer) S.vpointer = { x: viewCanvas.clientWidth / 2, y: viewCanvas.clientHeight / 2 };
+  const start = S.override[ch] ?? +valueAt(ch, S.frame).toFixed(3);
+  const p = pose(S.frame), world = new THREE.Vector3(p.x, p.center, 0);
+  const dist = cam3.position.distanceTo(world), wpp = 2 * dist * Math.tan(cam3.fov * Math.PI / 360) / viewCanvas.clientHeight;
+  S.vgrab = { ch, start, y0: S.vpointer.y, wpp, num: '', prev: { ...S.override } };
+  viewHost.classList.add('modal'); updateVGrab();
+}
+function updateVGrab() {
+  const g = S.vgrab; if (!g) return;
+  const typed = g.num !== '' && g.num !== '-' && !isNaN(+g.num) ? +g.num : null;
+  const dz = typed != null ? typed : -(S.vpointer.y - g.y0) * g.wpp;
+  S.override = { ...g.prev, [g.ch]: Math.round((g.start + dz) * 1000) / 1000 };
+  $('#view-readout').hidden = false;
+  $('#view-readout').textContent = `${t('Move')}  Z ${dz >= 0 ? '+' : ''}${dz.toFixed(2)} m${g.num ? `  [${g.num}]` : ''} · ${t('only Z in this lab')}`;
+  drawView(); renderSidebar();
+}
+function endVGrab(ok) {
+  const g = S.vgrab; if (!g) return;
+  S.vgrab = null; viewHost.classList.remove('modal'); $('#view-readout').hidden = true;
+  if (!ok) S.override = g.prev;
+  else if (Math.abs((S.override[g.ch] ?? 0) - valueAt(g.ch, S.frame)) < 1e-4) delete S.override[g.ch];
+  else msg('Moved. Press I to insert a keyframe, or the change is lost when the frame changes.');
+  drawView(); renderSidebar();
+}
+function vgrabKey(e) {
+  const g = S.vgrab, k = e.key;
+  if (k === 'Escape') return endVGrab(false);
+  if (k === 'Enter' || k === ' ') return endVGrab(true);
+  if (/^[0-9.]$/.test(k)) g.num += k;
+  else if (k === '-') g.num = g.num.startsWith('-') ? g.num.slice(1) : '-' + g.num;
+  else if (k === 'Backspace') g.num = g.num.slice(0, -1);
+  else if (k === 'z' || k === 'Z') return;
+  else return;
+  updateVGrab();
+}
+// I in the viewport: key the selected control at the current frame, with the pose it has now
+function keyControl() {
+  const ch = channelOf(S.bone);
+  if (!stage().channels.includes(ch)) return msg('This control is not animated in this stage.', true);
+  const f = Math.round(S.frame), ks = S.data.channels[ch], v = +(S.override[ch] ?? valueAt(ch, f)).toFixed(3);
+  pushUndo();
+  let k = ks.find(q => q.frame === f);
+  if (k) moveKey(k, f, v); else { k = key(f, v); ks.push(k); }
+  delete S.override[ch];
+  clearSelection(); k.select = true; S.activeKey = k; S.active = ch;
+  recalcHandles(ks);
+  msg(tr('Inserted a keyframe on {c} at frame {n}.', { c: `${S.bone} · Z Location`, n: f })); changed(true);
+}
+function clearControl() {
+  const ch = channelOf(S.bone);
+  if (!stage().channels.includes(ch)) return;
+  if (ch === 'locZ') return msg('Alt G on the Root would drop the ball to the floor: move it with G instead.');
+  S.override = { ...S.override, [ch]: 0 }; drawView(); renderSidebar(); msg('Location cleared. Press I to key it.');
+}
+function dropOverrides() {
+  const lost = Object.entries(S.override).some(([ch, v]) => Math.abs(v - valueAt(ch, S.frame)) > 1e-3);
+  S.override = {};
+  if (lost) msg('The unkeyed change was discarded (as in Blender). Press I before changing frame to keep a pose.', true);
 }
 
 // ─── Graph Editor ───────────────────────────────────────────────────────────
@@ -153,7 +290,6 @@ function frameAll(onlySelected = false) {
     if (id === 'locX' && !onlySelected && visibleChannels().length > 1) continue; // X Location is only the travel
     for (const p of [k, k.left, k.right]) { f0 = Math.min(f0, p.frame); f1 = Math.max(f1, p.frame); v0 = Math.min(v0, p.value); v1 = Math.max(v1, p.value); }
   }
-  if (visibleChannels().includes('sclX') && S.data.maintainVolume && !onlySelected) { v0 = Math.min(v0, 0.5); v1 = Math.max(v1, 1.5); }
   if (!isFinite(f0)) { f0 = S.start; f1 = S.end; v0 = 0; v1 = 4; }
   if (!onlySelected) { f0 = Math.min(f0, S.start); f1 = Math.max(f1, S.end); }
   if (f1 - f0 < 6) { f0 -= 3; f1 += 3; }
@@ -363,7 +499,7 @@ function setHandle(type) {
 }
 function insertKey() {
   const id = S.active;
-  if (!editable(id)) return msg(CHANNELS[id].locked ? 'This channel is locked in this lab.' : 'X Scale is calculated by Maintain Volume.', true);
+  if (!editable(id)) return msg('This channel is locked in this lab.', true);
   const f = Math.round(S.frame), ks = S.data.channels[id];
   pushUndo();
   let k = ks.find(q => q.frame === f);
@@ -425,16 +561,20 @@ document.addEventListener('pointerdown', e => { if (!menuEl.hidden && !menuEl.co
 // ─── Channels list and sidebar ──────────────────────────────────────────────
 function renderChannels() {
   const box = $('#channels');
-  box.innerHTML = `<div class="ch-group">${esc(t('Ball · Object Transforms'))}</div>` + stage().channels.map(id => {
-    const ch = CHANNELS[id], driven = id === 'sclX' && S.data.maintainVolume;
-    return `<div class="channel${id === S.active ? ' active' : ''}${ch.locked ? ' locked' : ''}${driven ? ' driven' : ''}" data-ch="${id}" title="${esc(t(ch.locked ? 'Locked in this lab: the ball travels at a constant speed.' : driven ? 'Calculated by Maintain Volume.' : 'Click to make it the active channel.'))}"><button type="button" class="eye" data-eye="${id}" aria-pressed="${!S.hidden.has(id)}" aria-label="Show ${ch.name}">${S.hidden.has(id) ? '◌' : '◉'}</button><span class="swatch" style="background:${ch.color}"></span><span class="ch-name" data-no-i18n>${ch.name}</span>${ch.locked ? '<span class="ch-lock" aria-hidden="true">🔒</span>' : ''}</div>`;
-  }).join('');
+  let html = '', group = null;
+  for (const id of stage().channels) {
+    const ch = CHANNELS[id];
+    if (ch.bone !== group) { group = ch.bone; html += `<div class="ch-group${S.bone === group ? ' sel' : ''}" data-bone="${group}" data-no-i18n>${esc(group)}</div>`; }
+    html += `<div class="channel${id === S.active ? ' active' : ''}${ch.locked ? ' locked' : ''}" data-ch="${id}" title="${esc(t(ch.locked ? 'Locked in this lab: the ball travels at a constant speed.' : 'Click to make it the active channel.'))}"><button type="button" class="eye" data-eye="${id}" aria-pressed="${!S.hidden.has(id)}" aria-label="Show ${ch.bone} ${ch.name}">${S.hidden.has(id) ? '◌' : '◉'}</button><span class="swatch" style="background:${ch.color}"></span><span class="ch-name" data-no-i18n>${ch.name}</span>${ch.locked ? '<span class="ch-lock" aria-hidden="true">🔒</span>' : ''}</div>`;
+  }
+  box.innerHTML = html;
 }
 $('#channels').addEventListener('click', e => {
   const eye = e.target.closest('[data-eye]');
   if (eye) { const id = eye.dataset.eye; S.hidden.has(id) ? S.hidden.delete(id) : S.hidden.add(id); renderAll(); return; }
+  const grp = e.target.closest('[data-bone]'); if (grp) { selectBone(grp.dataset.bone); return; }
   const row = e.target.closest('[data-ch]'); if (!row) return;
-  S.active = row.dataset.ch; renderAll();
+  S.active = row.dataset.ch; S.bone = CHANNELS[S.active].bone; renderAll();
 });
 
 function renderSidebar() {
@@ -456,7 +596,15 @@ function renderSidebar() {
     if (fb) html += `<div class="sb-stat"><span>${esc(t('Hang time'))}</span><b>${Math.round(hangTime(z, fb[0], fb[1]) * 100)}%</b></div>`;
     if (S.toggles.ref) html += `<div class="sb-stat"><span>${esc(t('Match'))}</span><b>${matchScore(z, REFERENCE, 1, 60)}%</b></div>`;
   }
-  if (stage().id === 'squash') html += `<div class="sb-stat"><span>${esc(t('Z Scale now'))}</span><b>${scaleZ(S.data, S.frame).toFixed(2)}</b></div>`;
+  if (stage().id === 'squash') {
+    const p = pose(S.frame);
+    html += `<div class="sb-sep"></div><h4>${esc(t('Rig'))}</h4>`;
+    html += `<div class="sb-stat"><span data-no-i18n>SS_Top</span><b>${(S.override.topZ ?? valueAt('topZ', S.frame)).toFixed(2)} m</b></div>`;
+    html += `<div class="sb-stat"><span data-no-i18n>SS_Bottom</span><b>${(S.override.botZ ?? valueAt('botZ', S.frame)).toFixed(2)} m</b></div>`;
+    html += `<div class="sb-stat"><span>${esc(t('Z Scale now'))}</span><b>${p.sz.toFixed(2)}</b></div>`;
+    const low = lowestPoint(S.data);
+    html += `<div class="sb-stat${low < -0.03 ? ' bad' : ''}"><span>${esc(t('Lowest point'))}</span><b>${low.toFixed(2)} m</b></div>`;
+  }
   $('#sidebar').innerHTML = html;
 }
 $('#sidebar').addEventListener('change', e => {
@@ -476,35 +624,119 @@ $('#sidebar').addEventListener('change', e => {
 });
 
 // ─── Timeline ───────────────────────────────────────────────────────────────
+// As in Blender: drag the numbers at the top to change frame; click a keyframe to select it
+// (Shift adds), drag it or press G to move it in time, drag on empty space to box-select, X to delete.
 const tlCanvas = $('#timeline');
+const TL_RULER = 18;
+function tlFrames() {
+  // one diamond per frame, for the visible, editable channels (a summary, like Blender's Timeline)
+  const frames = new Map();
+  for (const { id, k } of allKeys(editable)) { const e = frames.get(k.frame) || { keys: [], sel: false }; e.keys.push({ id, k }); e.sel = e.sel || k.select; frames.set(k.frame, e); }
+  return frames;
+}
 function drawTimeline() {
   const { ctx, w, h } = fitCanvas(tlCanvas);
   const f0 = 0, f1 = Math.max(S.end + 4, 76), X = f => 10 + (f - f0) / (f1 - f0) * (w - 20);
   ctx.fillStyle = '#232323'; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#00000045'; ctx.fillRect(0, 0, X(S.start), h); ctx.fillRect(X(S.end), 0, w - X(S.end), h);
+  ctx.fillStyle = '#00000045'; ctx.fillRect(0, TL_RULER, X(S.start), h); ctx.fillRect(X(S.end), TL_RULER, w - X(S.end), h);
+  ctx.fillStyle = '#2b2b2b'; ctx.fillRect(0, 0, w, TL_RULER);
   ctx.font = '10px Inter, sans-serif';
   for (let f = 0; f <= f1; f++) {
     const big = f % 10 === 0, mid = f % 5 === 0;
-    ctx.strokeStyle = big ? '#555' : '#353535'; ctx.beginPath(); ctx.moveTo(X(f), big ? 0 : mid ? 10 : 16); ctx.lineTo(X(f), h); ctx.stroke();
-    if (big || (mid && w > 700)) { ctx.fillStyle = '#9a9a9a'; ctx.fillText(String(f), X(f) + 2, 11); }
+    ctx.strokeStyle = big ? '#4a4a4a' : '#333'; ctx.beginPath(); ctx.moveTo(X(f), big ? TL_RULER : mid ? TL_RULER + 6 : TL_RULER + 12); ctx.lineTo(X(f), h); ctx.stroke();
+    if (big || (mid && w > 700)) { ctx.fillStyle = '#9a9a9a'; ctx.fillText(String(f), X(f) + 2, 12); }
   }
-  const frames = new Map();
-  for (const { id, k } of allKeys()) if (!CHANNELS[id].locked) frames.set(k.frame, (frames.get(k.frame) || false) || k.select);
-  for (const [f, sel] of frames) {
-    const x = X(f), y = h / 2 + 8;
-    ctx.fillStyle = sel ? '#ffaa33' : '#dcdcdc'; ctx.strokeStyle = '#000';
-    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+  const y = TL_RULER + (h - TL_RULER) / 2;
+  for (const [f, e] of tlFrames()) {
+    const x = X(f);
+    ctx.fillStyle = e.sel ? '#ffaa33' : '#dcdcdc'; ctx.strokeStyle = '#000';
+    ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+  if (S.drag?.tlBox) { const b = S.drag.tlBox; ctx.strokeStyle = '#fff'; ctx.setLineDash([4, 3]); ctx.strokeRect(Math.min(b.x0, b.x1), TL_RULER + 2, Math.abs(b.x1 - b.x0), h - TL_RULER - 4); ctx.setLineDash([]); }
   const cx = X(S.frame);
-  ctx.strokeStyle = '#4772b3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke(); ctx.lineWidth = 1;
+  ctx.strokeStyle = '#4772b3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, TL_RULER); ctx.lineTo(cx, h); ctx.stroke(); ctx.lineWidth = 1;
+  ctx.fillStyle = '#4772b3'; const lab = String(Math.round(S.frame)), lw = ctx.measureText(lab).width + 10;
+  ctx.fillRect(cx - lw / 2, 1, lw, 16); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(lab, cx, 13); ctx.textAlign = 'left';
+  if (S.tlGrab) { ctx.fillStyle = '#ffffffcc'; ctx.fillText(tr('Move keyframes: {d} frames · click to confirm, Esc to cancel', { d: (S.tlGrab.df > 0 ? '+' : '') + (S.tlGrab.df || 0) }), 8, h - 6); }
   tlCanvas._X = X; tlCanvas._inv = x => f0 + (x - 10) / (w - 20) * (f1 - f0);
 }
+function tlHit(x, y) {
+  if (y < TL_RULER) return null;
+  let best = null, bd = 9;
+  for (const [f, e] of tlFrames()) { const d = Math.abs(tlCanvas._X(f) - x); if (d < bd) { bd = d; best = { f, e }; } }
+  return best;
+}
+function startTlGrab(x, byDrag = false) {
+  const sel = selected();
+  if (!sel.length) return msg('Select keyframes first.', true);
+  if (!byDrag) pushUndo();
+  S.tlGrab = { x0: x, byDrag, df: 0, orig: sel.map(({ id, k }) => ({ id, k, frame: k.frame, value: k.value, left: { ...k.left }, right: { ...k.right } })) };
+  drawTimeline();
+}
+function updateTlGrab(x) {
+  const g = S.tlGrab; if (!g) return;
+  let df = Math.round(tlCanvas._inv(x) - tlCanvas._inv(g.x0));
+  for (const o of g.orig) { o.k.frame = o.frame; o.k.value = o.value; o.k.left = { ...o.left }; o.k.right = { ...o.right }; }
+  if (g.orig.some(o => o.frame + df < 0)) df = -Math.min(...g.orig.map(o => o.frame));
+  // keys of one channel can't land on another key's frame
+  if (g.orig.some(o => S.data.channels[o.id].some(k => !k.select && k.frame === o.frame + df))) df = g.df;
+  g.df = df;
+  for (const o of g.orig) moveKey(o.k, o.frame + df, o.value);
+  for (const id of new Set(g.orig.map(o => o.id))) recalcHandles(S.data.channels[id]);
+  changed(false);
+}
+function endTlGrab(ok) {
+  const g = S.tlGrab; if (!g) return;
+  S.tlGrab = null;
+  if (!ok) { for (const o of g.orig) { o.k.frame = o.frame; o.k.value = o.value; o.k.left = { ...o.left }; o.k.right = { ...o.right }; } for (const id of new Set(g.orig.map(o => o.id))) recalcHandles(S.data.channels[id]); S.undo.pop(); changed(false); return; }
+  if (g.df) msg(tr('Moved {n} keyframes {d} frames.', { n: g.orig.length, d: (g.df > 0 ? '+' : '') + g.df }));
+  changed(true);
+}
 function setupTimeline() {
-  let down = false;
-  const at = e => { const r = tlCanvas.getBoundingClientRect(); setFrame(Math.round(tlCanvas._inv(e.clientX - r.left))); };
-  tlCanvas.addEventListener('pointerdown', e => { down = true; tlCanvas.setPointerCapture(e.pointerId); at(e); });
-  tlCanvas.addEventListener('pointermove', e => { if (down) at(e); });
-  tlCanvas.addEventListener('pointerup', () => { down = false; });
+  const pos = e => { const r = tlCanvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  tlCanvas.addEventListener('pointerdown', e => {
+    closeMenu();
+    const { x, y } = pos(e);
+    if (S.tlGrab) { endTlGrab(e.button === 0); return; }
+    if (e.button !== 0) return;
+    tlCanvas.setPointerCapture(e.pointerId);
+    if (y < TL_RULER) { S.drag = { tlScrub: true }; setFrame(Math.round(tlCanvas._inv(x))); return; }
+    const hit = tlHit(x, y);
+    if (hit) {
+      const keys = hit.e.keys;
+      if (e.shiftKey) { const on = !hit.e.sel; keys.forEach(({ k }) => { k.select = on; }); }
+      else if (!hit.e.sel) { clearSelection(); keys.forEach(({ k }) => { k.select = true; }); }
+      S.activeKey = null;
+      S.drag = { tlMove: true, x, started: false };
+      renderAll(); return;
+    }
+    if (!e.shiftKey) clearSelection();
+    S.drag = { tlBox: { x0: x, x1: x } };
+    renderAll();
+  });
+  tlCanvas.addEventListener('pointermove', e => {
+    const { x } = pos(e); S.tlPointer = x;
+    if (S.tlGrab) { updateTlGrab(x); return; }
+    const d = S.drag; if (!d) return;
+    if (d.tlScrub) { setFrame(Math.round(tlCanvas._inv(x))); return; }
+    if (d.tlBox) { d.tlBox.x1 = x; drawTimeline(); return; }
+    if (d.tlMove) {
+      if (!d.started && Math.abs(x - d.x) < 3) return;
+      if (!d.started) { d.started = true; pushUndo(); startTlGrab(d.x, true); }
+      updateTlGrab(x);
+    }
+  });
+  const end = () => {
+    const d = S.drag; S.drag = null;
+    if (S.tlGrab?.byDrag) { endTlGrab(true); return; }
+    if (d?.tlBox) {
+      const a = tlCanvas._inv(Math.min(d.tlBox.x0, d.tlBox.x1)), b = tlCanvas._inv(Math.max(d.tlBox.x0, d.tlBox.x1));
+      if (b - a > 0.3) for (const { k } of allKeys(editable)) if (k.frame >= a && k.frame <= b) k.select = true;
+      renderAll();
+    }
+  };
+  tlCanvas.addEventListener('pointerup', end);
+  tlCanvas.addEventListener('pointercancel', end);
   $('#b-play').onclick = togglePlay;
   $('#b-start').onclick = () => setFrame(S.start);
   $('#b-end').onclick = () => setFrame(S.end);
@@ -514,7 +746,7 @@ function setupTimeline() {
   $('#f-start').onchange = e => { S.start = Math.max(0, Math.min(+e.target.value, S.end - 1)); renderAll(); };
   $('#f-end').onchange = e => { S.end = Math.max(S.start + 1, +e.target.value); renderAll(); };
 }
-function setFrame(f) { S.frame = Math.max(0, Math.min(250, f)); renderLive(); }
+function setFrame(f) { const n = Math.max(0, Math.min(250, f)); if (Math.round(n) !== Math.round(S.frame) && Object.keys(S.override).length) dropOverrides(); S.frame = n; renderLive(); }
 function jumpKey(dir) {
   const frames = [...new Set(allKeys(id => !CHANNELS[id].locked).map(e => e.k.frame))].sort((a, b) => a - b);
   const cur = Math.round(S.frame);
@@ -525,7 +757,7 @@ let raf = 0, lastT = 0;
 function togglePlay() {
   S.playing = !S.playing;
   $('#b-play').textContent = S.playing ? '❚❚' : '▶'; $('#b-play').setAttribute('aria-pressed', String(S.playing));
-  if (S.playing) { lastT = performance.now(); if (S.frame >= S.end) S.frame = S.start; raf = requestAnimationFrame(tick); }
+  if (S.playing) { if (Object.keys(S.override).length) dropOverrides(); lastT = performance.now(); if (S.frame >= S.end) S.frame = S.start; raf = requestAnimationFrame(tick); }
   else cancelAnimationFrame(raf);
 }
 function tick(now) {
@@ -611,8 +843,6 @@ function checkProgress() {
 // ─── Rendering and updates ──────────────────────────────────────────────────
 function syncToggles() {
   $('#t-path').checked = S.toggles.path; $('#t-ghosts').checked = S.toggles.ghosts; $('#t-ref').checked = S.toggles.ref;
-  $('#t-volume').checked = !!S.data.maintainVolume;
-  $('#volume-toggle').hidden = stage().id !== 'squash';
   $('#ref-toggle').hidden = stage().id !== 'weight';
 }
 function renderLive() {
@@ -632,7 +862,7 @@ function changed(commit = true) {
 }
 function enterStage() {
   S.focus = null; lastDone = null; S.hidden.clear(); S.hidden.add('locX'); // the travel curve is shown on demand
-  S.active = 'locZ';
+  S.active = 'locZ'; S.bone = 'Root'; S.override = {};
   loadData();
   S.toggles.ref = stage().independent ? !!stage().steps[S.step].reference : false;
   frameAll(); renderAll(); checkProgress();
@@ -641,51 +871,72 @@ function enterStage() {
 $('#t-path').onchange = e => { S.toggles.path = e.target.checked; renderLive(); };
 $('#t-ghosts').onchange = e => { S.toggles.ghosts = e.target.checked; renderLive(); };
 $('#t-ref').onchange = e => { S.toggles.ref = e.target.checked; renderAll(); };
-$('#t-volume').onchange = e => { pushUndo(); S.data.maintainVolume = e.target.checked; msg(e.target.checked ? 'Maintain Volume on: X Scale = 1 / √(Z Scale).' : 'Maintain Volume off.'); changed(true); renderChannels(); };
 
 // ─── Keyboard (only while the pointer is over the workspace, like Blender) ──
+// Keys go to the editor under the pointer: 3D Viewport, Graph Editor or Timeline.
 const ws = $('#workspace');
 ws.addEventListener('pointerenter', () => { S.hover = true; });
 ws.addEventListener('pointerleave', () => { S.hover = false; });
 let lastPointer = { x: 0, y: 0 };
 graphCanvas.addEventListener('pointermove', e => { const r = graphCanvas.getBoundingClientRect(); lastPointer = { x: e.clientX - r.left, y: e.clientY - r.top, cx: e.clientX, cy: e.clientY }; });
+for (const [el, area] of [[viewHost, 'view'], [$('#graph-host'), 'graph'], [$('#timeline-host'), 'timeline']]) el.addEventListener('pointerenter', () => { S.area = area; });
 document.addEventListener('keydown', e => {
   if (e.target.closest('input, select, textarea')) return;
+  if (S.vgrab) { e.preventDefault(); vgrabKey(e); return; }
+  if (S.tlGrab) { if (e.key === 'Escape') endTlGrab(false); else if (e.key === 'Enter') endTlGrab(true); e.preventDefault(); return; }
   if (!S.hover && !S.grab && e.key !== 'Escape') return;
-  const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+  const k = e.key, ctrl = e.ctrlKey || e.metaKey, low = k.toLowerCase();
   if (S.grab) {
     if (k === 'Escape') { cancelGrab(); e.preventDefault(); return; }
     if (k === 'Enter') { confirmGrab(); e.preventDefault(); return; }
-    if (k === 'x' || k === 'X') { S.grab.axis = S.grab.axis === 'x' ? null : 'x'; updateGrab(S.grab.lastX ?? S.grab.x, S.grab.lastY ?? S.grab.y); e.preventDefault(); return; }
-    if (k === 'y' || k === 'Y') { S.grab.axis = S.grab.axis === 'y' ? null : 'y'; updateGrab(S.grab.lastX ?? S.grab.x, S.grab.lastY ?? S.grab.y); e.preventDefault(); return; }
+    if (low === 'x') { S.grab.axis = S.grab.axis === 'x' ? null : 'x'; updateGrab(S.grab.lastX ?? S.grab.x, S.grab.lastY ?? S.grab.y); e.preventDefault(); return; }
+    if (low === 'y') { S.grab.axis = S.grab.axis === 'y' ? null : 'y'; updateGrab(S.grab.lastX ?? S.grab.x, S.grab.lastY ?? S.grab.y); e.preventDefault(); return; }
     return;
   }
   let handled = true;
-  if (ctrl && (k === 'z' || k === 'Z')) e.shiftKey ? redo() : undo();
-  else if (ctrl && (k === 'y' || k === 'Y')) redo();
+  if (ctrl && low === 'z') e.shiftKey ? redo() : undo();
+  else if (ctrl && low === 'y') redo();
   else if (k === ' ') togglePlay();
   else if (k === 'ArrowRight') e.shiftKey ? setFrame(S.end) : setFrame(Math.round(S.frame) + 1);
   else if (k === 'ArrowLeft') e.shiftKey ? setFrame(S.start) : setFrame(Math.round(S.frame) - 1);
   else if (k === 'ArrowUp') jumpKey(1);
   else if (k === 'ArrowDown') jumpKey(-1);
-  else if (k === 'Home') { frameAll(); drawGraph(); }
-  else if (k === '.') { frameAll(true); drawGraph(); }
-  else if ((k === 'a' || k === 'A') && e.altKey) selectAll(false);
-  else if (k === 'a' || k === 'A') selectAll(true);
-  else if (k === 'g' || k === 'G') startGrab(lastPointer.x, lastPointer.y);
-  else if (k === 'i' || k === 'I') insertKey();
-  else if (k === 'x' || k === 'X' || k === 'Delete') deleteKeys();
-  else if (k === 't' || k === 'T') openMenu('interp', lastPointer.cx || innerWidth / 2, lastPointer.cy || innerHeight / 2);
-  else if (k === 'v' || k === 'V') openMenu('handle', lastPointer.cx || innerWidth / 2, lastPointer.cy || innerHeight / 2);
-  else if (k === 'Escape') closeMenu();
-  else handled = false;
+  else if (S.area === 'view') {
+    if (low === 'g' && e.altKey) clearControl();
+    else if (low === 'g') startVGrab();
+    else if (low === 'i') keyControl();
+    else if (k === 'Home') frameView3();
+    else if (e.code === 'Numpad1' || k === '1') frameView3(true);
+    else if (k === 'Escape') closeMenu();
+    else handled = false;
+  } else if (S.area === 'timeline') {
+    if ((low === 'a') && e.altKey) selectAll(false);
+    else if (low === 'a') selectAll(true);
+    else if (low === 'g') startTlGrab(S.tlPointer ?? 0);
+    else if (low === 'x' || k === 'Delete') deleteKeys();
+    else if (low === 'i') insertKey();
+    else if (k === 'Escape') closeMenu();
+    else handled = false;
+  } else {
+    if (k === 'Home') { frameAll(); drawGraph(); }
+    else if (k === '.') { frameAll(true); drawGraph(); }
+    else if (low === 'a' && e.altKey) selectAll(false);
+    else if (low === 'a') selectAll(true);
+    else if (low === 'g') startGrab(lastPointer.x, lastPointer.y);
+    else if (low === 'i') insertKey();
+    else if (low === 'x' || k === 'Delete') deleteKeys();
+    else if (low === 't') openMenu('interp', lastPointer.cx || innerWidth / 2, lastPointer.cy || innerHeight / 2);
+    else if (low === 'v') openMenu('handle', lastPointer.cx || innerWidth / 2, lastPointer.cy || innerHeight / 2);
+    else if (k === 'Escape') closeMenu();
+    else handled = false;
+  }
   if (handled) e.preventDefault();
 });
 
 // ─── Start ──────────────────────────────────────────────────────────────────
 setupGraphInput(); setupTimeline();
 new ResizeObserver(() => renderLive()).observe($('#graph-host'));
-new ResizeObserver(() => renderLive()).observe($('#view-host'));
+new ResizeObserver(() => { resize3(); }).observe($('#view-host'));
 onLangChange(() => renderAll());
-enterStage();
-window.__anim = S; // for tests and curious students
+frameView3(); enterStage(); resize3();
+window.__anim = S; window.__anim3 = { cam3, ctrls3, selectBone, startVGrab, keyControl }; // for tests and curious students

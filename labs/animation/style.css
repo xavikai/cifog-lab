@@ -378,3 +378,13 @@ footer span:nth-child(3){margin-left:auto}
 @media(max-width:1180px){.anim-editors{grid-template-columns:1fr}.graph-body{grid-template-columns:130px minmax(0,1fr)}.sidebar{display:none}}
 @media(max-width:900px){.step-card{grid-template-columns:1fr}.view-host,.graph-body{height:340px}}
 @media(max-width:640px){.graph-body{grid-template-columns:1fr}.channels{display:none}.view-toggles{margin-left:0}}
+/* 3D viewport and rig (v2) */
+.mode-pill{background:var(--b-widget);border:1px solid #1b1b1b;border-radius:4px;padding:2px 9px;font-size:12px;color:#fff}
+.view-host{background:radial-gradient(ellipse at 50% 40%,#454545,#2e2e2e 75%)}
+.view-host.modal canvas{cursor:ns-resize}
+.view-overlay .unkeyed{color:#ffbf00;margin-top:2px}
+.op-readout{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#1b1b1bee;border:1px solid #0b0b0b;border-radius:5px;padding:5px 12px;font-size:12.5px;color:#fff;font-variant-numeric:tabular-nums;pointer-events:none;white-space:nowrap}
+.channels .ch-group{cursor:pointer;margin-top:4px}
+.channels .ch-group.sel{color:#fff;background:#334d8055}
+.timeline-host{height:74px}
+#view-host .view-overlay{top:auto;bottom:8px}

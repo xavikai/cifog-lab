@@ -18,12 +18,29 @@ The interface uses Blender's English names (Graph Editor, Timeline, Keyframe, Be
 
 ## Stage 2 · Squash & Stretch
 
-The ball's origin is at its base, as animators usually set it for squash.
+The ball uses the class rig:
+- **Root**: the base of the ball, at the floor.
+- **SS_Top**: moves the top of the ball. The pivot is at the base, so the ball stays on the floor.
+- **SS_Bottom**: moves the bottom of the ball. The pivot is at the top.
 
-1. **Squash on contact** — Z Scale ≈ 0.6 at the first two contacts.
-2. **Stretch in the air** — insert keys (I) two frames before and after the first contact, Z Scale ≈ 1.2.
-3. **Round at the top** — Z Scale back to 1 at the tops.
-4. **Keep the volume** — Maintain Volume: X Scale = 1/√(Z Scale), as Blender's Maintain Volume constraint.
+The rig keeps the volume: a shorter ball gets wider. Students pose the controls in the 3D Viewport with G (up and down only; typed values work) and key them with I. An unkeyed pose is lost when the frame changes, as in Blender.
+
+1. **Squash on contact**: SS_Top ≈ -0.4 m at the first two contacts. The base must stay on the floor.
+2. **Stretch before and after**:
+   - Before the contact (frame 11), SS_Bottom goes down ≈ 0.25 m: the ball reaches for the floor.
+   - At the same frame, key SS_Top at 0, otherwise the squash of the contact starts too early.
+   - After the contact (frame 15), SS_Top goes up ≈ 0.2 m.
+3. **Round at the top**: both controls at 0 at the tops.
+4. **Never through the floor**: the lowest point of the ball over the whole animation must stay above 0. Stretching with SS_Bottom near the contact can push the ball into the floor.
+
+## Editing keys in the Timeline
+
+As in Blender:
+- Drag the numbers at the top to change frame.
+- Click a keyframe to select it (Shift adds). Drag it, or press G, to move it in time.
+- Drag on empty space to box-select. X deletes.
+
+Keys go to the editor under the mouse, so the same G moves a control in the 3D Viewport, keys in the Graph Editor and keys in time in the Timeline.
 
 ## Stage 3 · Weight
 
