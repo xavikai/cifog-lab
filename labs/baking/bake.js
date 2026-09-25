@@ -9,6 +9,8 @@ export const BAKE_DEFAULTS = {
   type: 'NORMAL', selectedToActive: false, cage: false, extrusion: 0, maxRay: 0, margin: 16, res: 256,
   swizzle: ['+X', '+Y', '+Z'], samples: 16, passes: { direct: true, indirect: true, color: true },
 };
+// The colours of the ID map: one flat colour per material of the high poly (paint, steel, plate).
+export const ID_COLORS = [[0.9, 0.2, 0.2], [0.2, 0.45, 1], [0.25, 0.85, 0.3]];
 export const SUN = (() => { const l = [0.35, 0.8, 0.5], n = Math.hypot(...l); return l.map(x => x / n); })();
 
 // UV rasterization: which low triangle (and barycentrics) covers each texel centre.
@@ -76,7 +78,10 @@ export function castTexel(high, bvh, fr, opts) {
   const X = [O[0] + D[0] * h.t, O[1] + D[1] * h.t, O[2] + D[2] * h.t];
   // "wrong hit": the ray went through the surface and found the far side of the crate (its normal faces away)
   const wrong = N[0] * fr.N[0] + N[1] * fr.N[1] + N[2] * fr.N[2] < 0;
-  return { O, D, tMax, hit: { t: h.t, X, N, color: col, wrong } };
+  // the material of the nearest vertex (for the ID map), and whether the hit belongs to another object (the handle)
+  const mat = high.mats ? high.mats[w0 >= h.u && w0 >= h.v ? a : h.u >= h.v ? b : c] : 0;
+  const foreign = high.mainTris != null && h.tri >= high.mainTris;
+  return { O, D, tMax, hit: { t: h.t, X, N, color: col, wrong, mat, foreign } };
 }
 const AX = { X: 0, Y: 1, Z: 2 };
 function swizzle(v, sw) { return sw.map(s => (s[0] === '-' ? -1 : 1) * v[AX[s[1]]]); }
@@ -104,7 +109,9 @@ export function createBake(low, high, bvh, options) {
   const o = { ...BAKE_DEFAULTS, ...options, passes: { ...BAKE_DEFAULTS.passes, ...(options.passes || {}) } };
   const res = o.res, img = new Uint8ClampedArray(res * res * 4), filled = new Uint8Array(res * res), miss = new Uint8Array(res * res);
   const R = rasterize(low, res);
-  const stats = { texels: 0, misses: 0, wrongHits: 0, overlaps: 0, maxRayAngle: 0 };
+  const stats = { texels: 0, misses: 0, wrongHits: 0, foreign: 0, overlaps: 0, maxRayAngle: 0 };
+  const box = o.bbox || { min: [-1, -1, -1], max: [1, 1, 1] };
+  const curv = o.type === 'CURVATURE' ? new Float32Array(res * res * 2) : null;
   for (let i = 0; i < res * res; i++) if (R.owners[i] > 1) stats.overlaps++;
   const rnd = rng(12345);
   let row = 0;
@@ -130,6 +137,7 @@ export function createBake(low, high, bvh, options) {
     const hit = cast?.hit;
     if (o.selectedToActive && !hit) { stats.misses++; miss[i] = 1; }
     if (hit?.wrong) { stats.wrongHits++; miss[i] = 2; }
+    else if (hit?.foreign) { stats.foreign++; miss[i] = 3; }
     if (o.type === 'NORMAL') {
       const n = hit ? hit.N : fr.N;
       const ts = [n[0] * fr.T[0] + n[1] * fr.T[1] + n[2] * fr.T[2], n[0] * fr.B[0] + n[1] * fr.B[1] + n[2] * fr.B[2], n[0] * fr.N[0] + n[1] * fr.N[1] + n[2] * fr.N[2]];
@@ -138,6 +146,23 @@ export function createBake(low, high, bvh, options) {
       const X = hit ? hit.X : fr.P, N = hit ? hit.N : fr.N;
       const a = ambientOcclusion(bvh, X, N, Math.max(1, o.samples | 0), rnd);
       rgb = [a, a, a];
+    } else if (o.type === 'WORLD') {
+      const N = hit ? hit.N : fr.N;
+      rgb = N.map(v => 0.5 + 0.5 * v);
+    } else if (o.type === 'ID') {
+      rgb = ID_COLORS[hit ? hit.mat : 0];
+    } else if (o.type === 'POSITION') {
+      const X = hit ? hit.X : fr.P;
+      rgb = X.map((v, k) => Math.max(0, Math.min(1, (v - box.min[k]) / (box.max[k] - box.min[k]))));
+    } else if (o.type === 'THICKNESS') {
+      const X = hit ? hit.X : fr.P, N = hit ? hit.N : fr.N;
+      const a = thickness(bvh, X, N, Math.max(1, o.samples | 0), rnd);
+      rgb = [a, a, a];
+    } else if (o.type === 'CURVATURE') {
+      // keep the tangent-space normal: the curvature is how fast it changes from texel to texel (finish)
+      const n = hit ? hit.N : fr.N;
+      curv[i * 2] = n[0] * fr.T[0] + n[1] * fr.T[1] + n[2] * fr.T[2]; curv[i * 2 + 1] = n[0] * fr.B[0] + n[1] * fr.B[1] + n[2] * fr.B[2];
+      rgb = [0.5, 0.5, 0.5];
     } else { // DIFFUSE
       const N = hit ? hit.N : fr.N, base = (hit ? hit.color : [0.8, 0.8, 0.8]).map(c => Math.pow(c, 2.2)); // the colours are sRGB: light them in linear
       const light = (o.passes.direct ? 0.75 * Math.max(0, N[0] * SUN[0] + N[1] * SUN[1] + N[2] * SUN[2]) : 0) + (o.passes.indirect ? 0.35 : 0);
@@ -149,10 +174,40 @@ export function createBake(low, high, bvh, options) {
     img[i * 4] = rgb[0] * 255; img[i * 4 + 1] = rgb[1] * 255; img[i * 4 + 2] = rgb[2] * 255; img[i * 4 + 3] = 255;
     filled[i] = 1;
   }
-  function finish() { dilate(img, filled, res, o.margin); }
+  function finish() { if (curv) curvature(); dilate(img, filled, res, o.margin); }
+  // Curvature from the baked normals: convex (bevels, bolts) bright, concave (grooves) dark, flat 0.5.
+  function curvature() {
+    const same = (i, j) => filled[j] && R.tri[j] >> 1 === R.tri[i] >> 1;
+    const k = 1.3 * res / 256;
+    for (let y = 0; y < res; y++) for (let x = 0; x < res; x++) {
+      const i = y * res + x; if (!filled[i]) continue;
+      const d = (a, b, c) => { const pa = same(i, a), pb = same(i, b); return pa && pb ? (curv[b * 2 + c] - curv[a * 2 + c]) / 2 : pb ? curv[b * 2 + c] - curv[i * 2 + c] : pa ? curv[i * 2 + c] - curv[a * 2 + c] : 0; };
+      const dx = x > 0 && x < res - 1 ? d(i - 1, i + 1, 0) : 0, dy = y > 0 && y < res - 1 ? d(i - res, i + res, 1) : 0;
+      const v = Math.max(0, Math.min(1, 0.5 + k * (dx + dy)));
+      img[i * 4] = img[i * 4 + 1] = img[i * 4 + 2] = v * 255;
+    }
+  }
   return job;
 }
 // Margin: repeat the border texels of every island outwards, so filtering and mipmaps don't pick up the background.
+// Thickness: how far rays travel inside the high poly before leaving it (white = thick, dark = thin).
+function thickness(bvh, X, N, samples, rnd) {
+  const M = [-N[0], -N[1], -N[2]];
+  const up = Math.abs(M[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let T = [up[1] * M[2] - up[2] * M[1], up[2] * M[0] - up[0] * M[2], up[0] * M[1] - up[1] * M[0]];
+  const tl = Math.hypot(...T); T = T.map(x => x / tl);
+  const B = [M[1] * T[2] - M[2] * T[1], M[2] * T[0] - M[0] * T[2], M[0] * T[1] - M[1] * T[0]];
+  const MAX = 0.5, ox = X[0] + M[0] * 2e-3, oy = X[1] + M[1] * 2e-3, oz = X[2] + M[2] * 2e-3;
+  let sum = 0;
+  for (let s = 0; s < samples; s++) {
+    const r1 = (s + rnd()) / samples, r2 = rnd(), r = Math.sqrt(r1) * 0.7, ph = 2 * Math.PI * r2, z = Math.sqrt(1 - r * r);
+    const x = r * Math.cos(ph), y = r * Math.sin(ph);
+    const d = [T[0] * x + B[0] * y + M[0] * z, T[1] * x + B[1] * y + M[1] * z, T[2] * x + B[2] * y + M[2] * z];
+    const h = intersect(bvh, ox, oy, oz, d[0], d[1], d[2], 1e-4, MAX);
+    sum += h ? h.t / MAX : 1;
+  }
+  return sum / samples;
+}
 export function dilate(img, filled, res, margin) {
   let cur = filled.slice();
   for (let m = 0; m < margin; m++) {

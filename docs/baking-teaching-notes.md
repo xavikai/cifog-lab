@@ -23,6 +23,41 @@ Explanations are in Catalan or Spanish. Blender's interface names (Selected to A
   - Blender and Unity read green as +Y (OpenGL). Unreal reads it as −Y (DirectX).
   - The material can be wrong on purpose: the normal map in sRGB, the normal map connected without a Normal Map node, or missing colour and AO links.
 
+## Substance Painter stage
+
+- **The scene**: the same crate plus a steel handle on top. It has its own names (crate_low / crate_high, handle_low / handle_high) and its own texture set. The lab bakes only the crate texture set.
+- **Distances**:
+  - Painter's rays start *Max Frontal Distance* above the low poly and stop *Max Rear Distance* below it.
+  - With *Relative to Bounding Box* the values are fractions of the diagonal of the low poly scene (≈ 3.53 m). The default 0.01 is about 3.5 cm.
+  - *Average Normals* sends the rays along averaged normals. *Use Cage* replaces the distances with a cage mesh.
+- **Match**:
+  - *Always* lets the crate's rays hit the handle: the handle is printed into the crate's normal map. The report shows this as "hits on other meshes" (magenta).
+  - *By Mesh Name* only pairs name_low with name_high.
+- **Mesh maps**:
+  - World Space Normal and Position (normalised to the bounding box of the scene).
+  - ID: one flat colour per material painted on the high poly, from Vertex Color.
+  - Ambient Occlusion.
+  - Curvature: the change of the baked normal from texel to texel. Convex is bright and concave is dark.
+  - Thickness: rays into the model. The crate is solid, so almost all of it is white.
+  - A small "smart material" in the viewport uses ID (base materials), Curvature (worn edges), AO (dirt) and World Space Normal (dust on top).
+- **Export**: the output template decides the format of the exported normal map (the converted maps *Normal OpenGL* / *Normal DirectX*).
+
+  | Output template | Normal map | Files |
+  |---|---|---|
+  | Blender (Principled BSDF) | OpenGL | separate maps |
+  | Unity URP | OpenGL | separate maps |
+  | Unreal Engine (Packed) | DirectX | packs AO, Roughness and Metallic into the R, G and B channels of OcclusionRoughnessMetallic |
+
+  The file lists are simplified.
+
+| Step | What the student does | Check |
+|---|---|---|
+| p1 Frontal and rear distance | Raise both from 0.01 to about 0.03 | clean normal map (Match By Mesh Name already set) |
+| p2 Average Normals or cage | Tick Average Normals or Use Cage | clean, with averaged rays or a cage |
+| p3 Match by Mesh Name | Match Always → By Mesh Name | 0 hits on other meshes |
+| p4 Maps for smart materials | Tick and bake the six other mesh maps | all seven maps baked clean |
+| p5 Export to the engine | Output template for Unreal | template Unreal Engine (Packed), engine Unreal |
+
 ## The ray caster
 
 A BVH (median split, up to 4 triangles per leaf) with Möller–Trumbore intersection. The bake runs in slices of rows, so the image fills up with a progress bar (Esc cancels).

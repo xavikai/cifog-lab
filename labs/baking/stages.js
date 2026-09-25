@@ -1,9 +1,20 @@
 // Stages of the Baking Lab. Every step loads its own settings (and, when needed, images already baked).
-import { buildLow } from './mesh.js';
+import { buildLow, SCENE_BOX, SCENE_DIAG } from './mesh.js';
 import { createBake, BAKE_DEFAULTS } from './bake.js';
 
-export const IMAGE_OF = { NORMAL: 'normal', AO: 'ao', DIFFUSE: 'diffuse' };
-export const IMAGE_NAMES = { normal: 'Normal_Map', ao: 'AO_Map', diffuse: 'Color_Map' };
+export const IMAGE_OF = { NORMAL: 'normal', AO: 'ao', DIFFUSE: 'diffuse', WORLD: 'world', ID: 'id', CURVATURE: 'curvature', POSITION: 'position', THICKNESS: 'thickness' };
+export const IMAGE_NAMES = { normal: 'Normal_Map', ao: 'AO_Map', diffuse: 'Color_Map', world: 'World Space Normal', id: 'ID', curvature: 'Curvature', position: 'Position', thickness: 'Thickness' };
+// In Substance Painter the baked images are the "mesh maps" of a texture set.
+export const PAINTER_NAMES = { normal: 'Normal', world: 'World Space Normal', id: 'ID', ao: 'Ambient Occlusion', curvature: 'Curvature', position: 'Position', thickness: 'Thickness' };
+export const PAINTER_BAKERS = ['normal', 'world', 'id', 'ao', 'curvature', 'position', 'thickness'];
+export const TYPE_OF = { normal: 'NORMAL', world: 'WORLD', id: 'ID', ao: 'AO', curvature: 'CURVATURE', position: 'POSITION', thickness: 'THICKNESS' };
+// Export templates: the normal map format each one writes (Converted maps: Normal OpenGL / Normal DirectX).
+export const TEMPLATES = {
+  blender: { name: 'Blender (Principled BSDF)', normal: 'OpenGL', files: ['Base Color', 'Metallic', 'Roughness', 'Normal (OpenGL)', 'Height'] },
+  unity: { name: 'Unity Universal Render Pipeline (Metallic Standard)', normal: 'OpenGL', files: ['BaseMap', 'MetallicSmoothness', 'Normal (OpenGL)', 'Occlusion', 'Emission'] },
+  unreal: { name: 'Unreal Engine (Packed)', normal: 'DirectX', files: ['BaseColor', 'Normal (DirectX)', 'OcclusionRoughnessMetallic'] },
+};
+export const ENGINE_NORMAL = { blender: 'OpenGL', unity: 'OpenGL', unreal: 'DirectX' };
 
 export function defaultState() {
   return {
@@ -13,24 +24,54 @@ export function defaultState() {
     material: { normalCS: 'Non-Color', normalLink: 'normalmap', colorLink: true, aoLink: true },
     preview: { engine: 'blender', flipGreen: false },
     images: { normal: null, ao: null, diffuse: null },
+    tool: 'blender',
+    painter: {
+      frontal: 0.01, rear: 0.01, relative: true, avgNormals: true, useCage: false, match: 'always', lowSuffix: '_low', highSuffix: '_high',
+      size: 256, dilation: 16, samples: 16, normalFormat: 'OpenGL', idSource: 'Vertex Color',
+      bakers: { normal: true, world: false, id: false, ao: false, curvature: false, position: false, thickness: false },
+      template: 'blender', smart: false,
+    },
   };
+}
+// Painter's distances in metres: relative to the bounding box of the low poly scene, or absolute.
+export const painterScale = p => p.relative ? SCENE_DIAG : 1;
+// Painter's settings as options for the bake engine: the ray starts Max Frontal Distance above the low poly and
+// stops Max Rear Distance below it, along averaged normals (Average Normals) or the face normal. A cage replaces the distances.
+export function painterOptions(p) {
+  const k = painterScale(p);
+  const rays = p.useCage ? { cage: true, extrusion: 0.1, maxRay: 0 } : { cage: p.avgNormals, extrusion: p.frontal * k, maxRay: p.rear * k };
+  return { ...rays, selectedToActive: true, margin: p.dilation, res: p.size, samples: p.samples, swizzle: p.normalFormat === 'DirectX' ? ['+X', '-Y', '+Z'] : ['+X', '+Y', '+Z'], bbox: SCENE_BOX };
 }
 const merge = (a, b) => { for (const [k, v] of Object.entries(b)) { if (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object') merge(a[k], v); else a[k] = JSON.parse(JSON.stringify(v)); } return a; };
 const GOOD = { selectedToActive: true, cage: true, extrusion: 0.1, maxRay: 0 };
 const BOTH = { high: true, low: true, active: 'low' };
 
 // Bake into the state (used by the app, the tests and the starting scenes). geo = { high, bvh }.
+// geo = { high, bvh } (the crate) and, for Painter, { highAll, bvhAll } (crate + handle).
+const pickHigh = (geo, painter, match) => painter && match !== 'name' && geo.highAll ? [geo.highAll, geo.bvhAll] : [geo.high, geo.bvh];
 export function bakeInto(state, geo, type, extra = {}) {
-  const low = buildLow(state.low);
-  const opts = { ...state.bake, ...extra, type };
-  const job = createBake(low, geo.high, geo.bvh, opts);
+  const low = buildLow(state.low), painter = state.tool === 'painter';
+  const opts = painter ? { ...painterOptions(state.painter), ...extra, type } : { ...state.bake, ...extra, type };
+  const [high, bvh] = pickHigh(geo, painter, state.painter.match);
+  const job = createBake(low, high, bvh, opts);
   return { job, commit: () => { state.images[IMAGE_OF[type]] = metaOf(state, job); return job; } };
 }
 export function metaOf(state, job) {
-  const o = job.options;
-  return { type: o.type, selectedToActive: o.selectedToActive, cage: o.cage, extrusion: o.extrusion, maxRay: o.maxRay, margin: o.margin, res: o.res, swizzle: [...o.swizzle], samples: o.samples, passes: { ...o.passes }, shading: state.low.shading, uv: state.low.uv, stats: { ...job.stats } };
+  const o = job.options, p = state.painter;
+  const m = { type: o.type, selectedToActive: o.selectedToActive, cage: o.cage, extrusion: o.extrusion, maxRay: o.maxRay, margin: o.margin, res: o.res, swizzle: [...o.swizzle], samples: o.samples, passes: { ...o.passes }, shading: state.low.shading, uv: state.low.uv, stats: { ...job.stats } };
+  if (state.tool === 'painter') Object.assign(m, { tool: 'painter', match: p.match, frontal: p.frontal, rear: p.rear, relative: p.relative, avgNormals: p.avgNormals, useCage: p.useCage, normalFormat: p.normalFormat });
+  return m;
 }
-const clean = m => !!m && m.selectedToActive && m.stats.misses === 0 && m.stats.wrongHits === 0;
+// Bake again from what an image remembers (after loading, undo or a solution).
+export function jobFromMeta(m, geo) {
+  const low = buildLow({ shading: m.shading, uv: m.uv });
+  const [high, bvh] = pickHigh(geo, m.tool === 'painter', m.match);
+  return createBake(low, high, bvh, { type: m.type, selectedToActive: m.selectedToActive, cage: m.cage, extrusion: m.extrusion, maxRay: m.maxRay, margin: m.margin, res: m.res, swizzle: m.swizzle, samples: m.samples, passes: m.passes, bbox: SCENE_BOX });
+}
+const clean = m => !!m && m.selectedToActive && m.stats.misses === 0 && m.stats.wrongHits === 0 && !m.stats.foreign;
+const pclean = m => clean(m) && m.tool === 'painter';
+const PGOOD = { frontal: 0.03, rear: 0.03, avgNormals: true, match: 'name' };
+const ALL_BAKERS = { normal: true, world: true, id: true, ao: true, curvature: true, position: true, thickness: true };
 
 export const STAGES = [
   {
@@ -135,6 +176,56 @@ export const STAGES = [
         start: { sel: BOTH, bake: { ...GOOD, margin: 0 }, prebake: ['NORMAL', 'AO', ['DIFFUSE', { passes: { direct: false, indirect: false, color: true }, margin: 16 }]] },
         check: s => clean(s.images.normal) && s.images.normal.margin >= 8,
         solve: s => { s.bake.type = 'NORMAL'; s.bake.margin = 16; return ['NORMAL']; },
+      },
+    ],
+  },
+  {
+    id: 'painter', name: 'Substance Painter', sub: 'Mesh maps · export',
+    steps: [
+      {
+        id: 'p1', title: 'Frontal and rear distance',
+        text: 'The same crate, now in Substance Painter, with a steel handle on top (handle_low / handle_high). Painter has no Extrusion: each ray starts Max Frontal Distance above the low poly and stops Max Rear Distance below it. With Relative to Bounding Box, 0.01 means 1% of the size of the model. With the default values the rays of the bolts (6 cm out) start inside them, and the grooves (4 cm deep) and the rounded corners are out of reach: many misses.',
+        how: ['Open the <b>Baking</b> window (<b>Bake Mesh Maps</b> in the Texture Set Settings). In <b>Common parameters</b>, look at <b>Max Frontal Distance</b> and <b>Max Rear Distance</b>: the panel shows them in metres.', 'Raise both until the bolts are inside and the grooves and corners are reached (about 0.03 each) and press <b>Bake selected textures</b>.', 'The report must show 0 misses and 0 wrong hits.'],
+        why: 'Frontal and Rear Distance are Extrusion and Max Ray Distance in one: the ray only looks for the high poly inside that envelope. Too small misses details; too big picks up other parts.',
+        start: { tool: 'painter', sel: BOTH, painter: { match: 'name' }, prebake: ['NORMAL'] },
+        check: s => { const m = s.images.normal; return pclean(m) && m.useCage === false; },
+        solve: s => { Object.assign(s.painter, { frontal: 0.03, rear: 0.03, useCage: false, avgNormals: true }); return ['NORMAL']; },
+      },
+      {
+        id: 'p2', title: 'Average Normals or cage',
+        text: 'Average Normals is off, so the rays leave each face straight, like a low poly with hard edges in Blender without a cage: the corners give misses again. In Painter, Average Normals sends the rays along averaged normals (a smooth envelope) even if the low poly has hard edges. The other way is a cage mesh from your 3D program (Use Cage).',
+        how: ['Look at the red misses along the edges of the islands.', 'Tick <b>Average Normals</b> (or <b>Use Cage</b>, which uses crate_cage instead of the distances).', 'Press <b>Bake selected textures</b>: 0 misses.'],
+        why: 'Keeping hard edges (with UV seams on them) gives a cleaner normal map; Average Normals or a cage make the rays fan out so the corners are not lost.',
+        start: { tool: 'painter', sel: BOTH, painter: { ...PGOOD, avgNormals: false }, prebake: ['NORMAL'] },
+        check: s => { const m = s.images.normal; return pclean(m) && (m.avgNormals || m.useCage); },
+        solve: s => { s.painter.avgNormals = true; return ['NORMAL']; },
+      },
+      {
+        id: 'p3', title: 'Match by Mesh Name',
+        text: 'Match is set to Always: every low poly looks for any high poly. The rays of the top of the crate start above the handle, so the handle is printed into the normal map of the crate (magenta in the 2D View: hits on other meshes). Match by Mesh Name only pairs meshes with the same name and the suffixes _low and _high: crate_low with crate_high, handle_low with handle_high.',
+        how: ['Turn on <b>Rays</b> and look at the top of the crate, under the handle.', 'Check the names in the scene list: crate_low, crate_high, handle_low, handle_high.', 'Set <b>Match</b> to <b>By Mesh Name</b> and press <b>Bake selected textures</b>. The report must show 0 hits on other meshes.'],
+        why: 'Name matching is the clean way to bake many pieces that touch each other, without exploding the model. The names must be exactly name_low / name_high.',
+        start: { tool: 'painter', sel: BOTH, painter: { ...PGOOD, frontal: 0.035, match: 'always' }, prebake: ['NORMAL'] },
+        check: s => { const m = s.images.normal; return pclean(m) && m.match === 'name'; },
+        solve: s => { s.painter.match = 'name'; return ['NORMAL']; },
+      },
+      {
+        id: 'p4', title: 'Maps for smart materials',
+        text: 'Painter does not only bake the normal map. Its generators and smart materials read the other mesh maps: Curvature finds the edges (worn paint), Ambient Occlusion the cavities (dirt), World Space Normal and Position the top of the model (dust), Thickness the thin parts, and ID the materials of the high poly (a mask per colour). Bake all of them.',
+        how: ['In the list of mesh maps of the <b>Baking</b> window, tick <b>World Space Normal</b>, <b>ID</b>, <b>Ambient Occlusion</b>, <b>Curvature</b>, <b>Position</b> and <b>Thickness</b>.', 'For ID, <b>Color Source</b> is <b>Vertex Color</b>: the colours painted on the high poly.', 'Press <b>Bake selected textures</b>, then turn on <b>Smart material</b> in the viewport.'],
+        why: 'Edge wear, dirt and dust that follow the shape of the model all come from these maps. If they are baked wrong, the smart materials go wrong too.',
+        start: { tool: 'painter', sel: BOTH, painter: { ...PGOOD }, prebake: ['NORMAL'] },
+        check: s => PAINTER_BAKERS.every(k => pclean(s.images[k])),
+        solve: s => { s.painter.bakers = { ...ALL_BAKERS }; return PAINTER_BAKERS.filter(k => !pclean(s.images[k])).map(k => TYPE_OF[k]); },
+      },
+      {
+        id: 'p5', title: 'Export to the engine',
+        text: 'The crate goes to Unreal. The Export Textures window uses an output template that names and packs the textures for each engine. The template chosen is for Blender: its normal map is OpenGL (green up), but Unreal reads DirectX (green down), so the preview looks lit from below. Choose the Unreal template: it writes the normal map in DirectX and packs Ambient Occlusion, Roughness and Metallic into the R, G and B channels of one texture.',
+        how: ['In <b>File › Export Textures</b>, open the <b>Output template</b> list.', 'Choose <b>Unreal Engine (Packed)</b> and look at the list of files and channels.', 'Check the preview: the bolts stick out again.'],
+        why: 'The template, not the project setting, decides the format of the exported normal map (Normal OpenGL or Normal DirectX). Packing three greyscale maps into one texture saves memory in the engine.',
+        start: { tool: 'painter', sel: BOTH, painter: { ...PGOOD, bakers: { ...ALL_BAKERS }, template: 'blender' }, preview: { engine: 'unreal' }, prebake: ['NORMAL', 'WORLD', 'ID', 'AO', 'CURVATURE', 'POSITION', 'THICKNESS'] },
+        check: s => s.preview.engine === 'unreal' && s.painter.template === 'unreal' && pclean(s.images.normal),
+        solve: s => { s.painter.template = 'unreal'; s.preview.engine = 'unreal'; return []; },
       },
     ],
   },

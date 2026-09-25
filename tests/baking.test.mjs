@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildHigh, buildLow } from '../labs/baking/mesh.js';
+import { buildHigh, buildLow, buildHandleHigh, mergeHigh, SCENE_DIAG } from '../labs/baking/mesh.js';
 import { buildBVH, intersect } from '../labs/baking/bvh.js';
 import { createBake, rasterize, decodeTexel } from '../labs/baking/bake.js';
-import { STAGES, startState, bakeInto } from '../labs/baking/stages.js';
+import { STAGES, startState, bakeInto, defaultState, painterOptions, TEMPLATES, ENGINE_NORMAL } from '../labs/baking/stages.js';
 
 // A lighter high poly and small images keep the tests fast; the lab uses N = 96 and 256 px.
-const high = buildHigh(48), geo = { high, bvh: buildBVH(high.positions, high.indices) };
+const high = buildHigh(48), all = mergeHigh(high, buildHandleHigh(8));
+const geo = { high, bvh: buildBVH(high.positions, high.indices), highAll: all, bvhAll: buildBVH(all.positions, all.indices) };
 const RES = 64;
 const bake = (low, opts) => createBake(low, high, geo.bvh, { res: RES, ...opts }).run();
 const texel = (job, x, y) => { const i = (y * job.res + x) * 4; return [job.img[i], job.img[i + 1], job.img[i + 2]]; };
@@ -88,4 +89,32 @@ test('every step starts unsolved and its solution solves it', () => {
     for (const t of step.solve(state, flags)) { const b = bakeInto(state, geo, t, { res: RES }); b.job.run(); b.commit(); }
     assert.equal(!!step.check(state, flags), true, `${step.id} is solved by its solution`);
   }
+});
+
+const painterBake = (set, type = 'NORMAL') => { const s = defaultState(); s.tool = 'painter'; Object.assign(s.painter, set); const b = bakeInto(s, geo, type, { res: RES }); b.job.run(); return b.job; };
+
+test('Painter: frontal and rear distance are relative to the bounding box', () => {
+  const o = painterOptions({ ...defaultState().painter, frontal: 0.03, rear: 0.02 });
+  assert.ok(Math.abs(o.extrusion - 0.03 * SCENE_DIAG) < 1e-9 && Math.abs(o.maxRay - 0.02 * SCENE_DIAG) < 1e-9);
+  assert.equal(painterOptions({ ...defaultState().painter, relative: false, frontal: 0.1 }).extrusion, 0.1);
+  assert.ok(painterBake({ match: 'name' }).stats.misses > 0, 'the default 0.01 / 0.01 is too small for this crate');
+  assert.equal(painterBake({ match: 'name', frontal: 0.03, rear: 0.03 }).stats.misses, 0);
+  assert.ok(painterBake({ match: 'name', frontal: 0.03, rear: 0.03, avgNormals: false }).stats.misses > 0, 'without Average Normals the corners are missed');
+});
+
+test('Painter: Match Always bakes the handle into the crate, By Mesh Name does not', () => {
+  const always = painterBake({ match: 'always', frontal: 0.035, rear: 0.03 }), name = painterBake({ match: 'name', frontal: 0.035, rear: 0.03 });
+  assert.ok(always.stats.foreign > 0);
+  assert.equal(name.stats.foreign, 0);
+});
+
+test('Painter: ID, curvature and export templates', () => {
+  const set = { match: 'name', frontal: 0.03, rear: 0.03 };
+  const id = painterBake(set, 'ID'), colours = new Set();
+  for (let i = 0; i < RES * RES; i++) if (id.raster.tri[i] >= 0) colours.add(`${id.img[i * 4]},${id.img[i * 4 + 1]},${id.img[i * 4 + 2]}`);
+  assert.equal(colours.size, 3, 'paint, steel and plate');
+  const cu = painterBake(set, 'CURVATURE'), v = []; for (let i = 0; i < RES * RES; i++) if (cu.raster.tri[i] >= 0) v.push(cu.img[i * 4]);
+  assert.ok(Math.max(...v) > 190 && Math.min(...v) < 110, 'convex edges bright, grooves dark');
+  assert.equal(TEMPLATES.unreal.normal, ENGINE_NORMAL.unreal);
+  assert.notEqual(TEMPLATES.blender.normal, ENGINE_NORMAL.unreal);
 });

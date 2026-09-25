@@ -1,12 +1,12 @@
 // Baking Lab: bake a high poly crate into maps for a low poly cube, with a Blender-style Bake panel.
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import { buildHigh, buildLow, FACES } from './mesh.js?v=1';
-import { buildBVH } from './bvh.js?v=1';
-import { createBake, rasterize, lowFrame, castTexel, decodeTexel } from './bake.js?v=1';
-import { STAGES, startState, bakeInto, metaOf, IMAGE_OF, IMAGE_NAMES } from './stages.js?v=1';
+import { buildHigh, buildLow, FACES, buildHandleHigh, buildHandleLow, mergeHigh, SCENE_DIAG } from './mesh.js?v=2';
+import { buildBVH } from './bvh.js?v=2';
+import { createBake, rasterize, lowFrame, castTexel, decodeTexel } from './bake.js?v=2';
+import { STAGES, startState, bakeInto, jobFromMeta, IMAGE_OF, IMAGE_NAMES, PAINTER_NAMES, PAINTER_BAKERS, TYPE_OF, TEMPLATES, ENGINE_NORMAL, painterOptions, painterScale } from './stages.js?v=2';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=1';
+import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -18,7 +18,7 @@ const store = {
 const S = {
   stageIndex: Math.min(store.get('stage', 0), STAGES.length - 1), step: 0, st: null, flags: {}, undo: [], redo: [],
   done: store.get('done', {}), hover: false, pix: {}, job: null, jobType: null,
-  view: { show: 'low', rays: false, cage: true, light: true }, img: { slot: 'normal', chan: 'rgb', uv: true, miss: true }, hoverTexel: null,
+  view: { show: 'low', rays: false, cage: true, light: true, smart: false }, img: { slot: 'normal', chan: 'rgb', uv: true, miss: true }, hoverTexel: null,
 };
 const stage = () => STAGES[S.stageIndex];
 const step = () => stage().steps[S.step];
@@ -32,7 +32,15 @@ function msg(text, warning = false) {
 
 // ─── Geometry and ray caster ─────────────────────────────────────────────────
 const HIGH = buildHigh(96);
-const GEO = { high: HIGH, bvh: buildBVH(HIGH.positions, HIGH.indices) };
+const HANDLE = buildHandleHigh(), ALL = mergeHigh(HIGH, HANDLE);
+const GEO = { high: HIGH, bvh: buildBVH(HIGH.positions, HIGH.indices), highAll: ALL, bvhAll: buildBVH(ALL.positions, ALL.indices) };
+const isPainter = () => S.st?.tool === 'painter';
+const SLOTS = () => isPainter() ? PAINTER_BAKERS : ['normal', 'ao', 'diffuse'];
+const imageName = slot => isPainter() ? PAINTER_NAMES[slot] : IMAGE_NAMES[slot];
+// the high poly a bake or a ray looks at: in Painter with Match Always, the handle too
+const highFor = m => m?.tool === 'painter' && m.match !== 'name' ? [GEO.highAll, GEO.bvhAll] : [GEO.high, GEO.bvh];
+// the settings of the next bake, as options for the bake engine
+const bakeOpts = () => isPainter() ? { ...painterOptions(S.st.painter), tool: 'painter', match: S.st.painter.match } : S.st.bake;
 
 // ─── Data, undo, persistence ─────────────────────────────────────────────────
 const key = () => `data-${stage().id}-${S.step}`;
@@ -40,13 +48,12 @@ function saveData() { store.set(key(), { st: S.st, flags: S.flags }); }
 const metaKey = m => m ? JSON.stringify({ ...m, stats: undefined }) : '';
 // Make the pixels match the images described in the state (after loading, undo or a solution).
 function syncPixels() {
-  for (const slot of ['normal', 'ao', 'diffuse']) {
+  for (const slot of Object.keys(IMAGE_NAMES)) {
     const m = S.st.images[slot];
-    if (!m) { delete S.pix[slot]; continue; }
+    if (!m) { if (S.pix[slot]) { delete S.pix[slot]; TEX[slot] = BLANK[slot]; } continue; }
     if (S.pix[slot]?.key === metaKey(m)) continue;
-    const low = buildLow({ shading: m.shading, uv: m.uv });
-    const job = createBake(low, GEO.high, GEO.bvh, { type: m.type, selectedToActive: m.selectedToActive, cage: m.cage, extrusion: m.extrusion, maxRay: m.maxRay, margin: m.margin, res: m.res, swizzle: m.swizzle, samples: m.samples, passes: m.passes }).run();
-    S.pix[slot] = { key: metaKey(m), img: job.img, miss: job.miss, res: job.res, low };
+    const job = jobFromMeta(m, GEO).run();
+    S.pix[slot] = { key: metaKey(m), img: job.img, miss: job.miss, res: job.res, low: buildLow({ shading: m.shading, uv: m.uv }) };
     uploadTexture(slot);
   }
 }
@@ -89,12 +96,13 @@ const highMesh = new THREE.Mesh(highGeo, new THREE.MeshStandardMaterial({ vertex
 scene.add(highMesh);
 // Low poly with the baked maps, in a shader that reads the normal map like a game engine does
 const blank = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
-const TEX = { normal: blank(128, 128, 255), ao: blank(255, 255, 255), diffuse: blank(160, 160, 160) };
+const BLANK = { normal: blank(128, 128, 255), ao: blank(255, 255, 255), diffuse: blank(160, 160, 160), world: blank(128, 255, 128), id: blank(230, 50, 50), curvature: blank(128, 128, 128), position: blank(128, 128, 128), thickness: blank(255, 255, 255) };
+const TEX = { ...BLANK };
 const lowMat = new THREE.ShaderMaterial({
-  uniforms: { nMap: { value: TEX.normal }, cMap: { value: TEX.diffuse }, aoMap: { value: TEX.ao }, useN: { value: false }, nSRGB: { value: false }, nDirect: { value: false }, useC: { value: false }, useAO: { value: false }, ySign: { value: 1 }, L: { value: new THREE.Vector3() } },
+  uniforms: { nMap: { value: TEX.normal }, cMap: { value: TEX.diffuse }, aoMap: { value: TEX.ao }, curvMap: { value: TEX.curvature }, idMap: { value: TEX.id }, worldMap: { value: TEX.world }, useSmart: { value: false }, useN: { value: false }, nSRGB: { value: false }, nDirect: { value: false }, useC: { value: false }, useAO: { value: false }, ySign: { value: 1 }, L: { value: new THREE.Vector3() } },
   vertexShader: `attribute vec4 tangent; varying vec3 vN; varying vec3 vT; varying vec3 vB; varying vec2 vUv; varying vec3 vV;
     void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = -mv.xyz; vN = normalize(normalMatrix * normal); vT = normalize(normalMatrix * tangent.xyz); vB = cross(vN, vT) * tangent.w; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `uniform sampler2D nMap, cMap, aoMap; uniform bool useN, nSRGB, nDirect, useC, useAO; uniform float ySign; uniform vec3 L;
+  fragmentShader: `uniform sampler2D nMap, cMap, aoMap, curvMap, idMap, worldMap; uniform bool useN, nSRGB, nDirect, useC, useAO, useSmart; uniform float ySign; uniform vec3 L;
     varying vec3 vN; varying vec3 vT; varying vec3 vB; varying vec2 vUv; varying vec3 vV;
     void main(){
       vec3 N = normalize(vN);
@@ -107,13 +115,36 @@ const lowMat = new THREE.ShaderMaterial({
       }
       vec3 base = useC ? pow(texture2D(cMap, vUv).rgb, vec3(2.2)) : vec3(0.5);
       float ao = useAO ? texture2D(aoMap, vUv).r : 1.0;
+      if (useSmart) {
+        // a small smart material: ID picks paint / steel / plate, Curvature wears the edges, AO adds dirt, World Space Normal adds dust on top
+        vec3 id = texture2D(idMap, vUv).rgb;
+        base = id.b > 0.6 ? vec3(0.4, 0.42, 0.46) : id.g > 0.6 ? vec3(0.85, 0.6, 0.03) : vec3(0.55, 0.17, 0.03);
+        float c = texture2D(curvMap, vUv).r;
+        base = mix(base, vec3(0.6, 0.62, 0.64), smoothstep(0.62, 0.8, c));
+        base = mix(base, vec3(0.05, 0.035, 0.02), 0.85 * smoothstep(0.9, 0.45, ao));
+        base = mix(base, vec3(0.55, 0.52, 0.45), 0.6 * smoothstep(0.75, 0.95, texture2D(worldMap, vUv).g));
+      }
       vec3 V = normalize(vV);
       float d = max(dot(N, L), 0.0), sp = pow(max(dot(reflect(-L, N), V), 0.0), 40.0) * 0.35;
       vec3 col = base * (0.2 * ao + 0.95 * d * mix(1.0, ao, 0.35)) + sp * ao;
       gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
     }`,
 });
-let lowMesh = null, lowWire = null, cageLines = null, lowNow = null;
+let lowMesh = null, lowWire = null, cageLines = null, rearLines = null, lowNow = null;
+// The handle (Substance Painter stage only): handle_high with its vertex colours, handle_low as a plain box
+const handleGeo = new THREE.BufferGeometry();
+handleGeo.setAttribute('position', new THREE.BufferAttribute(HANDLE.positions, 3));
+handleGeo.setAttribute('normal', new THREE.BufferAttribute(HANDLE.normals, 3));
+handleGeo.setAttribute('color', new THREE.BufferAttribute(HANDLE.colors.map(c => Math.pow(c, 2.2)), 3));
+handleGeo.setIndex(new THREE.BufferAttribute(HANDLE.indices, 1));
+const handleHigh = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.6 }));
+const HL = buildHandleLow(), handleLowGeo = new THREE.BufferGeometry();
+handleLowGeo.setAttribute('position', new THREE.BufferAttribute(HL.positions, 3));
+handleLowGeo.setAttribute('normal', new THREE.BufferAttribute(HL.normals, 3));
+handleLowGeo.setIndex(new THREE.BufferAttribute(HL.indices, 1));
+const handleLow = new THREE.Mesh(handleLowGeo, new THREE.MeshStandardMaterial({ color: 0x8a9098, roughness: 0.45, metalness: 0.3 }));
+const handleWire = new THREE.LineSegments(new THREE.EdgesGeometry(handleLowGeo), new THREE.LineBasicMaterial({ color: 0xff9a2e }));
+scene.add(handleHigh, handleLow, handleWire);
 const rayLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 }));
 const inspectLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }));
 const inspectDot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
@@ -134,28 +165,34 @@ function buildLowMesh() {
   lowWire = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(edges, 3)), new THREE.LineBasicMaterial({ color: 0xff9a2e }));
   scene.add(lowMesh, lowWire);
 }
-function updateCage() {
-  if (cageLines) { scene.remove(cageLines); cageLines.geometry.dispose(); }
-  const b = S.st.bake, e = b.extrusion, P = lowNow.positions, R = b.cage ? lowNow.cageNormals : lowNow.normals, pts = [];
+// The envelope where the rays start (Extrusion / cage / Max Frontal Distance) and, in Painter, where they stop (Max Rear Distance).
+function envelope(e, cage, color) {
+  const P = lowNow.positions, R = cage ? lowNow.cageNormals : lowNow.normals, pts = [];
   const at = i => [P[i * 3] + R[i * 3] * e, P[i * 3 + 1] + R[i * 3 + 1] * e, P[i * 3 + 2] + R[i * 3 + 2] * e];
   for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) pts.push(...at(f * 4 + k), ...at(f * 4 + (k + 1) % 4));
-  cageLines = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)), new THREE.LineDashedMaterial({ color: 0x6ad1ff, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.8 }));
-  cageLines.computeLineDistances();
-  cageLines.visible = S.view.cage && b.selectedToActive && S.view.show !== 'high';
-  scene.add(cageLines);
+  const l = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)), new THREE.LineDashedMaterial({ color, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.8 }));
+  l.computeLineDistances(); scene.add(l); return l;
+}
+function updateCage() {
+  for (const l of [cageLines, rearLines]) if (l) { scene.remove(l); l.geometry.dispose(); }
+  rearLines = null;
+  const o = bakeOpts();
+  cageLines = envelope(o.extrusion, o.cage, 0x6ad1ff);
+  if (isPainter() && o.maxRay > 0) rearLines = envelope(-o.maxRay, o.cage, 0xff6a5a);
+  updateVisibility();
 }
 // A sample of the rays the next bake would cast (current settings)
 function updateRays() {
   rayLines.visible = S.view.rays;
   if (!S.view.rays) return;
-  const b = S.st.bake, R = rasterize(lowNow, 40), pos = [], col = [];
+  const b = bakeOpts(), [hi, bvh] = highFor(b), R = rasterize(lowNow, 40), pos = [], col = [];
   for (let i = 0; i < R.tri.length; i += 2) {
     if (R.tri[i] < 0) continue;
     const fr = lowFrame(lowNow, R.tri[i], R.b1[i], R.b2[i]);
     if (!b.selectedToActive) { pos.push(...fr.P, ...fr.P.map((v, k) => v + fr.N[k] * 0.12)); col.push(0.5, 0.5, 1, 0.5, 0.5, 1); continue; }
-    const c = castTexel(GEO.high, GEO.bvh, fr, b);
+    const c = castTexel(hi, bvh, fr, b);
     const end = c.hit ? c.hit.X : c.O.map((v, k) => v + c.D[k] * Math.min(c.tMax, 0.5));
-    const rgb = !c.hit ? [1, 0.25, 0.2] : c.hit.wrong ? [1, 0.85, 0.1] : [0.35, 0.95, 0.4];
+    const rgb = !c.hit ? [1, 0.25, 0.2] : c.hit.wrong ? [1, 0.85, 0.1] : c.hit.foreign ? [1, 0.3, 1] : [0.35, 0.95, 0.4];
     pos.push(...c.O, ...end); col.push(...rgb, ...rgb);
   }
   rayLines.geometry.dispose();
@@ -172,17 +209,31 @@ function uploadTexture(slot) {
 }
 function updateMaterial() {
   const m = S.st.material, pv = S.st.preview, u = lowMat.uniforms;
-  u.nMap.value = TEX.normal; u.cMap.value = TEX.diffuse; u.aoMap.value = TEX.ao;
+  u.nMap.value = TEX.normal; u.cMap.value = TEX.diffuse; u.aoMap.value = TEX.ao; u.curvMap.value = TEX.curvature; u.idMap.value = TEX.id; u.worldMap.value = TEX.world;
+  if (isPainter()) {
+    // Painter: the normal map as stored (project format), exported by the template, read by the engine
+    const p = S.st.painter, stored = S.st.images.normal?.normalFormat === 'DirectX' ? -1 : 1;
+    u.useN.value = !!S.pix.normal; u.nSRGB.value = false; u.nDirect.value = false; u.useC.value = false;
+    u.useAO.value = !!S.pix.ao;
+    u.ySign.value = stored * (TEMPLATES[p.template].normal === ENGINE_NORMAL[pv.engine] ? 1 : -1);
+    u.useSmart.value = S.view.smart && !!(S.pix.id && S.pix.curvature && S.pix.world && S.pix.ao);
+    return;
+  }
+  u.useSmart.value = false;
   u.useN.value = !!S.pix.normal && m.normalLink !== 'none';
   u.nSRGB.value = m.normalCS === 'sRGB'; u.nDirect.value = m.normalLink === 'direct';
   u.useC.value = !!S.pix.diffuse && m.colorLink; u.useAO.value = !!S.pix.ao && m.aoLink;
   u.ySign.value = (pv.engine === 'unreal' ? -1 : 1) * (pv.engine === 'unreal' && pv.flipGreen ? -1 : 1);
 }
 function updateVisibility() {
+  const pt = isPainter();
   highMesh.visible = S.view.show !== 'low';
   lowMesh.visible = S.view.show === 'low';
   lowWire.visible = S.view.show === 'both';
-  if (cageLines) cageLines.visible = S.view.cage && S.st.bake.selectedToActive && S.view.show !== 'high';
+  handleHigh.visible = pt && S.view.show !== 'low'; handleLow.visible = pt && S.view.show === 'low'; handleWire.visible = pt && S.view.show === 'both';
+  const env = S.view.cage && (pt || S.st.bake.selectedToActive) && S.view.show !== 'high';
+  if (cageLines) cageLines.visible = env;
+  if (rearLines) rearLines.visible = env;
 }
 let renderQueued = false;
 function requestRender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(renderNow); }
@@ -199,10 +250,18 @@ function resize() {
   const r = host.getBoundingClientRect(); if (!r.width || !r.height) return;
   renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); requestRender();
 }
+const ENGINE_LABEL = { blender: 'Blender (OpenGL, Y+)', unity: 'Unity (OpenGL, Y+)', unreal: 'Unreal (DirectX, Y−)' };
 function drawOverlay() {
   const m = S.st.material, pv = S.st.preview;
+  if (isPainter()) {
+    const p = S.st.painter, bad = TEMPLATES[p.template].normal !== ENGINE_NORMAL[pv.engine];
+    const lines = ['Substance 3D Painter', S.view.show === 'low' ? tr('{o} · with the baked maps', { o: 'crate_low + handle_low' }) : S.view.show === 'high' ? 'crate_high + handle_high' : t('High poly + low poly wireframe')];
+    if (S.view.show === 'low') lines.push(tr('Exported with {t}, seen in {e}', { t: TEMPLATES[p.template].name, e: ENGINE_LABEL[pv.engine] }));
+    $('#view-overlay').innerHTML = lines.map(l => `<div data-no-i18n>${esc(l)}</div>`).join('') + (bad && S.pix.normal ? `<div class="warn">${esc(tr('The normal map is {a} but {e} reads {b}: the green channel is flipped.', { a: TEMPLATES[p.template].normal, b: ENGINE_NORMAL[pv.engine], e: pv.engine === 'unreal' ? 'Unreal' : pv.engine === 'unity' ? 'Unity' : 'Blender' }))}</div>` : '');
+    return;
+  }
   const lines = [t('User Perspective'), S.view.show === 'low' ? tr('{o} · with the baked maps', { o: 'Crate_low' }) : S.view.show === 'high' ? 'Crate_high · 110,592 tris' : t('High poly + low poly wireframe')];
-  if (S.view.show === 'low') lines.push(tr('Preview: {e}', { e: pv.engine === 'unreal' ? `Unreal (DirectX, Y−)${pv.flipGreen ? ' · Flip Green' : ''}` : pv.engine === 'unity' ? 'Unity (OpenGL, Y+)' : 'Blender (OpenGL, Y+)' }));
+  if (S.view.show === 'low') lines.push(tr('Preview: {e}', { e: ENGINE_LABEL[pv.engine] + (pv.engine === 'unreal' && pv.flipGreen ? ' · Flip Green' : '') }));
   $('#view-overlay').innerHTML = lines.map(l => `<div data-no-i18n>${esc(l)}</div>`).join('') + (m.normalCS === 'sRGB' || m.normalLink === 'direct' ? `<div class="warn">${esc(t('The normal map is not connected correctly.'))}</div>` : '');
 }
 
@@ -221,7 +280,7 @@ function drawImage() {
   // checker background (empty image)
   for (let y = 0; y < size; y += 16) for (let x = 0; x < size; x += 16) { g.fillStyle = ((x + y) / 16) % 2 ? '#2a2a2a' : '#333'; g.fillRect(x, y, 16, 16); }
   const im = currentImage();
-  $('#image-empty').textContent = im ? '' : tr('{i} is empty: press Bake.', { i: IMAGE_NAMES[S.img.slot] });
+  $('#image-empty').textContent = im ? '' : isPainter() ? tr('{i} is not baked yet: tick it and press Bake selected textures.', { i: imageName(S.img.slot) }) : tr('{i} is empty: press Bake.', { i: IMAGE_NAMES[S.img.slot] });
   if (im) {
     off.width = off.height = im.res;
     const data = new ImageData(im.res, im.res), src = im.img, ch = S.img.chan;
@@ -231,7 +290,7 @@ function drawImage() {
       if (ch === 'rgb') { data.data[o] = src[i]; data.data[o + 1] = src[i + 1]; data.data[o + 2] = src[i + 2]; }
       else { const v = src[i + { r: 0, g: 1, b: 2 }[ch]]; data.data[o] = data.data[o + 1] = data.data[o + 2] = v; }
       data.data[o + 3] = 255;
-      if (S.img.miss && im.miss[(im.res - 1 - y) * im.res + x]) { const m = im.miss[(im.res - 1 - y) * im.res + x]; data.data[o] = 255; data.data[o + 1] = m === 2 ? 210 : 40; data.data[o + 2] = 30; }
+      if (S.img.miss && im.miss[(im.res - 1 - y) * im.res + x]) { const m = im.miss[(im.res - 1 - y) * im.res + x]; data.data[o] = 255; data.data[o + 1] = m === 2 ? 210 : m === 3 ? 60 : 40; data.data[o + 2] = m === 3 ? 255 : 30; }
     }
     off.getContext('2d').putImageData(data, 0, 0);
     g.imageSmoothingEnabled = false; g.drawImage(off, 0, 0, size, size);
@@ -255,12 +314,14 @@ imgCanvas.addEventListener('pointermove', e => {
   const tx = texelAt(e); if (!tx) return;
   S.hoverTexel = [tx.x, tx.y];
   const { im } = tx, i = (tx.y * im.res + tx.x) * 4, rgb = [im.img[i], im.img[i + 1], im.img[i + 2]];
-  let h = `<span data-no-i18n>${esc(IMAGE_NAMES[S.img.slot])} · ${tx.x}, ${tx.y}</span>`;
+  let h = `<span data-no-i18n>${esc(imageName(S.img.slot))} · ${tx.x}, ${tx.y}</span>`;
   if (im.img[i + 3] === 0) h += ` · ${esc(t('empty (outside the islands)'))}`;
   else {
     h += ` · <span class="sw" style="background:rgb(${rgb.join(',')})"></span> R ${(rgb[0] / 255).toFixed(2)} G ${(rgb[1] / 255).toFixed(2)} B ${(rgb[2] / 255).toFixed(2)}`;
-    if (S.img.slot === 'normal') { const n = decodeTexel(...rgb); h += ` → <b>(${n.map(v => v.toFixed(2)).join(', ')})</b> ${esc(t(describe(n)))}`; }
-    const mm = im.miss[tx.y * im.res + tx.x]; if (mm) h += ` · <span class="bad">${esc(t(mm === 2 ? 'wrong hit' : 'miss'))}</span>`;
+    if (S.img.slot === 'normal') { const n = decodeTexel(...rgb); if (S.st.images.normal?.normalFormat === 'DirectX') n[1] = -n[1]; h += ` → <b>(${n.map(v => v.toFixed(2)).join(', ')})</b> ${esc(t(describe(n)))}`; }
+    else if (S.img.slot === 'curvature') h += ` · ${esc(t(rgb[0] > 150 ? 'convex: an edge or a bump' : rgb[0] < 105 ? 'concave: a groove or a cavity' : 'flat'))}`;
+    else if (S.img.slot === 'id') h += ` · ${esc(t(rgb[2] > 150 ? 'steel' : rgb[1] > 150 ? 'plate' : 'paint'))}`;
+    const mm = im.miss[tx.y * im.res + tx.x]; if (mm) h += ` · <span class="bad">${esc(t(mm === 2 ? 'wrong hit' : mm === 3 ? 'hit on another mesh' : 'miss'))}</span>`;
   }
   $('#inspector').innerHTML = h;
   showInspectRay(tx);
@@ -288,14 +349,13 @@ function showInspectRay(tx) {
   if (!m || !p) return;
   const R = rasterize(p.low, p.res), i = tx.y * p.res + tx.x;
   if (R.tri[i] < 0 || !m.selectedToActive) { inspectLine.visible = inspectDot.visible = false; requestRender(); return; }
-  const fr = lowFrame(p.low, R.tri[i], R.b1[i], R.b2[i]), c = castTexel(GEO.high, GEO.bvh, fr, m);
+  const [hi, bvh] = highFor(m), fr = lowFrame(p.low, R.tri[i], R.b1[i], R.b2[i]), c = castTexel(hi, bvh, fr, m);
   const end = c.hit ? c.hit.X : c.O.map((v, k) => v + c.D[k] * Math.min(c.tMax, 0.5));
   inspectLine.geometry.dispose(); inspectLine.geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...c.O), new THREE.Vector3(...end)]);
-  inspectLine.material.color.set(!c.hit ? 0xff4030 : c.hit.wrong ? 0xffd21a : 0xffffff);
+  inspectLine.material.color.set(!c.hit ? 0xff4030 : c.hit.wrong ? 0xffd21a : c.hit.foreign ? 0xff4dff : 0xffffff);
   inspectDot.position.set(...end); inspectLine.visible = inspectDot.visible = true;
   requestRender();
 }
-const rasterCache = new Map();
 $('#i-slot').onchange = e => { S.img.slot = e.target.value; drawImage(); };
 $('#i-chan').addEventListener('click', e => { const b = e.target.closest('[data-ch]'); if (!b) return; S.img.chan = b.dataset.ch; document.querySelectorAll('#i-chan button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawImage(); });
 $('#i-uv').onchange = e => { S.img.uv = e.target.checked; drawImage(); };
@@ -304,39 +364,97 @@ $('#i-miss').onchange = e => { S.img.miss = e.target.checked; drawImage(); };
 // ─── Baking ─────────────────────────────────────────────────────────────────
 function startBake() {
   if (S.job) return;
+  if (isPainter()) {
+    // Painter bakes every ticked mesh map of the texture set, one after the other
+    const queue = PAINTER_BAKERS.filter(k => S.st.painter.bakers[k]).map(k => TYPE_OF[k]);
+    if (!queue.length) return msg('Tick at least one mesh map.', true);
+    pushUndo(); S.queue = queue; nextInQueue(); return;
+  }
   const sel = S.st.sel, b = S.st.bake;
   if (sel.active !== 'low') return msg('The active object must be Crate_low: it receives the bake. Click it last (Shift-click).', true);
   if (b.selectedToActive && !sel.high) return msg('Selected to Active needs the high poly selected too: click Crate_high, then Shift-click Crate_low.', true);
   pushUndo();
   const bk = bakeInto(S.st, GEO, b.type);
-  S.job = bk.job; S.job.low = buildLow(S.st.low); S.jobType = b.type; S.jobCommit = bk.commit; S.jobT0 = performance.now();
+  S.queue = []; S.job = bk.job; S.job.low = buildLow(S.st.low); S.jobType = b.type; S.jobCommit = bk.commit; S.jobT0 = performance.now();
   S.img.slot = IMAGE_OF[b.type]; $('#i-slot').value = S.img.slot;
+  $('#bake-progress').hidden = false; renderProps();
+  requestAnimationFrame(bakeTick);
+}
+function nextInQueue() {
+  const type = S.queue.shift(), bk = bakeInto(S.st, GEO, type);
+  S.job = bk.job; S.job.low = buildLow(S.st.low); S.jobType = type; S.jobCommit = bk.commit; S.jobT0 ??= performance.now();
+  S.img.slot = IMAGE_OF[type]; $('#i-slot').value = S.img.slot;
   $('#bake-progress').hidden = false; renderProps();
   requestAnimationFrame(bakeTick);
 }
 function bakeTick() {
   if (!S.job) return;
   const t0 = performance.now();
-  while (!S.job.done && performance.now() - t0 < 14) S.job.step(S.jobType === 'AO' ? 1 : 4);
+  while (!S.job.done && performance.now() - t0 < 14) S.job.step(S.jobType === 'AO' || S.jobType === 'THICKNESS' ? 1 : 4);
   const pr = S.job.progress();
   $('#bake-progress i').style.setProperty('--p', pr.toFixed(3));
-  $('#bake-progress span').textContent = tr('Baking {i}… {p}%', { i: IMAGE_NAMES[IMAGE_OF[S.jobType]], p: Math.round(pr * 100) });
+  $('#bake-progress span').textContent = tr('Baking {i}… {p}%', { i: imageName(IMAGE_OF[S.jobType]), p: Math.round(pr * 100) });
   drawImage();
   if (!S.job.done) { requestAnimationFrame(bakeTick); return; }
   const job = S.jobCommit(), slot = IMAGE_OF[S.jobType], secs = ((performance.now() - S.jobT0) / 1000).toFixed(1);
   S.pix[slot] = { key: metaKey(S.st.images[slot]), img: job.img, miss: job.miss, res: job.res, low: S.job.low };
   uploadTexture(slot);
-  S.job = null; $('#bake-progress').hidden = true;
+  S.job = null;
+  if (S.queue?.length) { nextInQueue(); return; }
+  $('#bake-progress').hidden = true;
   if (S.view.show !== 'low') { S.view.show = 'low'; $('#v-show').value = 'low'; }
-  const st = job.stats;
-  msg(tr('Baked {i} in {s} s: {m} misses, {w} wrong hits.', { i: IMAGE_NAMES[slot], s: secs, m: st.misses, w: st.wrongHits }), st.misses > 0 || st.wrongHits > 0);
+  const st = (S.st.images.normal && isPainter() ? S.st.images.normal.stats : job.stats);
+  if (isPainter()) msg(tr('Baked the mesh maps in {s} s: {m} misses, {w} wrong hits, {f} hits on other meshes.', { s: secs, m: st.misses, w: st.wrongHits, f: st.foreign || 0 }), st.misses > 0 || st.wrongHits > 0 || st.foreign > 0);
+  else msg(tr('Baked {i} in {s} s: {m} misses, {w} wrong hits.', { i: IMAGE_NAMES[slot], s: secs, m: st.misses, w: st.wrongHits }), st.misses > 0 || st.wrongHits > 0);
+  S.jobT0 = undefined;
   changed();
 }
-function cancelBake() { if (!S.job) return; S.job = null; $('#bake-progress').hidden = true; S.undo.pop(); drawImage(); renderProps(); msg('Bake cancelled.'); }
+function cancelBake() {
+  if (!S.job) return;
+  S.job = null; S.queue = []; S.jobT0 = undefined; $('#bake-progress').hidden = true;
+  S.st = JSON.parse(S.undo.pop()); syncPixels(); changed(); msg('Bake cancelled.');
+}
 
 // ─── Properties ─────────────────────────────────────────────────────────────
 const opt = (v, cur, label = v) => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`;
+// Substance 3D Painter: Texture Set List, Baking window, Export Textures
+function painterProps() {
+  const s = S.st, p = s.painter, k = painterScale(p), pv = s.preview, tpl = TEMPLATES[p.template];
+  const metres = v => `<p class="bl-note">= ${(v * k).toFixed(3)} m</p>`;
+  const baked = key => { const m = s.images[key]; return m?.tool === 'painter' ? (m.stats.misses || m.stats.wrongHits || m.stats.foreign ? '<i class="dot bad"></i>' : '<i class="dot ok"></i>') : '<i class="dot"></i>'; };
+  let h = `<div class="panel bl pt" data-no-i18n><h4>Texture Set List<small>Substance 3D Painter</small></h4><div class="ol-list">
+    <div class="ol-row active"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor"/></svg><span>crate</span><small>crate_low</small></div>
+    <div class="ol-row"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor"/></svg><span>handle</span><small>handle_low</small></div></div>
+    <div class="names"><span>Low poly</span><b>crate<em>_low</em></b><b>handle<em>_low</em></b><span>High Definition Meshes</span><b>crate<em>_high</em></b><b>handle<em>_high</em></b></div></div>`;
+  h += `<div class="panel bl pt" data-no-i18n><h4>Baking<small>Bake Mesh Maps · crate</small></h4>
+    <div class="bakers">${PAINTER_BAKERS.map(key => `<label class="bl-check"><input type="checkbox" data-baker="${key}"${p.bakers[key] ? ' checked' : ''}>${PAINTER_NAMES[key]}${baked(key)}</label>`).join('')}</div>
+    <div class="bl-sec">Common parameters</div>
+    <label class="bl-row"><span>Output Size</span><select data-p="size">${opt(256, +p.size, '256')}${opt(512, +p.size, '512')}</select></label>
+    <label class="bl-row"><span>Dilation Width</span><input type="number" data-p="dilation" min="0" max="64" step="1" value="${p.dilation}"><em>px</em></label>
+    <label class="bl-check"><input type="checkbox" data-p="useCage"${p.useCage ? ' checked' : ''}>Use Cage</label>
+    ${p.useCage ? `<label class="bl-row"><span>Cage file</span><span class="bl-fixed">crate_cage</span></label>` : ''}
+    <div class="${p.useCage ? 'bl-off' : ''}">
+    <label class="bl-row"><span>Max Frontal Distance</span><input type="number" data-p="frontal" min="0" max="1" step="0.005" value="${p.frontal}"></label>${metres(p.frontal)}
+    <label class="bl-row"><span>Max Rear Distance</span><input type="number" data-p="rear" min="0" max="1" step="0.005" value="${p.rear}"></label>${metres(p.rear)}
+    <label class="bl-check"><input type="checkbox" data-p="relative"${p.relative ? ' checked' : ''}>Relative to Bounding Box</label>
+    <label class="bl-check"><input type="checkbox" data-p="avgNormals"${p.avgNormals ? ' checked' : ''}>Average Normals</label></div>
+    <label class="bl-row"><span>Match</span><select data-p="match">${opt('always', p.match, 'Always')}${opt('name', p.match, 'By Mesh Name')}</select></label>
+    ${p.match === 'name' ? `<label class="bl-row"><span>Low Poly Mesh Suffix</span><span class="bl-fixed">${p.lowSuffix}</span></label><label class="bl-row"><span>High Poly Mesh Suffix</span><span class="bl-fixed">${p.highSuffix}</span></label>` : ''}
+    <div class="bl-sec">Normal · Ambient Occlusion · ID</div>
+    <label class="bl-row"><span>Normal Map Format</span><select data-p="normalFormat">${opt('OpenGL', p.normalFormat)}${opt('DirectX', p.normalFormat)}</select></label>
+    <label class="bl-row"><span>Secondary Rays</span><input type="number" data-p="samples" min="1" max="256" step="1" value="${p.samples}"></label>
+    <label class="bl-row"><span>Color Source</span><span class="bl-fixed">Vertex Color</span></label>
+    <button type="button" class="bake-btn pt-btn" id="bake-btn"${S.job ? ' disabled' : ''}>${S.job ? 'Baking…' : 'Bake selected textures'}</button></div>`;
+  h += `<div class="panel bl pt" data-no-i18n><h4>Export Textures<small>File › Export Textures</small></h4>
+    <label class="bl-row"><span>Output template</span><select data-p="template">${Object.entries(TEMPLATES).map(([key, v]) => opt(key, p.template, v.name)).join('')}</select></label>
+    <ul class="files">${tpl.files.map(f => `<li><b>crate_${f.replace(/ \(.*\)/, '').replace(/ /g, '')}.png</b>${f.includes('(') ? `<small>${f.match(/\((.*)\)/)[1]}</small>` : ''}${f === 'OcclusionRoughnessMetallic' ? '<small><i class="ch r">R</i> AO <i class="ch g">G</i> Roughness <i class="ch b">B</i> Metallic</small>' : ''}</li>`).join('')}</ul></div>`;
+  h += `<div class="panel"><h4>${esc(t('Preview'))}<small>${esc(t('as the engine reads it'))}</small></h4>
+    <label class="bl-row"><span>${esc(t('Engine'))}</span><select data-pv="engine">${opt('blender', pv.engine, ENGINE_LABEL.blender)}${opt('unity', pv.engine, ENGINE_LABEL.unity)}${opt('unreal', pv.engine, ENGINE_LABEL.unreal)}</select></label></div>`;
+  h += `<div class="panel" id="report">${reportHtml()}</div>`;
+  return h;
+}
 function renderProps() {
+  if (isPainter()) { $('#props').innerHTML = painterProps(); return; }
   const s = S.st, b = s.bake, m = s.material, pv = s.preview;
   let h = `<div class="panel"><h4>Outliner<small>${esc(t('click · Shift click'))}</small></h4><div class="ol-list">`;
   for (const [k, name, tris] of [['high', 'Crate_high', '110,592'], ['low', 'Crate_low', '12']]) {
@@ -378,6 +496,21 @@ function renderProps() {
 function reportHtml() {
   const m = S.st.images[S.img.slot] || S.st.images.normal;
   const row = (label, val, good) => `<div class="sb-stat${good == null ? '' : good ? ' good' : ' bad'}"><span>${esc(t(label))}</span><b>${val}</b></div>`;
+  if (isPainter()) {
+    const n = S.st.images.normal;
+    let h = `<h4>${esc(t('Bake report'))}<small data-no-i18n>crate · Normal</small></h4>`;
+    if (!n) return h + `<p class="sb-empty">${esc(t('Nothing baked yet.'))}</p>`;
+    const st = n.stats, done = PAINTER_BAKERS.filter(k => S.st.images[k]?.tool === 'painter').length;
+    h += row('Mesh maps baked', `${done} / 7`, done === 7 ? true : null);
+    h += row('Texels', st.texels.toLocaleString());
+    h += row('Misses', st.misses, st.misses === 0);
+    h += row('Wrong hits', st.wrongHits, st.wrongHits === 0);
+    h += row('Hits on other meshes', st.foreign || 0, !st.foreign);
+    h += n.useCage ? row('Rays', 'Use Cage') : row('Rays', `+${n.extrusion.toFixed(3)} m / −${n.maxRay.toFixed(3)} m`);
+    h += row('Average Normals', t(n.avgNormals || n.useCage ? 'on' : 'off'), n.avgNormals || n.useCage);
+    h += row('Match', n.match === 'name' ? 'By Mesh Name' : 'Always', n.match === 'name');
+    return h;
+  }
   let h = `<h4>${esc(t('Bake report'))}<small data-no-i18n>${m ? IMAGE_NAMES[IMAGE_OF[m.type]] : ''}</small></h4>`;
   if (!m) return h + `<p class="sb-empty">${esc(t('Nothing baked yet.'))}</p>`;
   const st = m.stats;
@@ -412,6 +545,14 @@ $('#props').addEventListener('change', e => {
   if (d.low) { pushUndo(); S.st.low[d.low] = v; changed(true, true); return; }
   if (d.mat) { pushUndo(); S.st.material[d.mat] = v; changed(); return; }
   if (d.pv) { pushUndo(); S.st.preview[d.pv] = v; changed(); return; }
+  if (d.baker) { pushUndo(); S.st.painter.bakers[d.baker] = v; changed(); return; }
+  if (d.p) {
+    pushUndo();
+    const num = { frontal: 1, rear: 1 }, int = { size: 1, dilation: 1, samples: 1 };
+    S.st.painter[d.p] = num[d.p] ? Math.max(0, +v || 0) : int[d.p] ? Math.max(0, Math.round(+v || 0)) : v;
+    if (d.p === 'template') msg(tr('Output template: {t}. Normal map: {n}.', { t: TEMPLATES[v].name, n: TEMPLATES[v].normal }));
+    changed(); return;
+  }
 });
 
 // ─── Stages, guide and step card ────────────────────────────────────────────
@@ -422,7 +563,7 @@ $('#stage-switch').addEventListener('click', e => { const b = e.target.closest('
 const doneKey = i => `${stage().id}-${i}`;
 const stepDone = i => i === S.step ? !!step().check(S.st, S.flags) : !!S.done[doneKey(i)];
 function renderGuide() {
-  const st = stage(), g = $('#guide'); g.classList.toggle('three', st.steps.length === 3);
+  const st = stage(), g = $('#guide'); g.classList.toggle('three', st.steps.length === 3); g.classList.toggle('five', st.steps.length === 5);
   g.innerHTML = st.steps.map((s, i) => `<li data-step="${i}" class="${stepDone(i) ? 'done' : ''}${i === S.step ? ' current' : ''}"><b>${stepDone(i) ? '✓' : i + 1}</b><span><strong>${esc(t(s.title))}</strong><small>${esc(t(stepDone(i) ? 'Done' : i === S.step ? 'Now' : 'Click to load'))}</small></span></li>`).join('');
 }
 $('#guide').addEventListener('click', e => { const li = e.target.closest('[data-step]'); if (!li || S.job) return; saveData(); S.step = +li.dataset.step; enterStep(); });
@@ -430,7 +571,7 @@ function renderStepCard() {
   const st = stage(), i = S.step, s = st.steps[i], ok = stepDone(i), card = $('#step-card');
   card.classList.toggle('done', ok);
   card.innerHTML = `<div><span class="control-label">${esc(tr('STAGE {a} · STEP {b} OF {c}', { a: S.stageIndex + 1, b: i + 1, c: st.steps.length }))}</span><h3>${esc(t(s.title))}</h3><p>${esc(t(s.text))}</p><p class="why"><b>${esc(t('Why:'))}</b> ${esc(t(s.why))}</p></div>
-    <div><span class="control-label">${esc(t('HOW, AS IN BLENDER'))}</span><ol>${s.how.map(h => `<li>${t(h)}</li>`).join('')}</ol></div>
+    <div><span class="control-label">${esc(t(isPainter() ? 'HOW, IN SUBSTANCE PAINTER' : 'HOW, AS IN BLENDER'))}</span><ol>${s.how.map(h => `<li>${t(h)}</li>`).join('')}</ol></div>
     <div class="step-actions"><span class="step-state">${esc(t(ok ? '✓ Done' : 'Not yet'))}</span>
       ${ok && i < st.steps.length - 1 ? `<button type="button" class="exp-button" id="next-step">${esc(t('Next step →'))}</button>` : ''}
       ${ok && i === st.steps.length - 1 && S.stageIndex < STAGES.length - 1 ? `<button type="button" class="exp-button" id="next-stage">${esc(t('Next stage →'))}</button>` : ''}
@@ -462,7 +603,14 @@ function changed(save = true, lowChanged = false) {
 function enterStep() {
   loadData(); lastOk = null;
   lastOk = stepDone(S.step);
+  const pt = isPainter();
+  $('#i-slot').innerHTML = SLOTS().map(k => `<option value="${k}">${esc(imageName(k))}</option>`).join('');
   S.img.slot = S.st.images.normal || !S.st.images.ao ? 'normal' : 'ao'; $('#i-slot').value = S.img.slot;
+  $('#v-name').textContent = pt ? '3D View' : '3D Viewport'; $('#i-name').textContent = pt ? '2D View' : 'Image Editor';
+  $('#v-show').innerHTML = pt ? '<option value="low">Low poly</option><option value="high">High poly</option><option value="both">High + low wire</option>' : '<option value="low">Crate_low</option><option value="high">Crate_high</option><option value="both">High + low wire</option>';
+  $('#v-show').value = S.view.show;
+  $('#smart-toggle').hidden = !pt;
+  $('#workspace').classList.toggle('painter', pt);
   buildLowMesh();
   renderStageSwitch();
   changed(false, false);
@@ -474,6 +622,7 @@ function translateTitles() { document.querySelectorAll('[title]').forEach(el => 
 $('#v-show').onchange = e => { S.view.show = e.target.value; updateVisibility(); drawOverlay(); requestRender(); };
 $('#v-rays').onchange = e => { S.view.rays = e.target.checked; updateRays(); requestRender(); };
 $('#v-cage').onchange = e => { S.view.cage = e.target.checked; updateVisibility(); requestRender(); };
+$('#v-smart').onchange = e => { S.view.smart = e.target.checked; updateMaterial(); requestRender(); };
 $('#v-light').onchange = e => { S.view.light = e.target.checked; requestRender(); };
 
 // Keyboard
