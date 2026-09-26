@@ -460,6 +460,7 @@ footer span:nth-child(3){margin-left:auto}
 .photo-host canvas#photo{display:block;max-width:100%;max-height:440px;width:auto;height:auto;box-shadow:0 8px 24px #000a;cursor:crosshair;image-rendering:auto}
 .photo-host.flash canvas#photo{animation:flashin .45s ease}
 @keyframes flashin{0%{filter:brightness(3)}100%{filter:none}}
+.photo-host canvas.motion{position:absolute;pointer-events:none}
 .photo-host canvas.hist{position:absolute;right:16px;top:16px;width:192px;height:64px;border-radius:4px;pointer-events:none}
 .reference{position:absolute;left:16px;top:16px;background:#111d;border:1px solid #ffffff33;border-radius:5px;padding:4px;display:flex;flex-direction:column;gap:3px}
 .reference span{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#ffd24a;font-weight:700}

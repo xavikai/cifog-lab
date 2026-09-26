@@ -10,7 +10,8 @@ The camera settings are explained in Catalan or Spanish. The modes (M, Av, Tv) a
   - Av and Tv pick the nearest full stop, like a camera would.
 - **The photo**: the scene is rendered many times and averaged (up to 40 samples).
   - *Depth of field*: every sample looks from another point of the aperture (diameter = focal length / N), with an off-axis frustum so the focus plane stays still. Out-of-focus lights become discs (bokeh).
-  - *Motion blur*: every sample is another instant of the exposure; the cyclist rides at 6 m/s.
+  - *Motion blur*: every sample is another instant of the exposure; the cyclist rides at 6 m/s, 3 m behind the person, on the left of the frame so the person never hides the streak.
+- **Motion overlay** (switch *Motion* above the photo, on when a step has the cyclist or hand-held shake): a blue outline where the bike was when the shutter opened, a yellow one where it was when it closed, and the distance in cm and px between them (speed × exposure time). Under 3 px it turns green (frozen). Hand-held, a red crosshair and arrow show how far the whole photo slid while the shutter was open. Use it to connect the number in the sidebar with what the eye sees.
   - *Camera shake*: without a tripod the camera turns about 3° per second while the shutter is open. This reproduces the 1 / focal length rule of thumb.
   - *Exposure and noise* are applied at the end. Highlights clip, and noise grows with ISO and in the shadows. The histogram shows clipped highlights (red) and shadows (blue).
 - **The DSLR cut in half**: the lens gets longer with the focal length, the iris closes with the f-number during the shot, and the sensor changes size.

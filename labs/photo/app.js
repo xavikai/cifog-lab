@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import * as O from './optics.js?v=1';
-import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, CYCLIST, IMAGE_H } from './stages.js?v=1';
-import { buildScene, PhotoCamera } from './photo.js?v=2';
+import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, CYCLIST, IMAGE_H } from './stages.js?v=2';
+import { buildScene, PhotoCamera } from './photo.js?v=3';
 import { buildDslr, shotTimeline } from './dslr.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=1';
+import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -60,7 +60,7 @@ function renderPhoto(samples) {
   photoRenderer.setSize(W, H, false);
   photoCanvas.style.aspectRatio = `${W} / ${H}`;
   pcam.render(world, photoParams(d), { samples, width: W, height: H, cyclistSpeed: CYCLIST.speed, seed });
-  drawHistogram();
+  drawHistogram(); drawMotion();
 }
 let hqTimer, pending = false;
 function schedulePhoto(fast = true) {
@@ -86,6 +86,84 @@ function drawHistogram() {
   histCtx.fillStyle = '#4aa3ff'; if (bins[0] / (sampler.width * sampler.height) > 0.05) histCtx.fillRect(2, 2, 3, H - 4);
 }
 $('#o-hist').onchange = () => drawHistogram();
+
+// Motion overlay: where the cyclist was when the shutter opened and when it closed, and how far the
+// camera turned (shake). The blur in the photo is exactly the distance between the two outlines.
+const motionCanvas = $('#motion'), motionCtx = motionCanvas.getContext('2d');
+function projectBox(box, cam, w, h) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; const v = new THREE.Vector3();
+  for (let i = 0; i < 8; i++) {
+    v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(cam);
+    const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  return { x0, y0, x1, y1 };
+}
+function tag(g, text, x, y, color, align = 'center') {
+  g.font = '600 11px system-ui, sans-serif'; const w = g.measureText(text).width + 10;
+  const left = Math.max(2, Math.min(motionCanvas.width / devicePixelRatio - w - 2, align === 'center' ? x - w / 2 : align === 'right' ? x - w : x));
+  g.fillStyle = 'rgba(12,14,16,.78)'; g.fillRect(left, y - 9, w, 18);
+  g.fillStyle = color; g.textBaseline = 'middle'; g.fillText(text, left + 5, y);
+}
+function arrow(g, x0, y0, x1, y1, color) {
+  const a = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0), hd = Math.min(8, L / 2);
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2; g.setLineDash([]);
+  g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 - hd * Math.cos(a - 0.45), y1 - hd * Math.sin(a - 0.45)); g.lineTo(x1 - hd * Math.cos(a + 0.45), y1 - hd * Math.sin(a + 0.45)); g.closePath(); g.fill();
+}
+function drawMotion() {
+  const d = S.d, sc = step().scene || {};
+  const showShake = !step().blender && !d.tripod && d.shakePx >= 0.5;
+  const relevant = !!sc.cyclist || showShake;
+  $('#motion-toggle').hidden = !relevant;
+  const on = relevant && $('#o-motion').checked;
+  motionCanvas.hidden = !on;
+  if (!on) return;
+  const host = $('#photo-host'), hr = host.getBoundingClientRect(), pr = photoCanvas.getBoundingClientRect();
+  const w = pr.width, h = pr.height, dpr = devicePixelRatio || 1;
+  Object.assign(motionCanvas.style, { left: `${pr.left - hr.left}px`, top: `${pr.top - hr.top}px`, width: `${w}px`, height: `${h}px` });
+  motionCanvas.width = Math.round(w * dpr); motionCanvas.height = Math.round(h * dpr);
+  const g = motionCtx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const k = w / d.width; // display pixels per photo pixel
+  const time = O.shutterLabel(d.t || 0);
+  if (sc.cyclist) {
+    const cam = pcam.baseCamera(photoParams(d), d.width / IMAGE_H);
+    const box = new THREE.Box3().setFromObject(world.cyclist), half = CYCLIST.speed * (d.t || 0) / 2;
+    const at = dx => projectBox(box.clone().translate(new THREE.Vector3(dx, 0, 0)), cam, w, h);
+    const a = at(-half), b = at(half), metres = 2 * half;
+    const dist = metres >= 1 ? `${metres.toFixed(1)} m` : `${(metres * 100).toFixed(metres < 0.1 ? 1 : 0)} cm`;
+    const px = d.motionPx.toFixed(d.motionPx < 10 ? 1 : 0);
+    g.lineWidth = 1.5;
+    if (!d.t) {
+      g.strokeStyle = '#56d364'; g.setLineDash([5, 4]); g.strokeRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
+      tag(g, t('Motion Blur off: the render is a single instant'), (a.x0 + a.x1) / 2, Math.max(12, a.y0 - 12), '#56d364');
+    } else if (d.motionPx < 3) {
+      g.strokeStyle = '#56d364'; g.setLineDash([5, 4]); g.strokeRect(a.x0, a.y0, b.x1 - a.x0, b.y1 - a.y0);
+      tag(g, tr('Frozen: in {t} s the bike moves {d} → {px} px', { t: time, d: dist, px }), (a.x0 + b.x1) / 2, Math.max(12, a.y0 - 12), '#56d364');
+    } else {
+      g.setLineDash([5, 4]);
+      g.strokeStyle = '#4aa3ff'; g.strokeRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
+      g.strokeStyle = '#ffd24a'; g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+      const y = Math.max(a.y0, 30) - 22;
+      tag(g, t('Shutter opens'), a.x0, a.y1 + 12, '#4aa3ff', 'left');
+      tag(g, t('Shutter closes'), b.x1, b.y1 + 28, '#ffd24a', 'right');
+      const cy = (a.y0 + a.y1) / 2;
+      arrow(g, (a.x0 + a.x1) / 2, cy, (b.x0 + b.x1) / 2, cy, '#ffffff');
+      tag(g, tr('Shutter open {t} s: the bike moves {d} → a {px} px streak', { t: time, d: dist, px }), ((a.x0 + a.x1) / 2 + (b.x0 + b.x1) / 2) / 2, Math.max(12, y), '#ffffff');
+    }
+  }
+  if (showShake) {
+    // The whole image slides this much while the shutter is open.
+    const dir = pcam.lastShakeDir ?? 0, L = Math.min(d.shakePx * k, h * 0.4), cx = 22, cy = 44;
+    const ex = cx + Math.cos(dir) * Math.max(L, 2), ey = cy + Math.sin(dir) * Math.max(L, 2);
+    g.strokeStyle = '#ff7b72'; g.lineWidth = 1.5; g.setLineDash([]);
+    g.beginPath(); g.arc(cx, cy, 5, 0, Math.PI * 2); g.moveTo(cx - 9, cy); g.lineTo(cx + 9, cy); g.moveTo(cx, cy - 9); g.lineTo(cx, cy + 9); g.stroke();
+    if (L > 3) arrow(g, cx, cy, ex, ey, '#ff7b72');
+    tag(g, tr('Camera shake in {t} s: the whole photo slides {px} px', { t: time, px: d.shakePx.toFixed(1) }), 10, 18, d.shakePx <= 2 ? '#56d364' : '#ff7b72', 'left');
+  }
+}
+$('#o-motion').onchange = () => drawMotion();
+new ResizeObserver(() => drawMotion()).observe($('#photo-host'));
 
 // Focus by clicking the photo (like moving the AF point)
 photoCanvas.addEventListener('click', e => {

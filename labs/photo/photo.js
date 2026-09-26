@@ -82,7 +82,7 @@ export function buildScene() {
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.45, 6, 12), rider); body.position.set(0, 1.2, 0); body.rotation.z = -0.6; cyclist.add(body);
   const rhead = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), std(0xeeeeee, 0.3)); rhead.position.set(0.32, 1.52, 0); cyclist.add(rhead);
   const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.55, 6, 12), std(0x222222)); leg.position.set(-0.08, 0.72, 0.08); leg.rotation.z = 0.3; cyclist.add(leg);
-  cyclist.position.set(1.7, 0, -CYCLIST.behind);
+  cyclist.position.set(CYCLIST.x, 0, -CYCLIST.behind);
   scene.add(cyclist);
 
   function setLook(kind) {
@@ -147,6 +147,7 @@ export class PhotoCamera {
     const base = world.cyclist.position.x;
     const rnd = mulberry(seed * 7919 + 1);
     const shakeDir = rnd() * Math.PI * 2, shake = p.tripod ? 0 : SHAKE_RATE;
+    this.lastShakeDir = shakeDir;
     for (let k = 0; k < samples; k++) {
       // lens position: a sunflower pattern fills the aperture evenly
       const rr = R * Math.sqrt((k + 0.5) / samples), th = k * 2.399963 + seed;

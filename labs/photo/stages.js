@@ -4,7 +4,7 @@ import * as O from './optics.js';
 export const SUBJECT_H = 1.75;     // the person, in metres
 export const BACKGROUND = 10;      // the string of lights behind the person (m)
 export const FACE = 0.15;          // the face is this much closer to the camera than the person's feet
-export const CYCLIST = { behind: 2, speed: 6 };
+export const CYCLIST = { behind: 3, speed: 6, x: -1.6 }; // x: where it is halfway through the exposure
 export const IMAGE_H = 512;
 export const imageWidth = sensor => Math.round(IMAGE_H * sensor.w / sensor.h);
 
@@ -69,7 +69,7 @@ export const STAGES = [
       {
         id: 'e3', title: 'Freeze the motion',
         text: 'A cyclist rides past at 6 m/s. With a slow shutter the bike becomes a streak. Use shutter priority (Tv): you choose the speed, the camera opens the aperture to compensate. Freeze the wheels: the streak must be under 1.5 pixels.',
-        how: ['The mode is <b>Tv</b>: choose a faster <b>shutter speed</b>.', 'Watch the motion blur in the sidebar.', 'If the camera runs out of aperture (the meter goes negative), raise the ISO.'],
+        how: ['The mode is <b>Tv</b>: choose a faster <b>shutter speed</b>.', 'Watch the <b>Motion</b> outlines on the photo: they show where the bike was when the shutter opened and when it closed.', 'If the camera runs out of aperture (the meter goes negative), raise the ISO.'],
         why: 'Sport and wildlife photography need fast shutter speeds; the aperture and ISO pay for them.',
         scene: { light: 'shade', cyclist: true },
         start: { mode: 'Tv', N: 8, t: 1 / 60, iso: 100, f: 50, focus: 6, dist: 4 },
