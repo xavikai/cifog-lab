@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import * as O from './optics.js?v=1';
 import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, WINDMILL, IMAGE_H } from './stages.js?v=3';
-import { buildScene, PhotoCamera } from './photo.js?v=5';
+import { buildScene, PhotoCamera } from './photo.js?v=6';
 import { buildDslr, shotTimeline } from './dslr.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
 import dictionary from './i18n.js?v=4';
@@ -489,4 +489,8 @@ document.addEventListener('keydown', e => {
 new ResizeObserver(resize).observe(dslrHost);
 onLangChange(() => renderAll());
 enterStep(); resize(); translateTitles();
+world.ready.then(() => {
+  if (step().blender) renderReference();
+  if (!$('#o-live').checked) renderPhoto(40);
+});
 window.__photo = { S, O, STAGES, derive, shoot, renderPhoto, dslr, renderDslr }; // for tests and curious students
