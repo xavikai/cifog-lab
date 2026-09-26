@@ -1,0 +1,34 @@
+# Texel Density Lab · teaching notes
+
+Lab 16, in `labs/texel-density/`. Five stages, 11 steps. It shows texel density from three sides: you see it (checker), you compute it (px ÷ m), and you decide it (camera, memory, exceptions).
+
+## The idea in one sentence
+Texel density = texture pixels per metre of surface = texture size × √(UV area ÷ 3D area). It depends on three things **together**: the texture size, the size of the UV islands and the real size of the object.
+
+## Stages
+| Stage | Steps | What students do |
+|---|---|---|
+| 1 · See it | s1 The checker map · s2 Blurry next to sharp | Switch Texture/Checker, read px/m of a crate, a wall and a barrel (all 1K). Then pick the blurriest and the sharpest prop from the squares alone. |
+| 2 · Measure it | m1 Pixels ÷ metres · m2 Three knobs | Type the density of the crate for three cases (512, 1024, 256 px/m). Reach 512 px/m three ways: bigger texture, bigger islands (A, S 2), smaller object (Scale 0.5). |
+| 3 · Match it | a1 Same squares by hand · a2 Average and pack · a3 One density for the scene | Scale the cabinet islands to 512 px/m with S; use Average Islands Scale + Pack Islands; choose the smallest texture for each prop and press Set TD. |
+| 4 · Choose it | c1 The target comes from the camera · c2 Texture size and memory | Pixel loupe: texels vs screen pixels at 10 m / 2.5 m / 1.25 m (answers 128, 512, 1024 px/m). Fit four props in a 40 MB budget at 512 px/m and see ×4 memory at 1024. |
+| 5 · Break the rule | e1 More for the hero, less for the hidden · e2 When to break it | Vending machine: front 1024, sides 512, top 256, back 128 px/m. Quiz of six cases: higher / same / lower. |
+
+## Numbers used (so you can check them on the board)
+- Checker square = 64 × 64 texels. At 512 px/m a square is 12.5 cm.
+- Packed layouts (margin 0.01): crate 0.5 m → 655 px/m on 1K; wall 3 × 2 m → 335 px/m on 1K; barrel Ø0.6 × 0.9 m → 534 px/m on 1K; vending machine → 286 px/m on 1K.
+- Smallest textures for 512 px/m: crate 1K, barrel 1K, wall 2K, vending machine 2K, cabinet 2K.
+- Screen 2560 × 1440, vertical FOV 60°: 1 m covers 1247 ÷ distance px → 125 px at 10 m, 499 px at 2.5 m, 998 px at 1.25 m.
+- Memory of a texture set (colour + normal + roughness, 1 byte/px block-compressed, + ⅓ mipmaps): 1K = 4 MB, 2K = 16 MB, 4K = 64 MB. Shop scene: 10 / 40 / 160 MB at 256 / 512 / 1024 px/m.
+
+## Talking points
+- A checker is only useful if its squares are a fixed number of **texels**: make it at the size of the real texture.
+- Scaling an object in Object Mode changes its density: apply the scale before measuring.
+- Average + Pack gives even squares on one object, but the density it lands on is an accident of packing. Set TD (Texel Density Checker) sets the number.
+- The target is a project decision (camera + budget); texture sizes follow from it. Write it in the art bible.
+- Exceptions are deliberate: hero areas, readable text and first-person weapons up; hidden, far or tiny faces down.
+
+## Simulation notes
+- The 3D view paints each texture procedurally at its real resolution (bilinear, with a mip-like limit), so blur follows the density without huge images in memory.
+- The pixel loupe resamples the brick pattern at the texel grid, then shows what a screen at that distance would display.
+- Links: Trim Sheet Lab (strip heights from density), UV Unwrap Lab.

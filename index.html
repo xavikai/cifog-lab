@@ -7,7 +7,7 @@
   <meta name="description" content="CIFOG Lab: hands-on browser experiments for learning 3D modeling, materials, lighting, rigging, animation and programming.">
   <title>CIFOG Lab · Learn by experimenting</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./home.css">
+  <link rel="stylesheet" href="./home.css?v=16">
 </head>
 <body>
   <header class="site-header">
@@ -37,7 +37,7 @@
 
     <section class="labs-section" id="labs" aria-labelledby="labs-title">
       <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2 id="labs-title">Explore the labs</h2></div><p>Grouped in the order of a 3D production: model, texture, light, animate, and program the game. And a visit to the theatre and to graphic design.</p></div>
-      <nav class="topic-nav" aria-label="Topics"><a href="#topic-modeling"><b>01</b>Modeling &amp; UVs<small>2</small></a><a href="#topic-materials"><b>02</b>Materials &amp; texturing<small>3</small></a><a href="#topic-light"><b>03</b>Light, camera &amp; render<small>2</small></a><a href="#topic-animation"><b>04</b>Rigging &amp; animation<small>3</small></a><a href="#topic-code"><b>05</b>Programming for games<small>2</small></a><a href="#topic-stage"><b>06</b>Stage &amp; scenography<small>2</small></a><a href="#topic-graphic"><b>07</b>Graphic design &amp; UI<small>1</small></a></nav>
+      <nav class="topic-nav" aria-label="Topics"><a href="#topic-modeling"><b>01</b>Modeling &amp; UVs<small>2</small></a><a href="#topic-materials"><b>02</b>Materials &amp; texturing<small>4</small></a><a href="#topic-light"><b>03</b>Light, camera &amp; render<small>2</small></a><a href="#topic-animation"><b>04</b>Rigging &amp; animation<small>3</small></a><a href="#topic-code"><b>05</b>Programming for games<small>2</small></a><a href="#topic-stage"><b>06</b>Stage &amp; scenography<small>2</small></a><a href="#topic-graphic"><b>07</b>Graphic design &amp; UI<small>1</small></a></nav>
       <section class="topic" id="topic-modeling" aria-labelledby="topic-modeling-title">
         <div class="topic-heading"><span class="topic-number">01</span><div><h3 id="topic-modeling-title">Modeling &amp; UVs</h3><p>Build clean meshes and unfold them for textures.</p></div><span class="topic-count">2 labs</span></div>
         <div class="lab-grid">
@@ -52,7 +52,7 @@
         </div>
       </section>
       <section class="topic" id="topic-materials" aria-labelledby="topic-materials-title">
-        <div class="topic-heading"><span class="topic-number">02</span><div><h3 id="topic-materials-title">Materials &amp; texturing</h3><p>How a surface reacts to light, how the detail of a sculpt becomes images, and how one texture can dress a whole set.</p></div><span class="topic-count">3 labs</span></div>
+        <div class="topic-heading"><span class="topic-number">02</span><div><h3 id="topic-materials-title">Materials &amp; texturing</h3><p>How a surface reacts to light, how the detail of a sculpt becomes images, and how one texture can dress a whole set.</p></div><span class="topic-count">4 labs</span></div>
         <div class="lab-grid">
         <article class="lab-card">
           <div class="card-visual" aria-hidden="true"><div class="card-sphere"></div><span class="card-wire wire-one"></span><span class="card-wire wire-two"></span><span class="card-node node-one">UV</span><span class="card-node node-two">Mapping</span><span class="card-node node-three">Material</span></div>
@@ -65,6 +65,10 @@
         <article class="lab-card trim-card">
           <div class="card-visual trim-visual" aria-hidden="true"><svg viewBox="0 0 320 200"><g class="tr-wall"><path d="M28 70h96v70H28z"/><path class="tr-beam" d="M22 58h108v14H22z"/><path class="tr-joint" d="M28 93h96M28 116h96M60 70v23M100 70v23M44 93v23M84 93v23M70 116v24M108 116v24"/></g><g class="tr-sheet"><rect class="s1" x="162" y="34" width="120" height="30"/><rect class="s2" x="162" y="66" width="120" height="30"/><rect class="s3" x="162" y="98" width="120" height="15"/><rect class="s4" x="162" y="115" width="120" height="15"/><rect class="s5" x="162" y="132" width="120" height="8"/><rect class="s6" x="162" y="142" width="120" height="8"/><rect class="s7" x="162" y="152" width="120" height="4"/><rect class="s8" x="162" y="158" width="120" height="4"/></g><rect class="tr-isl" x="176" y="99" width="132" height="13"/><rect class="tr-isl" x="170" y="67" width="96" height="28"/><path class="tr-arrow" d="M134 64 C150 64 156 104 170 104"/></svg><span class="uv-decor">STRIPS · U REPEAT</span></div>
           <div class="card-content"><div class="card-topline"><span class="lab-number">12 / TEXTURING</span><span class="available"><span></span> AVAILABLE</span></div><h3>Trim Sheet Lab</h3><p>Understand trim sheets with a medieval wood and stone sheet: read its strips, plan one by texel density and padding, put UV islands on the strips with G, S and R in a Blender-style UV Editor, round edges with a bevel strip and Weighted Normal, and texture many props with one material.</p><div class="card-bottom"><span>UV Editor · texel density · Follow Active Quads</span><a href="./labs/trim-sheet/" aria-label="Open Trim Sheet Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+        </article>
+        <article class="lab-card td-card">
+          <div class="card-visual td-visual" aria-hidden="true"><svg viewBox="0 0 320 200"><defs><pattern id="td-big" width="44" height="44" patternUnits="userSpaceOnUse"><rect width="44" height="44" class="td-l"/><rect width="22" height="22" class="td-d"/><rect x="22" y="22" width="22" height="22" class="td-d"/></pattern><pattern id="td-small" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" class="td-l"/><rect width="8" height="8" class="td-d"/><rect x="8" y="8" width="8" height="8" class="td-d"/></pattern></defs><rect class="td-wall" x="138" y="30" width="154" height="110" fill="url(#td-big)"/><rect class="td-crate" x="36" y="84" width="64" height="56" fill="url(#td-small)"/><path class="td-floor" d="M18 140H302"/><text class="td-tag bad" x="215" y="22">335 px/m</text><text class="td-tag good" x="68" y="76">655 px/m</text><path class="td-arrow" d="M108 112h22"/></svg><span class="uv-decor">CHECKER · PX/M · SET TD</span></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">16 / TEXTURING</span><span class="available"><span></span> AVAILABLE</span></div><h3>Texel Density Lab</h3><p>Understand texel density, pixels of texture per metre: see it with a checker map, compute it in px/m, make every prop equally sharp with S, Average Islands Scale, Pack Islands and Set TD, choose the target from the camera and the texture budget, and give hero areas more on purpose.</p><div class="card-bottom"><span>Checker map · px/m · Set TD · memory</span><a href="./labs/texel-density/" aria-label="Open Texel Density Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
         </article>
         </div>
       </section>
@@ -148,6 +152,6 @@
     <section class="method" aria-label="How to use the labs"><span class="method-label">A SIMPLE LOOP</span><div><b>01</b> Open a lab</div><span class="method-arrow" aria-hidden="true">→</span><div><b>02</b> Change something</div><span class="method-arrow" aria-hidden="true">→</span><div><b>03</b> Observe the result</div></section>
   </main>
   <footer><span>cifog <strong>LAB</strong></span><span>Interactive studies for the classroom</span><a href="#labs">Back to labs ↑</a></footer>
-  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
+  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js?v=16'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
 </body>
 </html>

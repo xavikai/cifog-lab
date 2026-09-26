@@ -18,6 +18,7 @@ A home for small interactive activities that support CIFOG classroom presentatio
 - Stage House Lab: https://xavikai.github.io/cifog-lab/labs/stage/
 - Color & Type Lab: https://xavikai.github.io/cifog-lab/labs/color-type/
 - Stage Lighting Lab: https://xavikai.github.io/cifog-lab/labs/stage-lighting/
+- Texel Density Lab: https://xavikai.github.io/cifog-lab/labs/texel-density/
 
 ## Available labs
 
@@ -65,6 +66,8 @@ Each step is checked automatically, can show a solution and can be undone.
 
 **Stage Lighting Lab** (`labs/stage-lighting/`) is a small theatre stage (12 × 8 m, cyclorama, black masking, FOH and two overhead bars) with a rig of twelve fixtures driven like a DMX lighting desk such as Lightkey: fixture list, 3D view with real spotlights, haze beams and an audience preview, an Inspector (dimmer, gel, zoom, edge, LED mixing, pan and tilt, colour wheel), a live DMX monitor of the universe and a cue list with Record, fade times and GO. `rig.js` holds the photometry (candela, inverse square law, cosine, beam falloff, zoom), the DMX footprints and 16-bit pan/tilt, the patch checks, DIP switches, gels and LED mixing, and cue blending. Four stages: **The fixtures** (profile, Fresnel, PC, LED PAR and moving head; hard special and soft wash); **DMX and patch** (typing DMX values, a patch without overlaps, DIP switches); **Designing the light** (face in lux with key/fill and backlight, warm and cold, aiming a moving head); **Cues** (record the preset and the scene, fades, blackout and GO).
 
+**Texel Density Lab** (`labs/texel-density/`) explains texel density (texture pixels per metre) with a Blender-style UV Editor over a checker grid, a 3D view whose textures are painted procedurally at their real resolution, and a Texel Density panel like the Texel Density Checker add-on. `td.js` holds the props (crate, wall, barrel, cabinet, vending machine), the density maths, Average Islands Scale, Pack Islands, Set TD, overlap checks, screen density and texture memory. Five stages: **See it** (checker map, blurry next to sharp); **Measure it** (px ÷ m, the three knobs: texture, UVs, object scale); **Match it** (S by hand, Average + Pack, one density for the scene with the smallest textures); **Choose it** (the target from the camera with a pixel loupe, texture sizes in a memory budget); **Break the rule** (hero front, hidden back, when to break it).
+
 The Blender labs follow Blender conventions where it helps transfer: Material Lab links are made by dragging from an output to an input (compatible inputs light up), removed or moved by dragging a connected input away, and cut with Ctrl + right-drag; the mouse wheel zooms, the middle button pans and Home fits all nodes; values use Blender-style slider bars.
 
 **Languages.** Every page has an EN / CA / ES switch in the header. The explanations, instructions, feedback and hints are translated into Catalan and Spanish; the interface names and technical terms (Blender's Mark Seam, UV Editor, Principled BSDF…, C# keywords and code) stay in English so they match the real software, and real C# compiler messages (with their CS codes) stay in English with a translated hint. The choice is saved in the browser; the first visit follows the browser language. The shared engine is `i18n.js`; each page has its own dictionary (`home.i18n.js`, `labs/<name>/i18n.js`) whose keys are the English texts, with `{placeholders}` for changing values.
@@ -99,6 +102,7 @@ The tests cover material graph connections, Mapping transformations, valid or co
 - `labs/animation/`: Animation Lab. `fcurve.js` (F-curve evaluation and handles), `stages.js`, `app.js`.
 - `labs/topology/`: Topology Lab. `mesh.js` (mesh operations and subdivision), `models.js` (models and measurements), `stages.js`, `app.js`.
 - `labs/stage-lighting/`: Stage Lighting Lab. `rig.js` (fixtures, photometry, DMX, patch, cues), `stages.js`, `app.js`.
+- `labs/texel-density/`: Texel Density Lab. `td.js` (props, density, pack, Set TD, camera, memory), `stages.js`, `app.js`.
 - `labs/color-type/`: Color & Type Lab. `color.js` (colour maths, contrast, CVD, print model), `type.js` (fonts and text rules), `doc.js` (the page, styles and tokens), `stages.js`, `app.js`, `fonts/` (OFL fonts; `tools/font-metrics.cjs` measures them).
 - `labs/stage/`: Stage House Lab. `stage.js` (the model, sightlines, loads and interlocks), `stages.js` (steps and the parts of the building), `app.js`.
 - `labs/trim-sheet/`: Trim Sheet Lab. `sheet.js` (strips and layout), `paint.js` (the painted sheet), `uv.js` (island maths, checks and normals), `props.js` (the props and their islands), `stages.js`, `app.js`.

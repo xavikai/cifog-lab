@@ -86,4 +86,9 @@ export default {
   "DMX · PATCH · CUES": { ca: "DMX · PATCH · MEMÒRIES", es: "DMX · PATCH · MEMORIAS" },
   "15 / STAGE LIGHTING": { ca: "15 / IL·LUMINACIÓ ESCÈNICA", es: "15 / ILUMINACIÓN ESCÉNICA" },
   "2 labs": { ca: "2 labs", es: "2 labs" },
+  "Understand texel density, pixels of texture per metre: see it with a checker map, compute it in px/m, make every prop equally sharp with S, Average Islands Scale, Pack Islands and Set TD, choose the target from the camera and the texture budget, and give hero areas more on purpose.": { ca: "Entén la texel density, els píxels de textura per metre: mira-la amb un mapa de quadres, calcula-la en px/m, fes que tots els props siguin igual de nítids amb S, Average Islands Scale, Pack Islands i Set TD, tria l'objectiu a partir de la càmera i del pressupost de textures, i dona'n més a les zones protagonistes expressament.", es: "Entiende la texel density, los píxeles de textura por metro: mírala con un mapa de cuadros, calcúlala en px/m, haz que todos los props sean igual de nítidos con S, Average Islands Scale, Pack Islands y Set TD, elige el objetivo a partir de la cámara y del presupuesto de texturas, y da más a las zonas protagonistas a propósito." },
+  "Checker map · px/m · Set TD · memory": { ca: "Mapa de quadres · px/m · Set TD · memòria", es: "Mapa de cuadros · px/m · Set TD · memoria" },
+  "CHECKER · PX/M · SET TD": { ca: "QUADRES · PX/M · SET TD", es: "CUADROS · PX/M · SET TD" },
+  "16 / TEXTURING": { ca: "16 / TEXTURITZAT", es: "16 / TEXTURIZADO" },
+  "4 labs": { ca: "4 labs", es: "4 labs" },
 };
