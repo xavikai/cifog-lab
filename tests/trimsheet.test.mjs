@@ -5,6 +5,7 @@ import { DEFAULT_LAYOUT, DEFAULT_PAD, stripsOf, stripOf, SIZE, DENSITY, cleanMip
 import { scene, solvedUV, arc, scatter, emptyUV } from '../labs/trim-sheet/props.js';
 import { report, followActiveQuads, alignRotation, fitToTrim, density, islandFaces, cornerNormals, scale, bbox, orientation } from '../labs/trim-sheet/uv.js';
 import { DEFAULT_STRIPS } from '../labs/trim-sheet/sheet.js';
+import { layoutUnique } from '../labs/trim-sheet/unique.js';
 
 const steps = STAGES.flatMap(s => s.steps);
 test('every step starts unsolved and its solution solves it', () => {
@@ -20,6 +21,29 @@ test('the default sheet fills 1024 px exactly with 8 px padding', () => {
   assert.equal(used, SIZE);
   assert.equal(strips.length, 8);
   assert.equal(cleanMips(8), 3);
+});
+test('unique atlas gives every face its own non-overlapping space', () => {
+  const m = scene('all'), atlas = layoutUnique(m);
+  assert.equal(atlas.rects.length, m.faces.length);
+  assert.ok(atlas.density < DENSITY);
+  for (let i = 0; i < atlas.rects.length; i++) {
+    const a = atlas.rects[i];
+    assert.ok(a.x >= 0 && a.y >= 0 && a.x + a.w <= SIZE && a.y + a.h <= SIZE);
+    for (const [u, v] of atlas.uv[i]) assert.ok(u >= a.x / SIZE - 1e-9 && u <= (a.x + a.w) / SIZE + 1e-9 && v >= 1 - (a.y + a.h) / SIZE - 1e-9 && v <= 1 - a.y / SIZE + 1e-9);
+    for (let j = 0; j < i; j++) {
+      const b = atlas.rects[j];
+      assert.ok(a.x >= b.x + b.w || b.x >= a.x + a.w || a.y >= b.y + b.h || b.y >= a.y + a.h, `faces ${i} and ${j} overlap`);
+    }
+  }
+});
+test('each prop can have its own unique 1K or 2K UV image', () => {
+  const m = scene('all');
+  for (const prop of ['wall', 'column', 'chest', 'beam']) {
+    const one = layoutUnique(m, [prop], 1024), two = layoutUnique(m, [prop], 2048);
+    assert.equal(one.rects.filter(Boolean).length, m.faces.filter(f => f.island.startsWith(prop + '.')).length);
+    assert.ok(two.density > one.density * 1.9, `${prop} 2K should provide about twice the texel density`);
+    assert.ok(one.rects.filter(Boolean).every(r => r.x + r.w <= 1024 && r.y + r.h <= 1024));
+  }
 });
 test('the solved layouts of every scene pass every check', () => {
   for (const name of ['wall', 'column', 'chest', 'beam', 'all']) {

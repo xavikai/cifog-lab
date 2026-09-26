@@ -1,6 +1,6 @@
 // Trim Sheet Lab: stages, steps and checks. Pure JS (tested with node).
 import { TYPES, TYPE_IDS, DEFAULT_LAYOUT, DEFAULT_PAD, DEFAULT_STRIPS, stripsOf, stripOf, setMB, SIZE } from './sheet.js';
-import { scene, solvedUV, scatter, arc, propOf, PROPS_OF_ALL } from './props.js';
+import { scene, solvedUV, scatter, arc, propOf, PROPS_OF_ALL } from './props.js?v=2';
 import { report, islandFaces, bbox, place, faceArea } from './uv.js';
 
 const meshCache = new Map();
@@ -78,7 +78,7 @@ export const STAGES = [
       {
         id: 't1', title: 'Three ways to texture',
         text: 'The same four props, textured in three ways. A unique texture gives every surface its own pixels, so a big scene gets few pixels per metre. A tileable texture repeats well, but everything looks the same. A trim sheet stores strips that repeat along U: planks, stones, beams, iron… and every prop takes the strips it needs from one texture. Try the three modes and compare the numbers.',
-        how: ['In the 3D Viewport header, switch <b>Texture</b> between <b>Unique</b>, <b>Tileable</b> and <b>Trim sheet</b>.', 'Look at the texel density (px/m) and the memory in the side panel.', 'Finish on <b>Trim sheet</b>.'],
+        how: ['In the 3D Viewport header, switch <b>Texture</b> between <b>Unique</b>, <b>Tileable</b> and <b>Trim sheet</b>.', 'Watch the UV Editor: Unique gives every face its own space; Tileable repeats one square; Trim sheet shares horizontal strips. Compare texel density in the side panel.', 'Finish on <b>Trim sheet</b>.'],
         why: 'Trim sheets are how game environments get sharp detail on many props with very little texture memory.',
         start: { scene: 'all', texMode: 'unique' },
         check: s => !!(s.flags.seen_unique && s.flags.seen_tile && s.flags.seen_trim && s.texMode === 'trim'),

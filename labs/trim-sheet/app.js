@@ -3,12 +3,13 @@ import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { RoomEnvironment } from '../../vendor/RoomEnvironment.js';
 import { SIZE, DENSITY, UV_PER_M, TYPES, TYPE_IDS, HEIGHTS, PADS, PALETTES, DEFAULT_STRIPS, stripsOf, stripAt, stripOf, cleanMips, setMB } from './sheet.js?v=1';
-import { paintSheet, paintTileable, downsample, mip } from './paint.js?v=1';
+import { paintSheet, paintTileable, paintUnique, mip } from './paint.js?v=3';
 import { report, problem, islandFaces, bbox, cloneUV, translate, scale as scaleUV, rotate as rotateUV, followActiveQuads, alignRotation, fitToTrim, density, cornerNormals } from './uv.js?v=1';
-import { propOf, PROPS_OF_ALL, solvedUV } from './props.js?v=1';
-import { STAGES, QUIZ, BUDGET, startState, meshOf, layoutInfo, budgetStats, propAreas, reports } from './stages.js?v=1';
+import { propOf, PROPS_OF_ALL, solvedUV } from './props.js?v=2';
+import { layoutUnique } from './unique.js?v=3';
+import { STAGES, QUIZ, BUDGET, startState, meshOf, layoutInfo, budgetStats, reports } from './stages.js?v=2';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=1';
+import dictionary from './i18n.js?v=3';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -20,6 +21,7 @@ const store = {
 const S = {
   stageIndex: Math.min(Math.max(0, store.get('stage', 0) | 0), STAGES.length - 1), step: 0, st: null, undo: [], redo: [],
   done: store.get('done', {}), sel: new Set(), hover: false, hoverStrip: null, pivot: 'bbox', modal: null,
+  budgetFocus: 'wall',
 };
 const stage = () => STAGES[S.stageIndex], step = () => stage().steps[S.step];
 const isBoard = () => S.st.scene === 'board';
@@ -41,23 +43,12 @@ function sheetFor(layout, pad, palette) {
     const color = new THREE.CanvasTexture(p.color), normal = new THREE.CanvasTexture(p.normal);
     for (const tex of [color, normal]) { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; }
     color.colorSpace = THREE.SRGBColorSpace; normal.colorSpace = THREE.NoColorSpace;
-    sheets.set(key, { ...p, color3: color, normal3: normal, mips: [], small: new Map(), dispose() { color.dispose(); normal.dispose(); for (const m of this.small.values()) { m.c.dispose(); m.n.dispose(); } } });
+    sheets.set(key, { ...p, color3: color, normal3: normal, mips: [], dispose() { color.dispose(); normal.dispose(); } });
   }
   return sheets.get(key);
 }
 const currentSheet = () => isBoard() ? sheetFor(S.st.layout, S.st.pad, S.st.palette) : sheetFor(stripsLayout, 8, S.st.palette);
 const stripsLayout = TYPE_IDS.map(type => ({ type, px: TYPES[type].m * DENSITY }));
-// A copy of the sheet at a lower density (a unique texture of that density would look like this).
-function smallMaps(sheet, f) {
-  const k = Math.round(f * 100) / 100;
-  if (!sheet.small.has(k)) {
-    const c = new THREE.CanvasTexture(downsample(sheet.color, k)), n = new THREE.CanvasTexture(downsample(sheet.normal, k));
-    for (const tex of [c, n]) { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; }
-    c.colorSpace = THREE.SRGBColorSpace; n.colorSpace = THREE.NoColorSpace;
-    sheet.small.set(k, { c, n });
-  }
-  return sheet.small.get(k);
-}
 const mipCanvas = (sheet, m) => (sheet.mips[m] ??= mip(sheet.color, m));
 let tileable = null;
 function tileMaps(palette) {
@@ -66,10 +57,38 @@ function tileMaps(palette) {
     const p = paintTileable(palette), c = new THREE.CanvasTexture(p.color), n = new THREE.CanvasTexture(p.normal);
     for (const tex of [c, n]) { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; }
     c.colorSpace = THREE.SRGBColorSpace; n.colorSpace = THREE.NoColorSpace;
-    tileable = { palette, c, n };
+    tileable = { palette, c, n, color: p.color };
   }
   return tileable;
 }
+const uniqueAtlas = layoutUnique(meshOf({ scene: 'all', bevel: 0.0625 }));
+let unique = null;
+function uniqueMaps(palette) {
+  if (unique?.palette !== palette) {
+    unique?.c.dispose(); unique?.n.dispose();
+    const sheet = sheetFor(stripsLayout, 8, palette);
+    const p = paintUnique(uniqueAtlas, sheet.color, sheet.normal);
+    const c = new THREE.CanvasTexture(p.color), n = new THREE.CanvasTexture(p.normal);
+    c.colorSpace = THREE.SRGBColorSpace; n.colorSpace = THREE.NoColorSpace;
+    for (const tex of [c, n]) { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.anisotropy = 8; }
+    unique = { palette, c, n, color: p.color };
+  }
+  return unique;
+}
+const propAtlases = new Map();
+function uniqueForProp(prop, palette, resolution) {
+  const key = `${prop}|${palette}|${resolution}`;
+  if (!propAtlases.has(key)) {
+    const atlas = layoutUnique(meshOf({ scene: 'all', bevel: 0.0625 }), [prop], resolution);
+    const sheet = sheetFor(stripsLayout, 8, palette), p = paintUnique(atlas, sheet.color, sheet.normal);
+    const c = new THREE.CanvasTexture(p.color), n = new THREE.CanvasTexture(p.normal);
+    c.colorSpace = THREE.SRGBColorSpace; n.colorSpace = THREE.NoColorSpace;
+    for (const tex of [c, n]) { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.anisotropy = 8; }
+    propAtlases.set(key, { atlas, color: p.color, c, n });
+  }
+  return propAtlases.get(key);
+}
+const budgetMap = prop => uniqueForProp(prop, S.st.palette, S.st.budget[prop] === '2k' ? 2048 : SIZE);
 
 // ─── 3D viewport ─────────────────────────────────────────────────────────────
 const canvas = $('#view'), host = $('#view-host');
@@ -86,7 +105,7 @@ controls.addEventListener('change', () => { dirty = true; });
 const grid = new THREE.GridHelper(12, 24, 0x555555, 0x474747); scene3.add(grid);
 const world = new THREE.Group(); scene3.add(world);
 let dirty = true, meshObj = null, overlayObj = null, faceOfTri = [];
-const CAMS = { wall: [[1.8, 1.7, 6.2], [0, 0.95, 0]], column: [[1.9, 1.6, 3.4], [0, 0.7, 0]], chest: [[1.6, 1.3, 2.1], [0, 0.25, 0]], beam: [[2.3, 2.0, 3.9], [0, 0.6, 0]], all: [[0.5, 3.5, 9.6], [0, 0.5, -0.1]], board: [[0, 1.4, 3.8], [0, 1.2, 0]] };
+const CAMS = { wall: [[1.8, 1.7, 6.2], [0, 0.95, 0]], column: [[1.9, 1.6, 3.4], [0, 0.7, 0]], chest: [[1.6, 1.3, 2.1], [0, 0.25, 0]], beam: [[2.3, 2.0, 3.9], [0, 0.6, 0]], all: [[2.5, 3.2, 9.3], [0, 0.5, -0.1]], board: [[0, 1.4, 3.8], [0, 1.2, 0]] };
 function frame(kind) { const [p, tg] = CAMS[kind] || CAMS.wall; camera.position.set(...p); controls.target.set(...tg); controls.update(); dirty = true; }
 const matOf = (map, normalMap) => new THREE.MeshStandardMaterial({ map, normalMap, roughness: 0.82, metalness: 0, side: THREE.FrontSide });
 const overlayMat = new THREE.MeshBasicMaterial({ color: 0xffa629, transparent: true, opacity: 0.38, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide });
@@ -96,7 +115,15 @@ let materialCache = [];
 
 function clearWorld() { for (const o of [...world.children]) { world.remove(o); o.geometry?.dispose(); } materialCache.forEach(m => m.dispose()); materialCache = []; }
 // UVs shown in 3D: the state's, or the ideal layout for the tileable comparison.
-function uvFor(m, f) { return S.st.texMode === 'tile' && S.st.scene === 'all' ? m.faces[f].loc.map(([s, t]) => [s * UV_PER_M, t * UV_PER_M]) : S.st.uv[f]; }
+function uvFor(m, f) {
+  if (S.st.budget && S.st.scene === 'all') {
+    const prop = propOf(m.faces[f].island);
+    if (S.st.budget[prop] !== 'trim') return budgetMap(prop).atlas.uv[f];
+  }
+  if (S.st.scene === 'all' && S.st.texMode === 'unique') return uniqueAtlas.uv[f];
+  if (S.st.scene === 'all' && S.st.texMode === 'tile') return m.faces[f].loc.map(([s, t]) => [s * UV_PER_M, t * UV_PER_M]);
+  return S.st.uv[f];
+}
 function build3D() {
   clearWorld(); overlayObj = null; meshObj = null; faceOfTri = [];
   if (isBoard()) { buildBoard(); dirty = true; return; }
@@ -122,14 +149,14 @@ function build3D() {
 function materialFor(prop) {
   const st = S.st, sheet = currentSheet();
   if (st.scene === 'all' && st.texMode === 'tile') { const tm = tileMaps(st.palette); return matOf(tm.c, tm.n); }
-  if (st.scene === 'all' && st.texMode === 'unique') { const d = uniqueDensity(); const sm = smallMaps(sheet, d / DENSITY); return matOf(sm.c, sm.n); }
+  if (st.scene === 'all' && st.texMode === 'unique') { const um = uniqueMaps(st.palette); return matOf(um.c, um.n); }
   if (st.budget && prop !== 'one') {
     const b = st.budget[prop];
-    if (b !== 'trim') { const d = Math.min(DENSITY, budgetStats(st.budget).dens[prop]); if (d < DENSITY * 0.98) { const sm = smallMaps(sheet, d / DENSITY); return matOf(sm.c, sm.n); } }
+    if (b !== 'trim') { const um = budgetMap(prop); return matOf(um.c, um.n); }
   }
   return matOf(sheet.color3, sheet.normal3);
 }
-const uniqueDensity = () => { const a = propAreas(); const total = PROPS_OF_ALL.reduce((s, p) => s + a[p], 0); return Math.sqrt(SIZE * SIZE * 0.7 / total); };
+const uniqueDensity = () => uniqueAtlas.density;
 function extraMesh(e) {
   const mat = new THREE.MeshStandardMaterial({ color: EXTRA[e.color], roughness: 0.9 }); materialCache.push(mat);
   let g;
@@ -212,21 +239,26 @@ const stripsNow = () => isBoard() ? stripsOf(S.st.layout, S.st.pad).strips : DEF
 function drawUV() {
   const w = uvHost.clientWidth, h = uvHost.clientHeight, st = S.st, sheet = currentSheet();
   ctx.fillStyle = '#232323'; ctx.fillRect(0, 0, w, h);
-  const board = isBoard(), src = board && st.mip > 0 ? mipCanvas(sheet, st.mip) : sheet.color;
+  const board = isBoard(), budgetUnique = !!st.budget && st.budget[S.budgetFocus] !== 'trim';
+  const isUnique = !board && (st.scene === 'all' && st.texMode === 'unique' || budgetUnique);
+  const isTile = !board && st.scene === 'all' && st.texMode === 'tile';
+  const src = budgetUnique ? budgetMap(S.budgetFocus).color : isUnique ? uniqueMaps(st.palette).color : isTile ? tileMaps(st.palette).color : board && st.mip > 0 ? mipCanvas(sheet, st.mip) : sheet.color;
   ctx.imageSmoothingEnabled = !(board && st.mip > 0);
-  // The sheet repeats along U: tiles left and right are drawn dimmer.
-  const k0 = board ? 0 : Math.floor(-V.ox / V.sc) - 1, k1 = board ? 0 : Math.ceil((w - V.ox) / V.sc);
-  for (let k = k0; k <= k1; k++) {
-    const [x, y] = toScr(k, 1);
+  // Unique occupies exactly one atlas. Tileable repeats in both axes; trims repeat only in U.
+  const k0 = board || isUnique ? 0 : Math.floor(-V.ox / V.sc) - 1, k1 = board || isUnique ? 0 : Math.ceil((w - V.ox) / V.sc);
+  const j0 = isTile ? Math.floor((V.oy + V.sc - h) / V.sc) - 1 : 0;
+  const j1 = isTile ? Math.ceil((V.oy + V.sc) / V.sc) : 0;
+  for (let j = j0; j <= j1; j++) for (let k = k0; k <= k1; k++) {
+    const [x, y] = toScr(k, 1 + j);
     ctx.drawImage(src, x, y, V.sc, V.sc);
-    if (k !== 0) { ctx.fillStyle = 'rgba(20,20,20,.5)'; ctx.fillRect(x, y, V.sc, V.sc); }
+    if (k !== 0 || j !== 0) { ctx.fillStyle = 'rgba(20,20,20,.5)'; ctx.fillRect(x, y, V.sc, V.sc); }
   }
   const [x0, y0] = toScr(0, 1);
   ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, V.sc, V.sc);
   // Strip edges and names.
   const strips = stripsNow(), bleedAt = board && st.mip > 0 && st.pad < 2 ** st.mip;
   ctx.font = '11px Inter, Segoe UI, sans-serif'; ctx.textBaseline = 'middle';
-  for (const s of strips) {
+  for (const s of isUnique || isTile ? [] : strips) {
     if (s.y0 >= SIZE) continue;
     const [, ya] = toScr(0, s.v1), [, yb] = toScr(0, Math.max(0, s.v0));
     ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.setLineDash([4, 4]);
@@ -247,16 +279,17 @@ function drawUV() {
   }
   // Islands.
   const m = meshOf(st);
-  const byArea = Object.entries(m.islands).map(([id, isl]) => { const b = bbox(st.uv, isl.faces); return [id, isl, (b.u1 - b.u0) * (b.v1 - b.v0)]; }).sort((a, b) => b[2] - a[2]);
+  const visibleUV = st.budget ? m.faces.map((_, f) => uvFor(m, f)) : isUnique ? uniqueAtlas.uv : isTile ? m.faces.map((_, f) => uvFor(m, f)) : st.uv;
+  const byArea = Object.entries(m.islands).filter(([id]) => !st.budget || propOf(id) === S.budgetFocus).map(([id, isl]) => { const b = bbox(visibleUV, isl.faces); return [id, isl, (b.u1 - b.u0) * (b.v1 - b.v0)]; }).sort((a, b) => b[2] - a[2]);
   for (const pass of [0, 1]) for (const [id, isl] of byArea) {
     const sel = S.sel.has(id); if ((pass === 1) !== sel) continue;
     ctx.fillStyle = sel ? 'rgba(255,166,41,.28)' : 'rgba(255,255,255,.10)';
     ctx.strokeStyle = sel ? '#ffa629' : 'rgba(235,235,235,.85)';
     for (const f of isl.faces) {
-      ctx.beginPath(); st.uv[f].forEach(([u, v], i) => { const [x, y] = toScr(u, v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); visibleUV[f].forEach(([u, v], i) => { const [x, y] = toScr(u, v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
     if (sel || S.hoverIsland === id) {
-      const b = bbox(st.uv, isl.faces), [cx, cy] = toScr(b.cu, b.cv), label = t(isl.name), tw = ctx.measureText(label).width;
+      const b = bbox(visibleUV, isl.faces), [cx, cy] = toScr(b.cu, b.cv), label = t(isl.name), tw = ctx.measureText(label).width;
       ctx.fillStyle = 'rgba(15,15,15,.8)'; ctx.fillRect(cx - tw / 2 - 5, cy - 8, tw + 10, 16);
       ctx.fillStyle = sel ? '#ffc266' : '#fff'; ctx.fillText(label, cx - tw / 2, cy);
     }
@@ -270,7 +303,8 @@ function pointInPoly(p, poly) { let c = false; for (let i = 0, j = poly.length -
 function islandsAt(u, v) {
   if (isBoard()) return [];
   const m = meshOf(S.st), out = [];
-  for (const [id, isl] of Object.entries(m.islands)) if (isl.faces.some(f => pointInPoly([u, v], S.st.uv[f]))) { const b = bbox(S.st.uv, isl.faces); out.push([id, (b.u1 - b.u0) * (b.v1 - b.v0)]); }
+  const visibleUV = S.st.budget ? m.faces.map((_, f) => uvFor(m, f)) : S.st.scene === 'all' && S.st.texMode === 'unique' ? uniqueAtlas.uv : S.st.scene === 'all' && S.st.texMode === 'tile' ? m.faces.map((_, f) => uvFor(m, f)) : S.st.uv;
+  for (const [id, isl] of Object.entries(m.islands)) if ((!S.st.budget || propOf(id) === S.budgetFocus) && isl.faces.some(f => pointInPoly([u, v], visibleUV[f]))) { const b = bbox(visibleUV, isl.faces); out.push([id, (b.u1 - b.u0) * (b.v1 - b.v0)]); }
   return out.sort((a, b) => a[1] - b[1]).map(a => a[0]);
 }
 const islandAt = (u, v) => islandsAt(u, v)[0] ?? null;
@@ -284,7 +318,8 @@ function pick(id, add) {
   if (step().id === 't2') return;
   if (!add) S.sel.clear();
   if (id) { if (add && S.sel.has(id)) S.sel.delete(id); else S.sel.add(id); }
-  uvDirty = true; buildOverlay(); renderProps();
+  if (id && S.st.budget) S.budgetFocus = propOf(id);
+  uvDirty = true; buildOverlay(); renderHeaders(); renderProps();
 }
 let pan = null;
 uvc.addEventListener('pointerdown', e => {
@@ -306,7 +341,7 @@ uvc.addEventListener('pointermove', e => {
   pointer = { x, y, inUV: true };
   if (pan) { V.ox = pan.ox + e.clientX - pan.x; V.oy = pan.oy + e.clientY - pan.y; uvDirty = true; return; }
   if (S.modal) return;
-  const [u, v] = toUV(x, y), s = u > -50 && v >= 0 && v <= 1 ? stripAt(v, stripsNow()) : null;
+  const [u, v] = toUV(x, y), s = (isBoard() || S.st.texMode === 'trim' && !(S.st.budget && S.st.budget[S.budgetFocus] !== 'trim')) && u > -50 && v >= 0 && v <= 1 ? stripAt(v, stripsNow()) : null;
   const hoverIsland = islandAt(u, v);
   const ht = isBoard() || step().id === 't2' || !hoverIsland ? s?.type ?? null : null;
   if (ht !== S.hoverStrip || hoverIsland !== S.hoverIsland) { S.hoverStrip = ht; S.hoverIsland = hoverIsland; S.hoverStripIndex = s?.index; uvDirty = true; buildOverlay(); }
@@ -321,7 +356,7 @@ uvc.addEventListener('wheel', e => {
 
 // ─── Transforms: G, S, R with X/Y, Ctrl snapping and typed numbers ───────────
 function startModal(kind) {
-  if (isBoard() || step().id === 't2') return;
+  if (isBoard() || S.st.budget || step().id === 't2' || step().id === 't1' && S.st.texMode !== 'trim') return;
   if (!S.sel.size) { msg('Select an island first: click it in the UV Editor or on the model.', true); return; }
   const m = meshOf(S.st), faces = [...S.sel].flatMap(id => islandFaces(m, id));
   const groups = [...S.sel].map(id => { const f = islandFaces(m, id), b = bbox(S.st.uv, f); return { faces: f, pu: b.cu, pv: b.cv }; });
@@ -487,7 +522,7 @@ function modifiersPanel() {
 function budgetPanel() {
   const st = S.st, b = budgetStats(st.budget), names = { wall: 'Wall', column: 'Column', chest: 'Chest', beam: 'Beam' };
   return `<div class="panel"><h4>${esc(t('Texture budget'))}<small>${esc(t('per prop'))}</small></h4>${PROPS_OF_ALL.map(p => `<label class="bl-row budget"><span>${esc(t(names[p]))}</span><select data-budget="${p}">${[['2k', 'Unique 2K'], ['1k', 'Unique 1K'], ['trim', 'Trim sheet']].map(([k, n]) => `<option value="${k}"${st.budget[p] === k ? ' selected' : ''}>${esc(t(n))}</option>`).join('')}</select><em class="${b.dens[p] >= BUDGET.density ? 'good' : 'bad'}">${Math.round(b.dens[p])}</em></label>`).join('')}
-    <p class="sb-empty">${esc(t('The numbers on the right are px/m.'))}</p>
+    <p class="sb-empty">${esc(t('The numbers on the right are px/m. Select a prop in the 3D view to inspect its own UV texture.'))}</p>
     ${statRow('Materials', `${b.materials} / ${BUDGET.materials}`, b.materials <= BUDGET.materials ? 'good' : 'bad')}${statRow('Texture memory', `${b.mb.toFixed(1)} / ${BUDGET.mb} MB`, b.mb <= BUDGET.mb ? 'good' : 'bad')}${statRow('Lowest density', `${Math.round(Math.min(...Object.values(b.dens)))} px/m`, Object.values(b.dens).every(d => d >= BUDGET.density) ? 'good' : 'bad')}
     <p class="sb-empty">${esc(t('Memory: colour, normal and roughness maps, block-compressed, with mipmaps.'))}</p></div>`;
 }
@@ -514,7 +549,7 @@ $('#props').addEventListener('change', e => {
   if (d.dsType != null) { pushUndo(); S.st.layout[+d.dsType].type = e.target.value; changed(); }
   else if (d.dsPx != null) { pushUndo(); S.st.layout[+d.dsPx].px = +e.target.value; changed(); }
   else if (e.target.id === 'ds-pad') { pushUndo(); S.st.pad = +e.target.value; changed(); }
-  else if (d.budget) { pushUndo(); S.st.budget[d.budget] = e.target.value; changed(); }
+  else if (d.budget) { pushUndo(); S.st.budget[d.budget] = e.target.value; S.budgetFocus = d.budget; S.hoverStrip = null; changed(); }
   else if (e.target.id === 'bevel') { saveData(); }
 });
 let bevelGesture = false;
@@ -527,7 +562,7 @@ $('#props').addEventListener('input', e => {
 });
 
 // ─── Headers ─────────────────────────────────────────────────────────────────
-$('#tex-mode').addEventListener('click', e => { const b = e.target.closest('[data-tex]'); if (!b) return; pushUndo(); S.st.texMode = b.dataset.tex; S.st.flags['seen_' + b.dataset.tex] = true; changed(); });
+$('#tex-mode').addEventListener('click', e => { const b = e.target.closest('[data-tex]'); if (!b) return; pushUndo(); S.st.texMode = b.dataset.tex; S.st.flags['seen_' + b.dataset.tex] = true; S.sel.clear(); S.hoverStrip = null; changed(); });
 $('#pivot').addEventListener('change', e => { S.pivot = e.target.value; });
 $('#mip').addEventListener('change', e => { S.st.mip = +e.target.value; changed(); });
 function renderHeaders() {
@@ -537,7 +572,8 @@ function renderHeaders() {
   $('#mip-field').hidden = !isBoard(); $('#mip').value = String(st.mip);
   $('#pivot-field').hidden = isBoard() || id === 't1' || id === 't2' || !!st.budget || id === 'p3';
   $('#pivot').value = S.pivot;
-  $('#uv-title').textContent = isBoard() ? 'Image Editor' : 'UV Editor';
+  $('#uv-title').textContent = isBoard() ? 'Image Editor' : st.budget ? `UV Editor · ${S.budgetFocus[0].toUpperCase() + S.budgetFocus.slice(1)} ${st.budget[S.budgetFocus] === 'trim' ? 'trim sheet' : 'unique atlas'}` : id === 't1' ? `UV Editor · ${{ unique: 'Unique atlas', tile: 'Tileable', trim: 'Trim sheet' }[st.texMode]}` : 'UV Editor';
+  uvc.setAttribute('aria-label', st.budget ? `UV texture for ${S.budgetFocus}` : id === 't1' ? `${{ unique: 'Unique atlas: each face has its own non-overlapping area', tile: 'Tileable texture repeated in both directions', trim: 'Trim sheet and UV islands' }[st.texMode]}` : 'UV Editor with the trim sheet and the UV islands');
   const note = $('#mip-note'); note.hidden = !(isBoard() && st.mip > 0); note.textContent = tr('Showing mip {m} ({p} px)', { m: st.mip, p: SIZE >> st.mip });
 }
 
@@ -597,7 +633,7 @@ function changed(save = true) {
   build3D(); renderHeaders(); renderProps(); uvDirty = true; checkProgress();
 }
 function enterStep() {
-  loadData(); S.undo = []; S.redo = []; S.sel.clear(); S.modal = null; S.hoverStrip = null; S.focusRow = null;
+  loadData(); S.undo = []; S.redo = []; S.sel.clear(); S.modal = null; S.hoverStrip = null; S.focusRow = null; S.budgetFocus = 'wall';
   if (S.st.texMode) S.st.flags['seen_' + S.st.texMode] = true;
   lastOk = null; lastCard = ''; lastOk = stepDone(S.step);
   $('#status-msg').textContent = ''; clearTimeout(msgTimer);

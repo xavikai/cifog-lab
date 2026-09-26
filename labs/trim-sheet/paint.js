@@ -1,6 +1,6 @@
 // Trim Sheet Lab: paints the medieval trim sheet (colour and OpenGL normal map) on canvases.
 // Every strip repeats every 1024 px in x, so it tiles in U.
-import { SIZE, stripsOf, PALETTES } from './sheet.js';
+import { SIZE, stripsOf, PALETTES, DEFAULT_STRIPS, DENSITY } from './sheet.js';
 
 function hash(x, y, s) { let h = (x * 374761393 + y * 668265263 + s * 982451653) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 // Value noise, periodic in x over 1024 px. `cell` must divide 1024.
@@ -23,8 +23,11 @@ const PAINT = {
     const dj = Math.min(wrapDist(x, jx), wrapDist(x, jx + 512)), edge = Math.min(yb, bh - 1 - yb, dj);
     if (edge < 1.5) return [0.05, ...mul(p.wood2, 0.35)];
     const g = woodGrain(x, y + b * 40, 3 + b), n = noise(x, y, 64, 9 + b);
-    const h = 0.55 + 0.3 * sstep(0, 6, edge) + 0.04 * g;
-    return [h, ...mul(mix(p.wood, p.wood2, 0.25 + 0.45 * g * (0.6 + 0.4 * n)), 0.85 + 0.25 * noise(x, y, 256, 20 + b))];
+    const knot = Math.hypot(wrapDist(x, 280 + b * 233) / 30, (yb - bh * 0.46) / 12);
+    const knotRing = knot < 2.2 ? 0.5 + 0.5 * Math.cos(knot * 8) : 0;
+    const h = 0.5 + 0.33 * sstep(0, 7, edge) + 0.055 * g - (knot < 0.55 ? 0.18 : 0);
+    const tone = (0.84 + 0.22 * noise(x, y, 256, 20 + b)) * (knot < 2.2 ? 1 - 0.28 * knotRing : 1);
+    return [h, ...mul(mix(p.wood, p.wood2, 0.2 + 0.48 * g * (0.6 + 0.4 * n)), tone)];
   },
   beam(x, y, H, p) {
     const e = Math.min(y, H - 1 - y), g = woodGrain(x * 0.8, y * 1.3, 31);
@@ -37,11 +40,14 @@ const PAINT = {
     const starts = [0, 300, 512, 792], widths = [300, 212, 280, 232];
     let k = 0; for (let i = 0; i < 4; i++) if (x >= starts[i]) k = i;
     const dx = Math.min(x - starts[k], starts[k] + widths[k] - 1 - x), dm = Math.min(dx, y - 1, H - 2 - y);
-    if (dm < 3) return [0.12, ...mul(mix(p.stone, [200, 196, 186], 0.5), 0.7 + 0.2 * noise(x, y, 8, 5))];
+    if (dm < 3) return [0.08, ...mul(p.stone2, 0.54 + 0.16 * noise(x, y, 8, 5))];
     const chip = noise(x, y, 16, 11 + k) * 0.6 + noise(x, y, 4, 12) * 0.4;
-    const h = 0.55 + 0.3 * sstep(3, 16, dm) + 0.15 * chip;
-    const tone = 0.82 + 0.3 * hash(k, 7, 3) + 0.12 * (noise(x, y, 64, 13 + k) - 0.5);
-    return [h, ...mul(mix(p.stone, p.stone2, 0.5 * noise(x, y, 32, 14)), tone * (0.75 + 0.25 * h))];
+    const crackX = starts[k] + widths[k] * (0.28 + 0.12 * hash(k, 3, 61)) + y * 0.28 + 9 * (noise(x, y, 32, 77) - 0.5);
+    const crack = k === 1 && y > H * 0.22 && y < H * 0.78 && Math.abs(x - crackX) < 1.5;
+    const h = 0.5 + 0.35 * sstep(3, 14, dm) + 0.13 * chip - (crack ? 0.24 : 0);
+    const tone = 0.78 + 0.29 * hash(k, 7, 3) + 0.18 * (noise(x, y, 64, 13 + k) - 0.5);
+    const bevel = dm < 11 ? 1.12 - 0.24 * sstep(3, 11, dm) : 0.88;
+    return [h, ...mul(mix(p.stone, p.stone2, 0.58 * noise(x, y, 32, 14)), tone * bevel * (crack ? 0.48 : 1))];
   },
   molding(x, y, H, p) {
     const t = (y + 0.5) / H;
@@ -124,10 +130,42 @@ export function paintTileable(paletteId = 'oak') {
   const layout = [0, 1, 2, 3].map(() => ({ type: 'stone', px: 256 }));
   return paintSheet(layout, 0, paletteId);
 }
-// A smaller copy of a canvas, as a unique texture of lower density would look.
-export function downsample(canvas, f) {
-  const n = Math.max(8, Math.round(canvas.width * f)), c = canvasOf(n), g = c.getContext('2d');
-  g.imageSmoothingQuality = 'high'; g.drawImage(canvas, 0, 0, n, n); return c;
+// A genuine one-off atlas: each face has its own patch of the image. The source materials
+// give the surfaces a shared art direction, while the per-face wear is painted only once.
+export function paintUnique(atlas, sourceColor, sourceNormal) {
+  const size = atlas.size, color = canvasOf(size), normal = canvasOf(size), g = color.getContext('2d'), n = normal.getContext('2d');
+  g.fillStyle = '#252b30'; g.fillRect(0, 0, size, size);
+  n.fillStyle = 'rgb(128,128,255)'; n.fillRect(0, 0, size, size);
+  for (const zone of atlas.zones) {
+    g.fillStyle = '#323a3e'; g.fillRect(zone.x + 1, 1, zone.w - 2, 27);
+    g.fillStyle = '#e6dbca'; g.font = 'bold 15px Segoe UI, sans-serif';
+    g.fillText(zone.prop.toUpperCase() + ' · UNIQUE', zone.x + 9, 19);
+    g.fillStyle = '#4a5052'; g.fillRect(zone.x, 0, 2, size);
+  }
+  for (const r of atlas.rects) {
+    if (!r) continue;
+    const strip = DEFAULT_STRIPS.find(s => s.type === r.type);
+    if (!strip) continue;
+    const sw = Math.min(SIZE, Math.max(2, Math.round(r.w * DENSITY / atlas.density)));
+    const sh = Math.min(strip.px, Math.max(2, Math.round(r.h * DENSITY / atlas.density)));
+    const sx = Math.round(hash(r.face, 7, 43) * (SIZE - sw));
+    const sy = strip.y0 + Math.round(hash(r.face, 11, 97) * Math.max(0, strip.px - sh));
+    g.drawImage(sourceColor, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
+    n.drawImage(sourceNormal, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
+    // Distinct marks make the one-to-one UV assignment visible on the model.
+    const patina = hash(r.face, 13, 31), marks = Math.max(1, Math.round(r.w * r.h / 2200));
+    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+    for (let i = 0; i < marks; i++) {
+      const px = r.x + hash(r.face, i * 17 + 3, 67) * r.w;
+      const py = r.y + hash(r.face, i * 19 + 5, 71) * r.h;
+      const radius = 2 + hash(r.face, i + 9, 79) * Math.min(13, r.w / 4);
+      g.fillStyle = r.prop === 'chest' || r.prop === 'beam' ? 'rgba(38,22,11,.14)' : 'rgba(51,42,29,.16)';
+      g.beginPath(); g.ellipse(px, py, radius, Math.max(1, radius * .35), patina, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+    g.strokeStyle = 'rgba(24,27,29,.75)'; g.lineWidth = 2; g.strokeRect(r.x + .5, r.y + .5, r.w - 1, r.h - 1);
+  }
+  return { color, normal };
 }
 // Mip level m of a canvas, made by halving it m times (each texel averages the ones below it).
 export function mip(canvas, m) {
