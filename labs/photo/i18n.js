@@ -209,4 +209,6 @@ export default {
   "Frozen: in {t} s the sails turn {a}, the tips move {d} → {px} px": {"ca": "Congelat: en {t} s les aspes giren {a}, les puntes es mouen {d} → {px} px", "es": "Congelado: en {t} s las aspas giran {a}, las puntas se mueven {d} → {px} px"},
   "Shutter open {t} s: the sails turn {a}, the tips move {d} → {px} px of blur": {"ca": "Obturador obert {t} s: les aspes giren {a}, les puntes es mouen {d} → {px} px de rastre", "es": "Obturador abierto {t} s: las aspas giran {a}, las puntas se mueven {d} → {px} px de estela"},
   "Motion blur (sail tips)": {"ca": "Rastre de moviment (puntes de les aspes)", "es": "Rastro de movimiento (puntas de las aspas)"},
+  "Live view": {"ca": "Visió en directe", "es": "Visión en directo"},
+  "The photo updates all the time, like the screen of a mirrorless camera: the windmill keeps turning": {"ca": "La foto s'actualitza contínuament, com la pantalla d'una càmera sense mirall: el molí no para de girar", "es": "La foto se actualiza continuamente, como la pantalla de una cámara sin espejo: el molino no para de girar"},
 };

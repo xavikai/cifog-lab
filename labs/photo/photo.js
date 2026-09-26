@@ -141,7 +141,7 @@ export class PhotoCamera {
     this.acc = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: false });
   }
   // p: { f (mm), sensor {w, h}, N (Infinity = pinhole), focus (m), t (s), tripod, gain, iso, dist (m) }
-  render(world, p, { samples = 32, width, height, target = null, spin = 0, seed = 0 } = {}) {
+  render(world, p, { samples = 32, width, height, target = null, spin = 0, time = 0, seed = 0 } = {}) {
     const r = this.r, cam = this.cam;
     this.ensureTargets(width, height);
     const prevTarget = r.getRenderTarget(), prevAuto = r.autoClear;
@@ -159,7 +159,7 @@ export class PhotoCamera {
       const ox = rr * Math.cos(th), oy = rr * Math.sin(th);
       // instant of the exposure (stratified, in a different order than the lens samples)
       const tau = p.t ? (((k * 7) % samples) + rnd()) / samples * p.t - p.t / 2 : 0;
-      world.blades.rotation.z = world.phase - spin * tau; // the sails turn clockwise
+      world.blades.rotation.z = world.phase - spin * (time + tau); // the sails turn clockwise
       // camera shake: the camera turns slowly while the shutter is open
       const ang = shake * (tau + p.t / 2);
       cam.position.set(eye.x + ox, eye.y + oy, eye.z);
@@ -174,7 +174,7 @@ export class PhotoCamera {
       this.accMat.uniforms.t.value = this.sample.texture; this.accMat.uniforms.w.value = 1 / samples;
       this.quad.material = this.accMat; r.autoClear = false; r.setRenderTarget(this.acc); r.render(this.quadScene, this.ortho); r.autoClear = prevAuto;
     }
-    world.blades.rotation.z = world.phase;
+    world.blades.rotation.z = world.phase - spin * time;
     this.finalMat.uniforms.t.value = this.acc.texture;
     this.finalMat.uniforms.gain.value = p.gain;
     this.finalMat.uniforms.noise.value = p.iso ? 0.011 * Math.sqrt(p.iso / 100) - 0.006 : 0;

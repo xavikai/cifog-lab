@@ -6,7 +6,7 @@ import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, WINDMILL, IMA
 import { buildScene, PhotoCamera } from './photo.js?v=4';
 import { buildDslr, shotTimeline } from './dslr.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=3';
+import dictionary from './i18n.js?v=4';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -53,20 +53,41 @@ let seed = 1;
 function photoParams(d) {
   return { f: d.f, sensor: d.sensor, N: d.N, focus: d.focus, t: d.t, tripod: d.tripod, gain: d.gain, iso: step().blender ? 0 : d.iso, dist: d.dist };
 }
-function renderPhoto(samples) {
+// The photo pane is a live view: the windmill keeps turning, so the photo is rendered again and again with
+// the time of each frame (as the screen of a mirrorless camera). Shoot keeps one frame in full quality.
+let liveTime = 0, liveSamples = 12, lastFrame = 0, lastHist = 0, photoVisible = true;
+const liveOn = () => $('#o-live').checked;
+function renderPhoto(samples, { hist = true } = {}) {
   const d = S.d, W = d.width, H = IMAGE_H;
   world.setLook(step().scene?.light || 'shade');
   photoRenderer.setSize(W, H, false);
   photoCanvas.style.aspectRatio = `${W} / ${H}`;
-  pcam.render(world, photoParams(d), { samples, width: W, height: H, spin: WINDMILL.omega, seed });
-  drawHistogram(); drawMotion();
+  pcam.render(world, photoParams(d), { samples, width: W, height: H, spin: WINDMILL.omega, time: liveTime, seed });
+  if (hist) drawHistogram();
+  drawMotion();
 }
 let hqTimer, pending = false;
 function schedulePhoto(fast = true) {
+  if (liveOn()) return; // the live loop draws the next frame anyway
   if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; renderPhoto(fast ? 8 : 40); }); }
   clearTimeout(hqTimer);
   if (fast) hqTimer = setTimeout(() => renderPhoto(40), 220);
 }
+function liveLoop(now) {
+  requestAnimationFrame(liveLoop);
+  if (!liveOn() || document.hidden || !photoVisible || !S.d || S.shooting || now < (S.reviewUntil || 0) || now - lastFrame < 50) return;
+  lastFrame = now; liveTime = now / 1000;
+  const t0 = performance.now();
+  const hist = now - lastHist > 400; if (hist) lastHist = now;
+  renderPhoto(liveSamples, { hist });
+  // keep the frame rate: fewer samples on a slow computer, more on a fast one
+  const cost = performance.now() - t0;
+  if (cost > 45 && liveSamples > 4) liveSamples -= 2; else if (cost < 18 && liveSamples < 32) liveSamples += 2;
+}
+new IntersectionObserver(es => { photoVisible = es[0].isIntersecting; }).observe($('#photo-host'));
+$('#o-live').onchange = e => { try { localStorage.setItem('cifog-photo:live', e.target.checked ? '1' : '0'); } catch { /* storage unavailable */ } if (!e.target.checked) renderPhoto(40); };
+try { if (localStorage.getItem('cifog-photo:live') === '0') $('#o-live').checked = false; } catch { /* storage unavailable */ }
+requestAnimationFrame(liveLoop);
 const histCanvas = $('#hist'), histCtx = histCanvas.getContext('2d'), sampler = document.createElement('canvas');
 sampler.width = 160; sampler.height = 106;
 function drawHistogram() {
@@ -135,7 +156,7 @@ function drawMotion() {
     const dist = metres >= 1 ? `${metres.toFixed(1)} m` : `${(metres * 100).toFixed(metres < 0.1 ? 1 : 0)} cm`;
     const px = d.motionPx.toFixed(d.motionPx < 10 ? 1 : 0), angle = deg >= 10 ? `${Math.round(deg)}°` : `${deg.toFixed(1)}°`;
     // the top sail, seen from the camera: it turns clockwise
-    const mid = -Math.PI / 2 - world.phase, a0 = mid - Math.min(sweep, 2 * Math.PI) / 2, a1 = mid + Math.min(sweep, 2 * Math.PI) / 2;
+    const mid = -Math.PI / 2 - (world.phase - WINDMILL.omega * liveTime), a0 = mid - Math.min(sweep, 2 * Math.PI) / 2, a1 = mid + Math.min(sweep, 2 * Math.PI) / 2;
     const ray = (a, color) => { g.strokeStyle = color; g.lineWidth = 2; g.setLineDash([]); g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx + R * Math.cos(a), hy + R * Math.sin(a)); g.stroke(); };
     const labelY = Math.max(14, hy - R - 16);
     if (!d.t) {
@@ -230,7 +251,7 @@ function shoot() {
     else {
       dslr.set({ mirror: 0, stop: 0, first: 0, second: 0 }); dslr.parts.button.position.y = 0.5; renderDslr();
       S.shooting = false; $('#shoot').disabled = false; note.hidden = true;
-      seed++; renderPhoto(48); addShot();
+      seed++; renderPhoto(48); addShot(); S.reviewUntil = performance.now() + 1500; // keep the shot on screen for a moment, like a camera
       $('#photo-host').classList.remove('flash'); void $('#photo-host').offsetWidth; $('#photo-host').classList.add('flash');
     }
   };
