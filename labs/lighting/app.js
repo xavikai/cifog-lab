@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { TARGETS, CAMERA, PROBES, HDRIS, FALSE_COLOR, lightPos, lightDir, lightFrame, apparentSize, measure, ratioLabel, stopsOf, luminance, MIDDLE_GREY, rad, deg } from './light.js?v=1';
-import { buildSet, applySet, Rig, World, Progressive } from './scene.js?v=4';
+import { buildSet, applySet, Rig, World, Progressive } from './scene.js?v=5';
 import { parseModel, fitModel } from './models.js?v=2';
 import { STAGES, startState, referenceState, LIGHT_IDS, LIGHT_NAMES } from './stages.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';

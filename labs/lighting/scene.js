@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { HEAD, BACKDROP_Z, BACKDROPS, CARD_COLORS, ALBEDO, lightPos, lightDir, lightColor, lightFrame, allLights, makeHdri, FALSE_COLOR, rad } from './light.js';
 
-// ─── The bust: a sphere pushed into a head, with a nose, brows, eye sockets, cheekbones, lips, chin and ears ──
+// ─── The bust: a compact CC0 sculpt, with a simple geometry fallback if its asset cannot load ──
 const gauss = (x, y, cx, cy, sx, sy) => Math.exp(-0.5 * (((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2));
 function headGeometry() {
   const geo = new THREE.SphereGeometry(1, 128, 96), p = geo.attributes.position;
@@ -57,7 +57,7 @@ export function readBust(buffer) {
   geo.computeBoundingSphere();
   return geo;
 }
-const bustData = fetch(new URL('./assets/bust.bin', import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
+const bustData = fetch(new URL('./assets/bust.bin?v=2', import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
 
 export function buildSet(scene) {
   const plaster = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(ALBEDO.plaster, ALBEDO.plaster * 0.98, ALBEDO.plaster * 0.95, THREE.LinearSRGBColorSpace), roughness: 0.65 });
