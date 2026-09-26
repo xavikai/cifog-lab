@@ -2,7 +2,9 @@
 import { Vector3 } from '../../vendor/three.module.js';
 import { makeRig, defaultState, cloneState, solve, posOf, rotAngle, reachFK, addWorldLocation } from './rig.js';
 
-export const rigFor = stage => makeRig(stage.rig);
+// The rig of a stage, with the knee bend (Edit Mode) of the state, if there is one.
+export const rigFor = (stage, st) => makeRig(stage.rig, { knee: st?.knee || 0 });
+export const KNEE_BEND = 0.05;   // the slight forward bend of the solutions (5 cm)
 
 // A pose to copy (stage 1, step 2). Shown as a ghost.
 export const GHOST_POSE = { UpperArm: [40, 0, -30], Forearm: [75, 0, 0], Hand: [20, 0, 10] };
@@ -13,6 +15,8 @@ export function cupPoint(rig) { const { W } = solve(rig, withPose(rig, CUP_POSE)
 export function ghostPoints(rig) { const { W } = solve(rig, withPose(rig, GHOST_POSE)); return ['UpperArm', 'Forearm', 'Hand'].map(n => posOf(rig, W, n, 't')); }
 
 const IK = (extra = {}) => ({ owner: 'Shin', target: 'IK_Foot', pole: null, poleAngle: 0, chain: 2, influence: 1, ...extra });
+// A leg state with its own knee bend: the rig used to place things must have the same bend.
+function leg(knee, ik) { const rig = makeRig('leg', { knee }), st = defaultState(rig); st.ik = ik; return { rig, st }; }
 function liftedFoot(rig, st) { addWorldLocation(rig, st, solve(rig, st).W, 'IK_Foot', new Vector3(0, 0.6, 0.45)); return st; }
 const kneeOut = info => info.kneeDir ? Math.atan2(info.kneeDir.x, info.kneeDir.z) * 180 / Math.PI : 0;
 export const kneeForward = info => info.kneeDir ? info.kneeDir.z : -1;
@@ -65,29 +69,38 @@ export const STAGES = [
         solve: (st) => { st.ik = IK(); },
       },
       {
-        id: 'k2', title: 'Point the knee',
-        text: 'The foot is lifted and the knee bends backwards. The leg was modelled perfectly straight, so the IK has no hint of which way to bend. Add a Pole Target: the Knee_Pole in front of the knee. Then adjust the Pole Angle until the knee points at it.',
+        id: 'k2', title: 'A slight bend',
+        text: 'The foot is lifted and the knee bends backwards. The leg was modelled perfectly straight, so the IK has no hint: forwards and backwards are equally good, and it picks the wrong one. Riggers avoid this by giving the knee a slight bend in Edit Mode, in the direction it must bend. Move the knee joint a few centimetres forward.',
+        how: ['Press <kbd>Tab</kbd> to enter <b>Edit Mode</b>: the bones go back to their rest position.', 'Click the knee joint (the ball between Thigh and Shin) and type <kbd>G</kbd> <kbd>Y</kbd> <kbd>-</kbd><kbd>0</kbd><kbd>.</kbd><kbd>0</kbd><kbd>5</kbd> <kbd>Enter</kbd>: 5 cm forward (−Y is the front in Blender).', 'Press <kbd>Tab</kbd> again to go back to Pose Mode: the knee bends forward now.'],
+        why: 'The IK solver bends the chain the way it is already bent in the rest pose. A small bend is enough; the pole target, in the next step, then decides exactly where the knee points.',
+        start: () => { const { rig, st } = leg(0, IK()); return liftedFoot(rig, st); },
+        check: (st, c) => (st.knee || 0) >= 0.02 && (st.knee || 0) <= 0.2 && kneeForward(c.info) > 0.9,
+        solve: (st) => { st.knee = KNEE_BEND; },
+      },
+      {
+        id: 'k3', title: 'Point the knee',
+        text: 'The knee bends forward now, but nothing tells it exactly where to point: move the IK_Foot sideways and the knee swings with it. Add a Pole Target: the Knee_Pole in front of the knee. Then adjust the Pole Angle until the knee points at it.',
         how: ['Select the <b>Shin</b> and, in its IK constraint, set <b>Pole Target: Knee_Pole</b>.', 'The knee now points sideways. Change <b>Pole Angle</b> until the knee points forward (try -90°).', 'Move the <b>Knee_Pole</b> with <kbd>G</kbd>: the knee follows it.'],
         why: 'The pole target decides the direction of the joint, so knees and elbows never flip. The right Pole Angle depends on the roll of the bones: for a leg like this one it is usually -90°.',
-        start: rig => liftedFoot(rig, { ...defaultState(rig), ik: IK() }),
+        start: () => { const { rig, st } = leg(KNEE_BEND, IK()); return liftedFoot(rig, st); },
         check: (st, c) => !!st.ik && st.ik.pole === 'Knee_Pole' && kneeForward(c.info) > 0.95,
         solve: (st) => { st.ik.pole = 'Knee_Pole'; st.ik.poleAngle = -90; },
       },
       {
-        id: 'k3', title: 'Crouch with the foot planted',
+        id: 'k4', title: 'Crouch with the foot planted',
         text: 'Lower the Hips at least 0.4 m: the foot stays on the floor and the knee bends by itself. Then move the Knee_Pole outwards so the knee points 15°–50° to the outside, as in a relaxed crouch.',
         how: ['Select the <b>Hips</b> and type <kbd>G</kbd> <kbd>Z</kbd> <kbd>-</kbd><kbd>0</kbd><kbd>.</kbd><kbd>5</kbd> <kbd>Enter</kbd>.', 'Select the <b>Knee_Pole</b> and move it along X: <kbd>G</kbd> <kbd>X</kbd> <kbd>0</kbd><kbd>.</kbd><kbd>8</kbd> <kbd>Enter</kbd>.', 'The sidebar shows where the knee points.'],
         why: 'This is why legs are rigged with IK: the body moves and the feet stay where they are.',
-        start: rig => ({ ...defaultState(rig), ik: IK({ pole: 'Knee_Pole', poleAngle: -90 }) }),
+        start: () => leg(KNEE_BEND, IK({ pole: 'Knee_Pole', poleAngle: -90 })).st,
         check: (st, c) => { const h = posOf(c.rig, c.W, 'Hips'); const o = kneeOut(c.info); return 2.3 - h.y >= 0.4 && c.info.dist < 0.02 && o >= 15 && o <= 50; },
-        solve: (st, rig) => { st.pose.Hips.loc = [0, -0.5, 0]; addWorldLocation(rig, st, solve(rig, st).W, 'Knee_Pole', new Vector3(0.8, 0, 0)); },
+        solve: (st) => { const rig = makeRig('leg', { knee: st.knee }); st.pose.Hips.loc = [0, -0.5, 0]; addWorldLocation(rig, st, solve(rig, st).W, 'Knee_Pole', new Vector3(0.8, 0, 0)); },
       },
       {
-        id: 'k4', title: 'IK or FK: Influence',
-        text: 'Every constraint has an Influence. Drag it down to 0: the leg goes back to its FK rotations (straight, because nobody rotated the bones). Bring it back to 1 and the IK takes over again. Rigs use this to switch a limb between FK and IK.',
+        id: 'k5', title: 'IK or FK: Influence',
+        text: 'Every constraint has an Influence. Drag it down to 0: the leg goes back to its FK rotations (its rest pose, with the slight bend, because nobody rotated the bones). Bring it back to 1 and the IK takes over again. Rigs use this to switch a limb between FK and IK.',
         how: ['Select the <b>Shin</b>.', 'In the IK constraint, drag <b>Influence</b> down to 0.', 'Drag it back up to 1.'],
         why: 'Arms often need both: FK to swing freely, IK to lean on a table. An IK/FK switch is an Influence you can animate.',
-        start: rig => { const st = { ...defaultState(rig), ik: IK({ pole: 'Knee_Pole', poleAngle: -90 }) }; st.pose.Hips.loc = [0, -0.5, 0]; return st; },
+        start: () => { const { st } = leg(KNEE_BEND, IK({ pole: 'Knee_Pole', poleAngle: -90 })); st.pose.Hips.loc = [0, -0.5, 0]; return st; },
         check: (st, c) => !!st.ik && !!c.flags.lowInfluence && (st.ik.influence ?? 1) > 0.99,
         solve: (st, rig, flags) => { flags.lowInfluence = true; st.ik.influence = 1; },
       },

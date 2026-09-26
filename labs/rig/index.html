@@ -6,7 +6,7 @@
   <meta name="description" content="Pose an armature like in Blender: forward kinematics on an arm, then an IK constraint with a pole target on a leg.">
   <title>Rig Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=1">
+  <link rel="stylesheet" href="./style.css?v=2">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
 <body>
@@ -28,7 +28,7 @@
       <section class="editor" aria-label="3D Viewport">
         <div class="editor-header">
           <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14 5v6l-6 3.5L2 11V5z M2 5l6 3.5L14 5 M8 8.5v6" fill="none" stroke="currentColor"/></svg>3D Viewport</span>
-          <span class="mode-pill" title="In Blender: select the armature and press Ctrl Tab">Pose Mode</span>
+          <button type="button" class="mode-pill" id="mode-pill" title="Tab: switch between Pose Mode and Edit Mode (the leg)" data-no-i18n>Pose Mode</button>
           <div class="menubar">
             <button type="button" class="menu-button" data-menu="view" aria-haspopup="menu">View</button>
             <button type="button" class="menu-button" data-menu="select" aria-haspopup="menu">Select</button>
@@ -51,7 +51,7 @@
         </div>
       </section>
       <div class="statusbar">
-        <span class="status-keys" id="status-keys"><span><kbd>LMB</kbd>Select a bone</span><span><kbd>G</kbd>Move</span><span><kbd>R</kbd>Rotate</span><span><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd>Axis</span><span><kbd>Alt</kbd><kbd>R</kbd> / <kbd>Alt</kbd><kbd>G</kbd>Clear</span><span><kbd>Shift</kbd><kbd>I</kbd>Add IK</span><span><kbd>Ctrl</kbd><kbd>Z</kbd>Undo</span></span>
+        <span class="status-keys" id="status-keys"><span><kbd>LMB</kbd>Select a bone</span><span><kbd>G</kbd>Move</span><span><kbd>R</kbd>Rotate</span><span><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd>Axis</span><span><kbd>Alt</kbd><kbd>R</kbd> / <kbd>Alt</kbd><kbd>G</kbd>Clear</span><span><kbd>Shift</kbd><kbd>I</kbd>Add IK</span><span><kbd>Tab</kbd>Edit / Pose Mode</span><span><kbd>Ctrl</kbd><kbd>Z</kbd>Undo</span></span>
         <span id="status-msg" class="status-msg" role="status" aria-live="polite"></span>
       </div>
       <div id="menu" class="context-menu" role="menu" hidden></div>
@@ -79,7 +79,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>An FK arm and an IK leg</h2><p>This lab shows a simplified Blender: a few bones, rigid pieces of mesh and one IK constraint. Selecting, rotating, moving and the IK options behave like Blender's.</p></div><ol><li>Add an <strong>Armature</strong>, extrude the bones in <strong>Edit Mode</strong> (<strong>E</strong>) and name them. Bend the knee and the elbow slightly in Edit Mode so the IK knows which way to bend.</li><li>Switch to <strong>Pose Mode</strong> (<strong>Ctrl Tab</strong>). Rotate with <strong>R</strong>; <strong>R X X</strong> uses the bone's own axis. <strong>Alt R</strong> clears it.</li><li>Add control bones that do not deform: in the Bone properties turn off <strong>Deform</strong>, and clear their parent (<strong>Alt P</strong>) so they move freely.</li><li>Select the control, then <strong>Shift</strong>-click the Shin and press <strong>Shift I › To Active Bone</strong>. Set <strong>Chain Length</strong> to 2.</li><li>Set the <strong>Pole Target</strong> and fix the <strong>Pole Angle</strong> (often -90°) until the knee points at it.</li><li>Parent the foot to the IK control so it stays flat, and use the constraint's <strong>Influence</strong> for an IK/FK switch.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Rig Lab</span><a href="https://docs.blender.org/manual/en/latest/animation/constraints/tracking/ik_solver.html" target="_blank" rel="noopener">Blender: IK Constraint ↗</a><span>Teaching model · simplified Pose Mode.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=1"></script>
+  <script type="module" src="./app.js?v=2"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>

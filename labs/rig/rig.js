@@ -37,17 +37,24 @@ export const RIGS = {
 };
 
 // Blender's bone roll 0: a horizontal bone has its Z axis up; a vertical bone has its X axis along world X.
+// Bones within about 10° of vertical (a slightly bent leg) keep the vertical rule, so their roll does not jump.
 function restFrame(dir) {
   const Y = dir.clone().normalize();
   let X, Z;
-  if (Math.abs(Y.dot(UP)) < 0.999) { Z = UP.clone().addScaledVector(Y, -UP.dot(Y)).normalize(); X = new Vector3().crossVectors(Y, Z); }
-  else { X = new Vector3(1, 0, 0); Z = new Vector3().crossVectors(X, Y); }
+  if (Math.abs(Y.dot(UP)) < 0.985) { Z = UP.clone().addScaledVector(Y, -UP.dot(Y)).normalize(); X = new Vector3().crossVectors(Y, Z); }
+  else { X = new Vector3(1, 0, 0).addScaledVector(Y, -Y.x).normalize(); Z = new Vector3().crossVectors(X, Y); }
   return new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(X, Y, Z));
 }
 
-export function makeRig(kind) {
-  const def = RIGS[kind];
-  const bones = def.bones.map(b => ({ type: 'bone', connected: false, move: false, ...b }));
+// opts.knee: how far the knee joint was moved forward in Edit Mode (metres, three.js +Z = the front).
+export function makeRig(kind, opts = {}) {
+  const def = RIGS[kind], knee = kind === 'leg' ? +(opts.knee || 0) : 0;
+  const bones = def.bones.map(b => {
+    const o = { type: 'bone', connected: false, move: false, ...b, head: [...b.head], tail: [...b.tail] };
+    if (knee && b.name === 'Thigh') o.tail[2] += knee;
+    if (knee && b.name === 'Shin') o.head[2] += knee;
+    return o;
+  });
   const index = Object.fromEntries(bones.map((b, i) => [b.name, i]));
   for (const b of bones) {
     b.headV = V(b.head); b.tailV = V(b.tail);
@@ -61,14 +68,19 @@ export function makeRig(kind) {
     }
     b.canMove = b.move && !b.connected;
   }
-  return { kind, name: def.name, bones, index };
+  return { kind, name: def.name, bones, index, knee };
+}
+// How much a two-bone chain is bent in its rest pose (Edit Mode), as a vector from the straight line to the joint.
+export function restBend(rig, ia, ib) {
+  const a = rig.bones[ia], b = rig.bones[ib], line = b.tailV.clone().sub(a.headV).normalize(), j = b.headV.clone().sub(a.headV);
+  return j.addScaledVector(line, -j.dot(line));
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 // pose: name → { rot: [x, y, z] degrees (XYZ Euler, bone local), loc: [x, y, z] (bone local) }
 // ik: null or { owner, target, pole, poleAngle (degrees), chain, influence }
 export function defaultState(rig) {
-  return { pose: Object.fromEntries(rig.bones.map(b => [b.name, { rot: [0, 0, 0], loc: [0, 0, 0] }])), ik: null };
+  return { pose: Object.fromEntries(rig.bones.map(b => [b.name, { rot: [0, 0, 0], loc: [0, 0, 0] }])), ik: null, knee: rig.knee || 0 };
 }
 export const cloneState = s => JSON.parse(JSON.stringify(s));
 // Blender's XYZ Euler applies X first, then Y, then Z: in three.js that is the order 'ZYX'.
@@ -148,8 +160,19 @@ function twoBone(rig, W, [ia, ib], T, ik, info) {
     if (pv.length() > 1e-5) r = rotateAbout(pv.normalize(), u, -(ik.poleAngle || 0));
   }
   if (!r) {
-    const x = perp(new Vector3(1, 0, 0).applyQuaternion(W[ia].q));
-    r = x.length() > 1e-5 ? x.normalize() : perp(new Vector3(0, 0, 1)).normalize();
+    // No pole: the chain bends the way it is already bent in the rest pose (turned with the parent of the chain).
+    // A perfectly straight chain gives no hint: the solver falls back on the bones' X axis and here bends backwards.
+    const bend = restBend(rig, ia, ib);
+    info.straight = bend.length() < 1e-3;
+    if (!info.straight) {
+      if (a.parentIndex >= 0) bend.applyQuaternion(W[a.parentIndex].q.clone().multiply(rig.bones[a.parentIndex].restQ.clone().invert()));
+      const kb = perp(bend);
+      if (kb.length() > 1e-5) r = new Vector3().crossVectors(u, kb.normalize()).normalize();
+    }
+    if (!r) {
+      const x = perp(new Vector3(1, 0, 0).applyQuaternion(W[ia].q));
+      r = x.length() > 1e-5 ? x.normalize() : perp(new Vector3(0, 0, 1)).normalize();
+    }
   }
   const k = new Vector3().crossVectors(r, u).normalize();
   const along = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - along * along));

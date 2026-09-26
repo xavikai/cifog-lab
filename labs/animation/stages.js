@@ -10,7 +10,7 @@ export const RANGE = [1, 72];
 export const BALL = 1; // diameter in metres
 export const BONES = ['Root', 'SS_Top', 'SS_Bottom'];
 export const CHANNELS = {
-  locX: { name: 'X Location', bone: 'Root', color: '#ff6464', axis: 'X', locked: true },
+  locX: { name: 'X Location', bone: 'Root', color: '#ff6464', axis: 'X' },
   locZ: { name: 'Z Location', bone: 'Root', color: '#4aa3ff', axis: 'Z' },
   topZ: { name: 'Z Location', bone: 'SS_Top', color: '#7ee07e', axis: 'Z' },
   botZ: { name: 'Z Location', bone: 'SS_Bottom', color: '#e07ee0', axis: 'Z' },

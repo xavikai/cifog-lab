@@ -388,3 +388,6 @@ footer span:nth-child(3){margin-left:auto}
 .channels .ch-group.sel{color:#fff;background:#334d8055}
 .timeline-host{height:74px}
 #view-host .view-overlay{top:auto;bottom:8px}
+
+.editor-switch select{background:#3d3d3d;color:#fff;border:1px solid #1b1b1b;border-radius:4px;padding:2px 6px;font-weight:650;font-size:12.5px}
+#bottom-editor.dope .timeline-host{min-height:120px}

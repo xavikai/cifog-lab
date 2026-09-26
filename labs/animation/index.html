@@ -6,7 +6,7 @@
   <meta name="description" content="Animate a rigged bouncing ball in 3D with a Blender-style Timeline and Graph Editor: timing, squash and stretch with two controls, and weight with F-curves.">
   <title>Animation Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=2">
+  <link rel="stylesheet" href="./style.css?v=3">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
 <body>
@@ -15,7 +15,7 @@
     <section class="lab-top">
       <div class="lab-lead">
         <h1>Time it. Squash it. <span>Give it weight.</span></h1>
-        <p>The bouncing ball, one principle at a time. Pose the rigged ball in the <strong>3D Viewport</strong>, key it, and shape its curves in the <strong>Graph Editor</strong> and the <strong>Timeline</strong>, as in Blender.</p>
+        <p>The bouncing ball, one principle at a time. Pose the rigged ball in the <strong>3D Viewport</strong>, key it, and shape its curves in the <strong>Graph Editor</strong>; move keys in time in the <strong>Timeline</strong> or the <strong>Dope Sheet</strong>, as in Blender.</p>
       </div>
       <div class="model-switch stage-switch" id="stage-switch" role="group" aria-label="Stage">
         <span class="control-label">STAGE</span>
@@ -55,9 +55,9 @@
         </section>
       </div>
 
-      <section class="editor timeline" aria-label="Timeline">
+      <section class="editor timeline" id="bottom-editor" aria-label="Timeline and Dope Sheet">
         <div class="editor-header">
-          <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h13M4 5v6M8 4v8M12 5v6" fill="none" stroke="currentColor"/></svg>Timeline</span>
+          <label class="editor-type editor-switch" title="Editor Type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h13M4 5v6M8 4v8M12 5v6" fill="none" stroke="currentColor"/></svg><select id="bottom-type" aria-label="Editor Type" data-no-i18n><option value="timeline">Timeline</option><option value="dopesheet">Dope Sheet</option></select></label>
           <div class="play-controls">
             <button type="button" id="b-start" title="Jump to start (Shift ←)">⏮</button>
             <button type="button" id="b-prevkey" title="Previous keyframe (↓)">◆◂</button>
@@ -70,7 +70,7 @@
           <label class="frame-field">End <input type="number" id="f-end" min="2" max="250" value="72"></label>
           <span class="fps">24 fps · <span id="time-sec">0.00 s</span></span>
         </div>
-        <div class="timeline-host" id="timeline-host"><canvas id="timeline" aria-label="Timeline with keyframes"></canvas></div>
+        <div class="timeline-host" id="timeline-host"><canvas id="timeline" aria-label="Timeline or Dope Sheet with keyframes"></canvas></div>
       </section>
 
       <div class="statusbar">
@@ -87,8 +87,8 @@
     <section class="shortcuts" aria-label="Blender shortcuts used in this lab">
       <div><span class="eyebrow">SAME KEYS AS BLENDER</span><h2>Shortcuts you can use here</h2><p>Keys work in the editor under the mouse, just like in Blender: the same G moves a control in the 3D Viewport, keys in the Graph Editor and keys in time in the Timeline.</p></div>
       <dl>
-        <div><dt><kbd>LMB</kbd> · 3D</dt><dd>Select a rig control (Root, SS_Top, SS_Bottom). <kbd>G</kbd> moves it up or down (type a number for an exact value), <kbd>I</kbd> inserts a keyframe, <kbd>Alt</kbd><kbd>G</kbd> clears it</dd></div>
-        <div><dt><kbd>LMB</kbd> · Timeline</dt><dd>Drag the numbers to change frame · click a keyframe to select it (<kbd>Shift</kbd> adds) · drag it or press <kbd>G</kbd> to move it in time · drag on empty space to box-select · <kbd>X</kbd> deletes</dd></div>
+        <div><dt><kbd>LMB</kbd> · 3D</dt><dd>Select a rig control (Root, SS_Top, SS_Bottom). <kbd>G</kbd> moves it: the Root in X and Z (<kbd>X</kbd> / <kbd>Z</kbd> lock an axis), the squash &amp; stretch controls up or down. Type a number for an exact value. <kbd>I</kbd> inserts a keyframe, <kbd>Alt</kbd><kbd>G</kbd> clears it</dd></div>
+        <div><dt><kbd>LMB</kbd> · Timeline / Dope Sheet</dt><dd>Drag the numbers to change frame · click a keyframe to select it (<kbd>Shift</kbd> adds; on the Summary or a bone row it takes every channel) · drag it or press <kbd>G</kbd> to move it in time · <kbd>Shift</kbd><kbd>D</kbd> duplicates · drag on empty space to box-select · <kbd>X</kbd> deletes. Switch the editor with its <b>Editor Type</b> menu.</dd></div>
         <div><dt><kbd>LMB</kbd> · Graph</dt><dd>Select a keyframe or handle · <kbd>Shift</kbd> to add · drag to move · drag on empty space to box-select</dd></div>
         <div><dt><kbd>G</kbd> · <kbd>X</kbd> / <kbd>Y</kbd></dt><dd>Move the selected keys; X only in time, Y only in value. Click or Enter to confirm, Esc to cancel.</dd></div>
         <div><dt><kbd>A</kbd> · <kbd>Alt</kbd><kbd>A</kbd></dt><dd>Select all / none</dd></div>
@@ -107,7 +107,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>The same bounce in Blender</h2><p>This lab shows a simplified Blender: one object, a side camera and a few channels. The curves, handles and keys behave like Blender's F-curves.</p></div><ol><li>Append the ball rig: a <strong>Root</strong> control at the base and two squash & stretch controls, <strong>SS_Top</strong> and <strong>SS_Bottom</strong>. Select it and switch to <strong>Pose Mode</strong>.</li><li>Open the <strong>Animation</strong> workspace. Pose the Root at frame 1 with <strong>G</strong> and key it with <strong>I</strong>; key the contacts and the tops. Move keys in time in the <strong>Timeline</strong> or the <strong>Dope Sheet</strong>.</li><li>In the <strong>Graph Editor</strong>, select all and press <strong>T</strong> › Bezier; select the contacts and press <strong>V</strong> › Vector.</li><li>Make every bounce lower and shorter. Turn on <strong>Motion Paths</strong> (Object properties) to see the spacing.</li><li>Use the rig's squash & stretch controls: the top one at the contacts (pivot at the base), the bottom one to stretch towards the floor. The rig keeps the volume.</li><li>Shape weight with the handles: long at the top for light objects, short and sharp for heavy ones.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Animation Lab</span><a href="https://docs.blender.org/manual/en/latest/editors/graph_editor/fcurves/introduction.html" target="_blank" rel="noopener">Blender: F-Curves ↗</a><span>Teaching model · simplified Graph Editor.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=2"></script>
+  <script type="module" src="./app.js?v=3"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 // Rig Lab: a Blender-style Pose Mode with FK on an arm and an IK constraint with a pole target on a leg.
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import * as RG from './rig.js?v=1';
-import { STAGES, rigFor, ghostPoints, cupPoint, withPose, GHOST_POSE, kneeForward } from './stages.js?v=1';
+import * as RG from './rig.js?v=2';
+import { STAGES, rigFor, ghostPoints, cupPoint, withPose, GHOST_POSE, kneeForward } from './stages.js?v=2';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
 import dictionary from './i18n.js?v=1';
 addDictionary(dictionary);
@@ -17,7 +17,7 @@ const RIGS = {};
 const S = {
   stageIndex: Math.min(store.get('stage', 0), STAGES.length - 1), step: 0, rig: null, st: null, res: null,
   sel: new Set(), active: null, flags: {}, undo: [], redo: [], done: store.get('done', {}),
-  modal: null, pointer: null, hover: false, focus: null,
+  modal: null, pointer: null, hover: false, focus: null, mode: 'pose', editSel: null,
   show: { mesh: true, lines: true, axes: false },
 };
 const stage = () => STAGES[S.stageIndex];
@@ -27,12 +27,16 @@ const bone = name => S.rig.bones[S.rig.index[name]];
 // ─── Data, undo, persistence ─────────────────────────────────────────────────
 const key = () => `data-${stage().id}-${S.step}`;
 function saveData() { store.set(key(), S.st); }
+// One rig per knee bend (the bend is edited in Edit Mode and stored in the state).
+function rigOf(st) { const k = +(st?.knee || 0).toFixed(4), id = `${stage().rig}|${k}`; return RIGS[id] ??= rigFor(stage(), { knee: k }); }
 function loadData() {
-  S.rig = RIGS[stage().rig] ??= rigFor(stage());
-  const saved = store.get(key(), null);
-  S.st = saved && saved.pose && Object.keys(saved.pose).length === S.rig.bones.length ? saved : step().start(S.rig);
-  S.undo = []; S.redo = []; S.flags = {}; S.sel.clear(); S.active = null;
+  const base = rigOf(null), saved = store.get(key(), null);
+  S.st = saved && saved.pose && Object.keys(saved.pose).length === base.bones.length ? saved : step().start(base);
+  S.rig = rigOf(S.st);
+  S.undo = []; S.redo = []; S.flags = {}; S.sel.clear(); S.active = null; S.mode = 'pose'; S.editSel = null;
 }
+// After the knee bend changed (Edit Mode, undo, a solution), use the matching rig.
+function syncRig() { const r = rigOf(S.st); if (r !== S.rig) { S.rig = r; buildScene(); } }
 function pushUndo(prev = S.st) { S.undo.push(JSON.stringify(prev)); if (S.undo.length > 80) S.undo.shift(); S.redo = []; }
 function undo() { if (!S.undo.length) return msg('Nothing to undo.'); S.redo.push(JSON.stringify(S.st)); S.st = JSON.parse(S.undo.pop()); changed(); msg('Undo'); }
 function redo() { if (!S.redo.length) return; S.undo.push(JSON.stringify(S.st)); S.st = JSON.parse(S.redo.pop()); changed(); msg('Redo'); }
@@ -119,10 +123,14 @@ function buildScene() {
   });
   const dashed = color => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineDashedMaterial({ color, dashSize: 0.08, gapSize: 0.06, depthTest: false, transparent: true })); l.renderOrder = 14; root.add(l); return l; };
   const ikLine = dashed(0xe8c14a), poleLine = dashed(0xdddddd), parentLines = S.rig.bones.map(() => dashed(0x9a9a9a));
+  // Joints of Edit Mode: the heads and tails of the deforming bones
+  const joints = new THREE.Group(); root.add(joints);
+  const jointGeo = new THREE.SphereGeometry(0.07, 16, 12);
+  S.rig.bones.forEach(b => { if (b.type !== 'bone') return; for (const end of ['h', 't']) { const m = new THREE.Mesh(jointGeo, new THREE.MeshBasicMaterial({ color: 0x1b1b1b, depthTest: false, transparent: true })); m.renderOrder = 16; m.userData = { bone: b.name, end }; joints.add(m); } });
   // Ghost pose and cup
   const extras = new THREE.Group(); root.add(extras);
   scene.add(root);
-  objs = { root, bones, ikLine, poleLine, parentLines, extras };
+  objs = { root, bones, ikLine, poleLine, parentLines, extras, joints };
   buildExtras();
 }
 function buildExtras() {
@@ -147,13 +155,24 @@ function buildExtras() {
   }
 }
 function isIkOwner(n) { return S.st.ik && S.st.ik.owner === n; }
+const isKnee = (bn, end) => (bn === 'Thigh' && end === 't') || (bn === 'Shin' && end === 'h');
 function updateScene() {
+  syncRig();
   S.res = RG.solve(S.rig, S.st);
-  const { W, info } = S.res;
+  // Edit Mode shows the rest pose; the checks still read the posed rig (S.res).
+  const edit = S.mode === 'edit', shown = edit ? RG.solve(S.rig, RG.defaultState(S.rig)) : S.res;
+  const { W } = shown, info = edit ? { active: false } : S.res.info;
+  objs.joints.visible = edit;
+  for (const m of objs.joints.children) {
+    const w = W[S.rig.index[m.userData.bone]]; m.position.copy(m.userData.end === 'h' ? w.h : w.t);
+    const knee = isKnee(m.userData.bone, m.userData.end);
+    m.material.color.set(knee && S.editSel === 'knee' ? 0xffa629 : knee ? 0xdddddd : 0x2a2a2a);
+    m.scale.setScalar(knee ? 1.15 : 0.8);
+  }
   S.rig.bones.forEach((b, i) => {
     const o = objs.bones[i], w = W[i];
     o.node.position.copy(w.h); o.node.quaternion.copy(w.q);
-    const selected = S.sel.has(b.name), active = S.active === b.name;
+    const selected = !edit && S.sel.has(b.name), active = !edit && S.active === b.name;
     const col = active ? COLORS.active : selected ? COLORS.sel : isIkOwner(b.name) ? COLORS.ik : b.type === 'bone' ? COLORS.bone : COLORS[b.type];
     if (o.octa) { o.octa.scale.setScalar(b.length); o.octa.material.color.set(col); o.octa.material.opacity = selected ? 0.85 : 0.55; o.axes.scale.setScalar(1 / b.length); }
     if (o.shape) o.shape.material.color.set(col);
@@ -258,6 +277,14 @@ function select(name, extend) {
 // ─── Modal transforms: G and R, with axis constraints and typed numbers ──────
 const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }; // Blender axes
 function startModal(kind) {
+  if (S.mode === 'edit') {
+    if (kind !== 'grab') return msg('In Edit Mode this lab only moves the knee joint (G).', true);
+    if (S.editSel !== 'knee') return msg('Click the knee joint first (the ball between Thigh and Shin).', true);
+    if (!S.pointer) S.pointer = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+    const W0 = RG.solve(S.rig, RG.defaultState(S.rig)).W;
+    S.modal = { kind: 'edit', prev: JSON.stringify(S.st), base: S.st.knee || 0, W0, x0: S.pointer.x, y0: S.pointer.y, axis: null, num: '', h: W0[S.rig.index.Shin].h.clone() };
+    host.classList.add('modal'); updateModal(); return;
+  }
   if (!S.active) return msg('Select a bone first.');
   let names = [...S.sel];
   if (kind === 'grab') {
@@ -283,6 +310,20 @@ function axisWorld(m) {
 function updateModal() {
   const m = S.modal; if (!m) return;
   const p = S.pointer, typed = m.num !== '' && m.num !== '-' && !isNaN(+m.num) ? +m.num : null;
+  if (m.kind === 'edit') {
+    // Only along Blender's Y (forward is −Y), whatever the mouse does.
+    let dz;
+    if (typed != null) dz = -typed;
+    else {
+      const ax = new THREE.Vector3(0, 0, 1), a = toScreen(m.h), b = toScreen(m.h.clone().add(ax)), sx = b[0] - a[0], sy = b[1] - a[1], L2 = sx * sx + sy * sy;
+      if (L2 > 4) dz = ((p.x - m.x0) * sx + (p.y - m.y0) * sy) / L2;
+      else { const dist = camera.position.distanceTo(m.h); dz = (p.x - m.x0) * 2 * dist * Math.tan(camera.fov * Math.PI / 360) / canvas.clientHeight; }
+    }
+    S.st = JSON.parse(m.prev); S.st.knee = Math.max(-0.3, Math.min(0.3, Math.round((m.base + dz) * 1000) / 1000));
+    $('#op-readout').textContent = `${t('Move')}  Y ${(-(S.st.knee - m.base)).toFixed(3)} m  · ${t('only Y for the knee in this lab')}${m.num ? `  [${m.num}]` : ''}`;
+    $('#op-readout').hidden = false;
+    updateScene(); return;
+  }
   S.st = RG.cloneState(m.base);
   const ax = axisWorld(m);
   const axisLabel = m.axis ? `${t(m.space === 'local' ? 'Local' : 'Global')} ${m.axis.toUpperCase()}` : '';
@@ -321,7 +362,7 @@ function updateModal() {
 function endModal(ok) {
   const m = S.modal; if (!m) return;
   S.modal = null; host.classList.remove('modal'); $('#op-readout').hidden = true;
-  if (ok) { pushUndo(JSON.parse(m.prev)); changed(); }
+  if (ok) { pushUndo(JSON.parse(m.prev)); changed(); if (m.kind === 'edit') msg(S.st.knee > 0.005 ? 'The knee is bent forward in the rest pose. Tab back to Pose Mode.' : S.st.knee < -0.005 ? 'The knee is bent backwards: the IK will bend it that way.' : 'The leg is straight again.', S.st.knee < -0.005); }
   else { S.st = JSON.parse(m.prev); changed(false); msg('Cancelled'); }
 }
 function modalKey(e) {
@@ -329,6 +370,8 @@ function modalKey(e) {
   if (k === 'Escape') return endModal(false);
   if (k === 'Enter' || k === ' ') return endModal(true);
   const low = k.toLowerCase();
+  if (m.kind === 'edit' && (low === 'x' || low === 'z')) { msg('Only Y for the knee in this lab.'); return; }
+  if (m.kind === 'edit' && low === 'y') { m.axis = 'y'; updateModal(); return; }
   if (low === 'x' || low === 'y' || low === 'z') {
     if (m.axis !== low) { m.axis = low; m.space = 'global'; }
     else if (m.space === 'global') m.space = 'local';
@@ -340,13 +383,32 @@ function modalKey(e) {
   updateModal();
 }
 
+function pickJoint(x, y) {
+  let best = null, bd = 18;
+  for (const m of objs.joints.children) { const p = toScreen(m.position), d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; best = m.userData; } }
+  return best;
+}
 canvas.addEventListener('pointerdown', e => {
   closeMenu();
   const { x, y } = localXY(e); S.pointer = { ...S.pointer, x, y };
   if (S.modal) { e.preventDefault(); endModal(e.button === 0); return; }
   if (e.button !== 0 || e.altKey) return;
+  if (S.mode === 'edit') {
+    const j = pickJoint(x, y);
+    if (j && isKnee(j.bone, j.end)) { S.editSel = 'knee'; msg('Knee joint selected: G then Y moves it forwards or backwards.'); }
+    else { S.editSel = null; if (j) msg('In this lab only the knee joint moves in Edit Mode.', true); }
+    updateScene(); renderProps(); drawOverlay(); return;
+  }
   select(pickBone(x, y), e.shiftKey);
 });
+function toggleMode() {
+  if (S.modal) return;
+  if (S.rig.kind !== 'leg') return msg('Edit Mode is used on the leg, in the IK stage of this lab.', true);
+  S.mode = S.mode === 'pose' ? 'edit' : 'pose'; S.editSel = null;
+  msg(S.mode === 'edit' ? 'Edit Mode: the bones are in their rest position. Click the knee joint.' : 'Pose Mode: the IK uses the new rest pose.');
+  updateScene(); renderProps(); drawOverlay();
+}
+$('#mode-pill').addEventListener('click', toggleMode);
 canvas.addEventListener('pointermove', e => {
   const { x, y } = localXY(e); S.pointer = { x, y, cx: e.clientX, cy: e.clientY };
   if (S.modal) updateModal();
@@ -412,8 +474,18 @@ document.addEventListener('pointerdown', e => { if (!menuEl.hidden && !menuEl.co
 const BONE_ICON = '<svg class="b-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 10 5 4 6 2 7 4 10 10 6 8z" fill="none" stroke="currentColor"/></svg>';
 const CTRL_ICON = '<svg class="b-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="3" width="8" height="6" fill="none" stroke="currentColor"/></svg>';
 const fmt = v => (Math.round(v * 1000) / 1000).toString();
+function editPanel() {
+  const k = S.st.knee || 0;
+  return `<div class="panel"><h4>${esc(t('Edit Mode'))}<small>${esc(t('rest pose'))}</small></h4>
+    <p class="edit-note">${esc(t(S.editSel === 'knee' ? 'Knee joint (tail of Thigh, head of Shin).' : 'Click the knee joint to select it.'))}</p>
+    <div class="tf-axes"><span></span><span class="ax-x">X</span><span class="ax-y">Y</span><span class="ax-z">Z</span></div>
+    <div class="tf-grid"><span>${esc(t('Knee'))}</span><input type="number" value="0.35" disabled><input type="number" step="0.01" id="knee-y" value="${fmt(-k)}"${S.editSel === 'knee' ? '' : ' disabled'}><input type="number" value="1.2" disabled></div>
+    <p class="edit-note">${esc(t('Blender axes: −Y is the front. Only the knee moves in this lab.'))}</p></div>`;
+}
 function renderProps() {
   const rig = S.rig, a = S.active ? bone(S.active) : null;
+  $('#mode-pill').textContent = S.mode === 'edit' ? 'Edit Mode' : 'Pose Mode'; $('#mode-pill').classList.toggle('edit', S.mode === 'edit');
+  if (S.mode === 'edit') { $('#props').innerHTML = editPanel() + `<div class="panel" id="readout-panel">${readoutHtml()}</div>`; return; }
   let html = `<div class="panel"><h4>${esc(t('Bones'))}<small>${esc(t('click · Shift click'))}</small></h4><div class="bone-list">`;
   html += rig.bones.map(b => `<button type="button" class="bone-row${S.sel.has(b.name) ? ' sel' : ''}${S.active === b.name ? ' active' : ''}" data-bone="${b.name}">${b.type === 'bone' ? BONE_ICON : CTRL_ICON}<span data-no-i18n>${esc(b.name)}</span><span class="b-tag">${esc(t(b.type === 'control' ? 'IK control' : b.type === 'pole' ? 'pole' : isIkOwner(b.name) ? 'IK' : ''))}</span></button>`).join('');
   html += `</div></div>`;
@@ -476,6 +548,8 @@ function readoutHtml() {
         h += row('The knee points', `${t(where)} · ${out.toFixed(0)}°`, fwd > 0.5);
       }
     } else h += row('IK', t('none: the leg is FK'));
+    const kb = S.st.knee || 0;
+    h += row('Knee bend (Edit Mode)', Math.abs(kb) < 0.005 ? t('straight') : `${(Math.abs(kb) * 100).toFixed(1)} cm ${t(kb > 0 ? 'forward' : 'backwards')}`, kb >= 0.02);
     h += row('Hips height', RG.posOf(rig, W, 'Hips').y.toFixed(2) + ' m');
   }
   return h;
@@ -507,9 +581,11 @@ $('#props').addEventListener('change', e => {
     changed(); return;
   }
   if (tf && S.active) { pushUndo(); S.st.pose[S.active][tf][+e.target.dataset.i] = +e.target.value || 0; changed(); }
+  if (e.target.id === 'knee-y') { pushUndo(); S.st.knee = Math.max(-0.3, Math.min(0.3, -(+e.target.value || 0))); changed(); }
 });
 
 function drawOverlay() {
+  if (S.mode === 'edit') { $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(1) ${esc(S.rig.name)} · Edit Mode${S.editSel ? ' : <b>Knee</b>' : ''}</div>`; return; }
   $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(1) ${esc(S.rig.name)}${S.active ? ` : <b>${esc(S.active)}</b>` : ''}</div>`;
 }
 function syncToggles() { $('#o-mesh').checked = S.show.mesh; $('#o-lines').checked = S.show.lines; $('#o-axes').checked = S.show.axes; }
@@ -547,8 +623,8 @@ function renderStepCard() {
 }
 $('#step-card').addEventListener('click', e => {
   const id = e.target.id;
-  if (id === 'reset-step') { pushUndo(); S.st = step().start(S.rig); S.flags = {}; changed(); msg('Back to the start. Ctrl Z undoes it.'); }
-  if (id === 'show-solution') { pushUndo(); const st = step().start(S.rig); step().solve(st, S.rig, S.flags); S.st = st; changed(); msg('This is one possible solution. Ctrl Z brings your pose back.'); }
+  if (id === 'reset-step') { pushUndo(); S.st = step().start(rigOf(null)); S.flags = {}; changed(); msg('Back to the start. Ctrl Z undoes it.'); }
+  if (id === 'show-solution') { pushUndo(); const st = step().start(rigOf(null)); step().solve(st, rigOf(st), S.flags); S.st = st; changed(); msg('This is one possible solution. Ctrl Z brings your pose back.'); }
   if (id === 'next-step') { saveData(); S.step++; enterStep(false); }
   if (id === 'next-stage') { saveData(); S.stageIndex++; S.step = 0; store.set('stage', S.stageIndex); enterStep(true); }
 });
@@ -567,7 +643,7 @@ function changed(save = true) {
 function enterStep(newRig) {
   const prevKind = S.rig?.kind;
   loadData(); lastOk = null; S.focus = null;
-  if (!objs || prevKind !== S.rig.kind) { buildScene(); frameAll(); } else buildExtras();
+  if (!objs || prevKind !== S.rig.kind) { buildScene(); frameAll(); } else buildScene();
   updateScene(); lastOk = stepDone(S.step);
   renderStageSwitch(); renderProps(); renderGuide(); renderStepCard(); drawOverlay(); syncToggles();
 }
@@ -584,8 +660,10 @@ document.addEventListener('keydown', e => {
   if (!S.hover && e.key !== 'Escape') return;
   const k = e.key, low = k.toLowerCase(), code = e.code, ctrl = e.ctrlKey || e.metaKey;
   let handled = true;
-  if (ctrl && low === 'z') e.shiftKey ? redo() : undo();
+  if (k === 'Tab') toggleMode();
+  else if (ctrl && low === 'z') e.shiftKey ? redo() : undo();
   else if (ctrl && low === 'y') redo();
+  else if (S.mode === 'edit' && (low === 'r' || low === 'a' || (low === 'i' && e.shiftKey))) msg('In Edit Mode this lab only moves the knee joint (G).', true);
   else if (low === 'i' && e.shiftKey) openMenu('addik', S.pointer?.cx ?? innerWidth / 2, S.pointer?.cy ?? innerHeight / 2);
   else if (low === 'r' && e.altKey) clearTransform('rot');
   else if (low === 'g' && e.altKey) clearTransform('loc');

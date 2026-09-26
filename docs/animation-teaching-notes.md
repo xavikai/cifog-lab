@@ -33,12 +33,12 @@ The rig keeps the volume: a shorter ball gets wider. Students pose the controls 
 3. **Round at the top**: both controls at 0 at the tops.
 4. **Never through the floor**: the lowest point of the ball over the whole animation must stay above 0. Stretching with SS_Bottom near the contact can push the ball into the floor.
 
-## Editing keys in the Timeline
+## Editing keys in the Timeline and the Dope Sheet
 
-As in Blender:
-- Drag the numbers at the top to change frame.
-- Click a keyframe to select it (Shift adds). Drag it, or press G, to move it in time.
-- Drag on empty space to box-select. X deletes.
+The bottom editor switches between **Timeline** and **Dope Sheet** with its Editor Type menu, as in Blender.
+- Timeline: one row of diamonds that sums up the visible channels.
+- Dope Sheet: a Summary row, a row for each bone and a row for each channel (all the channels of the stage, whatever is hidden in the Graph Editor). Holds (two keys in a row with the same value) are drawn as bars. Clicking a diamond on the Summary or a bone row takes the keys of all its channels at that frame; clicking a channel name makes it active.
+- In both: drag the numbers at the top to change frame; click a keyframe to select it (Shift adds); drag it or press G to move it in time; Shift D duplicates and moves the copies; drag on empty space to box-select (in the Dope Sheet, over the rows you cover); X deletes.
 
 Keys go to the editor under the mouse, so the same G moves a control in the 3D Viewport, keys in the Graph Editor and keys in time in the Timeline.
 
@@ -52,7 +52,7 @@ Each step loads its own starting scene.
 
 ## Differences from Blender
 
-- One object, one side camera and four channels (X Location is locked: the ball travels at constant speed).
+- One object, one side camera and four channels. The Root moves in X and Z (G, with X / Z to lock an axis; a typed number goes to the locked axis, X if none). I always keys the Z Location and keys the X Location only when it was moved (like Only Insert Needed), so keying the bounces does not add ease to the constant travel; a new X key copies the interpolation of the previous one.
 - A single handle type per key (Blender stores one per side).
 - Handles are shown only for selected keys, as with Blender's "Only Selected Keyframes Handles".
 - Automatic handles use one third of the distance to the neighbouring keys.

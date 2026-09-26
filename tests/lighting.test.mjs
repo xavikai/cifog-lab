@@ -57,3 +57,25 @@ test('every step starts unsolved and its solution solves it', () => {
     assert.equal(!!step.check(s, measure(s), flags), true, `${step.id} is solved by its solution`);
   }
 });
+
+import { parseOBJ, parseSTL, fitModel } from '../labs/lighting/models.js';
+test('a model of your own is turned, scaled to 40 cm and put on the socle, with its faces outwards', () => {
+  // a cube with Z up, its faces wound inwards
+  const obj = ['v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'v 0 1 0', 'v 0 0 2', 'v 1 0 2', 'v 1 1 2', 'v 0 1 2',
+    'f 1 2 3 4', 'f 5 8 7 6', 'f 1 5 6 2', 'f 2 6 7 3', 'f 3 7 8 4', 'f 4 8 5 1'].join('\n');
+  const g = fitModel(parseOBJ(obj), { zUp: true });
+  g.computeBoundingBox();
+  const b = g.boundingBox;
+  assert.ok(Math.abs(b.max.y - b.min.y - 0.4) < 1e-6 && Math.abs(b.min.y - 1.285) < 1e-6, 'height and base');
+  const p = g.attributes.position, i = g.index.array;
+  let vol = 0;
+  for (let t = 0; t < i.length; t += 3) { const [a, c, d] = [i[t], i[t + 1], i[t + 2]].map(k => [p.getX(k), p.getY(k), p.getZ(k)]); vol += a[0] * (c[1] * d[2] - c[2] * d[1]) - a[1] * (c[0] * d[2] - c[2] * d[0]) + a[2] * (c[0] * d[1] - c[1] * d[0]); }
+  assert.ok(vol > 0, 'faces point outwards');
+});
+test('binary STL corners are welded so the model shades smoothly', () => {
+  const buf = new ArrayBuffer(84 + 2 * 50), dv = new DataView(buf); dv.setUint32(80, 2, true);
+  const tris = [[0, 0, 0, 1, 0, 0, 1, 1, 0], [0, 0, 0, 1, 1, 0, 0, 1, 0]];
+  tris.forEach((t, k) => t.forEach((v, j) => dv.setFloat32(84 + k * 50 + 12 + j * 4, v, true)));
+  const d = parseSTL(buf);
+  assert.equal(d.pos.length / 3, 4); assert.equal(d.idx.length, 6);
+});

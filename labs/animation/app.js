@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { recalcHandles, evaluate, moveKey, moveHandle, key, contacts, tops, intervals, hangTime, matchScore, INTERPOLATIONS, HANDLE_TYPES } from './fcurve.js';
-import { STAGES, CHANNELS, FPS, RANGE, REFERENCE, BALL, startData, cloneData, shape, channelOf, lowestPoint, firstBounce } from './stages.js?v=2';
+import { STAGES, CHANNELS, FPS, RANGE, REFERENCE, BALL, startData, cloneData, shape, channelOf, lowestPoint, firstBounce } from './stages.js?v=3';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
 import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
@@ -22,7 +22,7 @@ const S = {
   playing: false, active: 'locZ', hidden: new Set(), activeKey: null,
   undo: [], redo: [], done: store.get('done', {}), toggles: { path: true, ghosts: false, ref: false },
   view: null, drag: null, grab: null, hover: false,
-  bone: 'Root', override: {}, vgrab: null, tlGrab: null, area: null, vpointer: null,
+  bone: 'Root', override: {}, vgrab: null, tlGrab: null, area: null, vpointer: null, bottom: store.get('bottom', 'timeline') === 'dopesheet' ? 'dopesheet' : 'timeline',
 };
 const stage = () => STAGES[S.stageIndex];
 
@@ -39,7 +39,7 @@ function restore(json) { S.data = JSON.parse(json); S.activeKey = null; S.overri
 function undo() { if (!S.undo.length) return msg('Nothing to undo.'); S.redo.push(JSON.stringify(S.data)); restore(S.undo.pop()); msg('Undo'); }
 function redo() { if (!S.redo.length) return; S.undo.push(JSON.stringify(S.data)); restore(S.redo.pop()); msg('Redo'); }
 
-const editable = id => !CHANNELS[id].locked;
+const editable = () => true;
 const visibleChannels = () => stage().channels.filter(id => !S.hidden.has(id) && S.data.channels[id]);
 function allKeys(filter = () => true) {
   const out = [];
@@ -47,6 +47,10 @@ function allKeys(filter = () => true) {
   return out;
 }
 const selected = () => allKeys(editable).filter(e => e.k.select);
+// The Dope Sheet shows every channel of the stage, whatever is hidden in the Graph Editor.
+function stageKeys() { const out = []; for (const id of stage().channels) if (S.data.channels[id]) for (const k of S.data.channels[id]) out.push({ id, k }); return out; }
+const dopeSheet = () => S.bottom === 'dopesheet';
+const bottomSelected = () => dopeSheet() ? stageKeys().filter(e => e.k.select) : selected();
 function valueAt(id, f) {
   const k = S.data.channels[id];
   return k && k.length ? evaluate(k, f) : 0;
@@ -134,7 +138,7 @@ function resize3() {
   renderer3.setSize(r.width, r.height, false); cam3.aspect = r.width / r.height; cam3.updateProjectionMatrix();
   if (!framed3) { framed3 = true; frameView3(); } else render3();
 }
-const pose = f => { const sh = shape(S.data, f, Math.round(f) === Math.round(S.frame) && !S.playing ? S.override : {}); return { x: valueAt('locX', f), ...sh }; };
+const pose = f => { const over = Math.round(f) === Math.round(S.frame) && !S.playing ? S.override : {}; const sh = shape(S.data, f, over); return { x: over.locX ?? valueAt('locX', f), ...sh }; };
 let lastPathKey = '';
 function drawView() {
   const p = pose(S.frame);
@@ -177,7 +181,7 @@ function drawView() {
   }
   if (refGroup.visible) refBall.position.set(valueAt('locX', S.frame), REFERENCE(S.frame) + BALL / 2, 0);
   const secs = ((S.frame - 1) / FPS).toFixed(2);
-  $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(${Math.round(S.frame)}) Armature : <b>${esc(S.bone)}</b></div><div>${secs} s · ${esc(tr('Height {v} m', { v: Math.max(0, p.bottom).toFixed(2) }))} · ${esc(tr('Scale {x} × {z}', { x: p.sx.toFixed(2), z: p.sz.toFixed(2) }))}</div>${Object.keys(S.override).length ? `<div class="unkeyed">${esc(t('Unkeyed change: press I to keep it'))}</div>` : ''}`;
+  $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(${Math.round(S.frame)}) Armature : <b>${esc(S.bone)}</b></div><div>${secs} s · X ${p.x.toFixed(2)} m · ${esc(tr('Height {v} m', { v: Math.max(0, p.bottom).toFixed(2) }))} · ${esc(tr('Scale {x} × {z}', { x: p.sx.toFixed(2), z: p.sz.toFixed(2) }))}</div>${Object.keys(S.override).length ? `<div class="unkeyed">${esc(t('Unkeyed change: press I to keep it'))}</div>` : ''}`;
   render3();
 }
 function render3() { renderer3.render(scene3, cam3); }
@@ -211,31 +215,42 @@ viewCanvas.addEventListener('pointermove', e => {
   if (S.vgrab) updateVGrab();
 });
 viewCanvas.addEventListener('contextmenu', e => { if (S.vgrab) { e.preventDefault(); endVGrab(false); } });
+// G in the 3D Viewport. The Root moves in X (forwards) and Z (up); the squash & stretch controls only in Z.
+// As in Blender: X or Z locks an axis, a typed number goes to the locked axis (X if none).
 function startVGrab() {
   const ch = channelOf(S.bone);
   if (!stage().channels.includes(ch)) return msg('This control is not animated in this stage.', true);
   if (!S.vpointer) S.vpointer = { x: viewCanvas.clientWidth / 2, y: viewCanvas.clientHeight / 2 };
   const start = S.override[ch] ?? +valueAt(ch, S.frame).toFixed(3);
+  const root = S.bone === 'Root', startX = S.override.locX ?? +valueAt('locX', S.frame).toFixed(3);
   const p = pose(S.frame), world = new THREE.Vector3(p.x, p.center, 0);
   const dist = cam3.position.distanceTo(world), wpp = 2 * dist * Math.tan(cam3.fov * Math.PI / 360) / viewCanvas.clientHeight;
-  S.vgrab = { ch, start, y0: S.vpointer.y, wpp, num: '', prev: { ...S.override } };
+  S.vgrab = { ch, root, start, startX, x0: S.vpointer.x, y0: S.vpointer.y, wpp, num: '', axis: root ? null : 'z', prev: { ...S.override } };
   viewHost.classList.add('modal'); updateVGrab();
 }
 function updateVGrab() {
   const g = S.vgrab; if (!g) return;
   const typed = g.num !== '' && g.num !== '-' && !isNaN(+g.num) ? +g.num : null;
-  const dz = typed != null ? typed : -(S.vpointer.y - g.y0) * g.wpp;
-  S.override = { ...g.prev, [g.ch]: Math.round((g.start + dz) * 1000) / 1000 };
+  let dx = (S.vpointer.x - g.x0) * g.wpp, dz = -(S.vpointer.y - g.y0) * g.wpp;
+  if (typed != null) { if (g.axis === 'z') { dz = typed; dx = 0; } else { dx = typed; dz = 0; } }
+  if (g.axis === 'x') dz = 0;
+  if (g.axis === 'z' || !g.root) dx = 0;
+  const over = { ...g.prev, [g.ch]: Math.round((g.start + dz) * 1000) / 1000 };
+  if (g.root) over.locX = Math.round((g.startX + dx) * 1000) / 1000;
+  S.override = over;
   $('#view-readout').hidden = false;
-  $('#view-readout').textContent = `${t('Move')}  Z ${dz >= 0 ? '+' : ''}${dz.toFixed(2)} m${g.num ? `  [${g.num}]` : ''} · ${t('only Z in this lab')}`;
+  const lock = g.root ? (g.axis ? ` · ${t(g.axis === 'x' ? 'only X' : 'only Z')}` : ` · ${t('X / Z lock an axis')}`) : ` · ${t('SS controls move only in Z')}`;
+  $('#view-readout').textContent = `${t('Move')}${g.root ? `  X ${dx >= 0 ? '+' : ''}${dx.toFixed(2)} m` : ''}  Z ${dz >= 0 ? '+' : ''}${dz.toFixed(2)} m${g.num ? `  [${g.num}]` : ''}${lock}`;
   drawView(); renderSidebar();
 }
 function endVGrab(ok) {
   const g = S.vgrab; if (!g) return;
   S.vgrab = null; viewHost.classList.remove('modal'); $('#view-readout').hidden = true;
   if (!ok) S.override = g.prev;
-  else if (Math.abs((S.override[g.ch] ?? 0) - valueAt(g.ch, S.frame)) < 1e-4) delete S.override[g.ch];
-  else msg('Moved. Press I to insert a keyframe, or the change is lost when the frame changes.');
+  else {
+    for (const c of [g.ch, 'locX']) if (S.override[c] != null && Math.abs(S.override[c] - valueAt(c, S.frame)) < 1e-4) delete S.override[c];
+    if (Object.keys(S.override).length) msg('Moved. Press I to insert a keyframe, or the change is lost when the frame changes.');
+  }
   drawView(); renderSidebar();
 }
 function vgrabKey(e) {
@@ -245,27 +260,38 @@ function vgrabKey(e) {
   if (/^[0-9.]$/.test(k)) g.num += k;
   else if (k === '-') g.num = g.num.startsWith('-') ? g.num.slice(1) : '-' + g.num;
   else if (k === 'Backspace') g.num = g.num.slice(0, -1);
+  else if ((k === 'x' || k === 'X') && g.root) g.axis = g.axis === 'x' ? null : 'x';
+  else if ((k === 'z' || k === 'Z') && g.root) g.axis = g.axis === 'z' ? null : 'z';
   else if (k === 'z' || k === 'Z') return;
+  else if (k === 'x' || k === 'X' || k === 'y' || k === 'Y') { msg(g.root ? 'The ball moves in X and Z in this lab (side view).' : 'SS controls move only in Z.'); return; }
   else return;
   updateVGrab();
 }
-// I in the viewport: key the selected control at the current frame, with the pose it has now
+// I in the viewport: key the selected control at the current frame, with the pose it has now.
+// The Z Location is always keyed; the Root's X Location only when it was moved (like "Only Insert Needed"),
+// so keying a bounce does not put ease-in and ease-out into a constant travel.
 function keyControl() {
   const ch = channelOf(S.bone);
   if (!stage().channels.includes(ch)) return msg('This control is not animated in this stage.', true);
-  const f = Math.round(S.frame), ks = S.data.channels[ch], v = +(S.override[ch] ?? valueAt(ch, f)).toFixed(3);
-  pushUndo();
-  let k = ks.find(q => q.frame === f);
-  if (k) moveKey(k, f, v); else { k = key(f, v); ks.push(k); }
-  delete S.override[ch];
-  clearSelection(); k.select = true; S.activeKey = k; S.active = ch;
-  recalcHandles(ks);
-  msg(tr('Inserted a keyframe on {c} at frame {n}.', { c: `${S.bone} · Z Location`, n: f })); changed(true);
+  const f = Math.round(S.frame);
+  pushUndo(); clearSelection();
+  const chans = [ch];
+  if (S.bone === 'Root' && S.override.locX != null && Math.abs(S.override.locX - valueAt('locX', f)) > 1e-4) chans.push('locX');
+  let last = null;
+  for (const c of chans) {
+    const ks = S.data.channels[c], v = +(S.override[c] ?? valueAt(c, f)).toFixed(3);
+    let k = ks.find(q => q.frame === f);
+    if (k) moveKey(k, f, v);
+    else { const prev = [...ks].reverse().find(q => q.frame < f); k = key(f, v, c === 'locX' && prev ? prev.interp : 'BEZIER'); ks.push(k); }
+    delete S.override[c]; k.select = true; last = k; recalcHandles(ks);
+  }
+  S.activeKey = last; S.active = ch;
+  msg(tr('Inserted a keyframe on {c} at frame {n}.', { c: `${S.bone} · ${[...chans].sort().map(c => CHANNELS[c].axis).join(', ')} Location`, n: f })); changed(true);
 }
 function clearControl() {
   const ch = channelOf(S.bone);
   if (!stage().channels.includes(ch)) return;
-  if (ch === 'locZ') return msg('Alt G on the Root would drop the ball to the floor: move it with G instead.');
+  if (ch === 'locZ') return msg('Alt G on the Root would send the ball to the origin (X 0, Z 0): move it with G instead.');
   S.override = { ...S.override, [ch]: 0 }; drawView(); renderSidebar(); msg('Location cleared. Press I to key it.');
 }
 function dropOverrides() {
@@ -392,7 +418,7 @@ function hitTest(x, y) {
   }
   return null;
 }
-function clearSelection() { for (const { k } of allKeys()) k.select = false; S.activeKey = null; }
+function clearSelection() { for (const ks of Object.values(S.data.channels)) for (const k of ks) k.select = false; S.activeKey = null; }
 
 function setupGraphInput() {
   const c = graphCanvas;
@@ -508,8 +534,8 @@ function insertKey() {
   recalcHandles(ks);
   msg(tr('Inserted a keyframe on {c} at frame {n}.', { c: CHANNELS[id].name, n: f })); changed(true);
 }
-function deleteKeys() {
-  const sel = selected(); if (!sel.length) return msg('Select keyframes first.', true);
+function deleteKeys(sel = selected()) {
+  if (!sel.length) return msg('Select keyframes first.', true);
   pushUndo();
   for (const id of new Set(sel.map(e => e.id))) {
     const ks = S.data.channels[id], keep = ks.filter(k => !k.select);
@@ -518,7 +544,7 @@ function deleteKeys() {
   }
   S.activeKey = null; msg('Deleted keyframes.'); changed(true);
 }
-function selectAll(on) { for (const { k } of allKeys(editable)) k.select = on; S.activeKey = null; renderAll(); }
+function selectAll(on, list = allKeys(editable)) { for (const { k } of list) k.select = on; S.activeKey = null; renderAll(); }
 
 // ─── Menus ──────────────────────────────────────────────────────────────────
 const menuEl = $('#menu');
@@ -565,7 +591,7 @@ function renderChannels() {
   for (const id of stage().channels) {
     const ch = CHANNELS[id];
     if (ch.bone !== group) { group = ch.bone; html += `<div class="ch-group${S.bone === group ? ' sel' : ''}" data-bone="${group}" data-no-i18n>${esc(group)}</div>`; }
-    html += `<div class="channel${id === S.active ? ' active' : ''}${ch.locked ? ' locked' : ''}" data-ch="${id}" title="${esc(t(ch.locked ? 'Locked in this lab: the ball travels at a constant speed.' : 'Click to make it the active channel.'))}"><button type="button" class="eye" data-eye="${id}" aria-pressed="${!S.hidden.has(id)}" aria-label="Show ${ch.bone} ${ch.name}">${S.hidden.has(id) ? '◌' : '◉'}</button><span class="swatch" style="background:${ch.color}"></span><span class="ch-name" data-no-i18n>${ch.name}</span>${ch.locked ? '<span class="ch-lock" aria-hidden="true">🔒</span>' : ''}</div>`;
+    html += `<div class="channel${id === S.active ? ' active' : ''}" data-ch="${id}" title="${esc(t(id === 'locX' ? 'The travel of the ball. Click the eye to show its curve.' : 'Click to make it the active channel.'))}"><button type="button" class="eye" data-eye="${id}" aria-pressed="${!S.hidden.has(id)}" aria-label="Show ${ch.bone} ${ch.name}">${S.hidden.has(id) ? '◌' : '◉'}</button><span class="swatch" style="background:${ch.color}"></span><span class="ch-name" data-no-i18n>${ch.name}</span></div>`;
   }
   box.innerHTML = html;
 }
@@ -634,43 +660,99 @@ function tlFrames() {
   for (const { id, k } of allKeys(editable)) { const e = frames.get(k.frame) || { keys: [], sel: false }; e.keys.push({ id, k }); e.sel = e.sel || k.select; frames.set(k.frame, e); }
   return frames;
 }
+// Rows of the Dope Sheet: Summary, then each bone (group) with its channels.
+const RH = 20, NAMES = 150;
+function dsRows() {
+  const rows = [{ kind: 'summary', label: 'Summary' }];
+  let group = null;
+  for (const id of stage().channels) {
+    if (!S.data.channels[id]) continue;
+    const ch = CHANNELS[id];
+    if (ch.bone !== group) { group = ch.bone; rows.push({ kind: 'group', bone: group, label: group, ids: [] }); }
+    rows[rows.length - 1].ids?.push(id);
+    rows.push({ kind: 'ch', id, label: ch.name, color: ch.color });
+  }
+  // the group rows list their channels
+  let g = null; for (const r of rows) { if (r.kind === 'group') g = r; else if (r.kind === 'ch' && g && !g.ids.includes(r.id)) g.ids.push(r.id); }
+  return rows;
+}
+const rowKeys = r => r.kind === 'ch' ? S.data.channels[r.id].map(k => ({ id: r.id, k })) : r.kind === 'group' ? r.ids.flatMap(id => S.data.channels[id].map(k => ({ id, k }))) : stageKeys();
+function frameGroups(list) { const m = new Map(); for (const e of list) { const g = m.get(e.k.frame) || { keys: [], sel: false }; g.keys.push(e); g.sel = g.sel || e.k.select; m.set(e.k.frame, g); } return m; }
+function sizeBottom() {
+  const hostEl = $('#timeline-host');
+  hostEl.style.height = dopeSheet() ? `${TL_RULER + 6 + dsRows().length * RH}px` : '';
+  $('#bottom-editor').classList.toggle('dope', dopeSheet());
+}
+function diamond(ctx, x, y, r, fill) { ctx.fillStyle = fill; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
 function drawTimeline() {
-  const { ctx, w, h } = fitCanvas(tlCanvas);
-  const f0 = 0, f1 = Math.max(S.end + 4, 76), X = f => 10 + (f - f0) / (f1 - f0) * (w - 20);
+  const { ctx, w, h } = fitCanvas(tlCanvas), ds = dopeSheet(), left = ds ? NAMES : 0;
+  const f0 = 0, f1 = Math.max(S.end + 4, 76), X = f => left + 10 + (f - f0) / (f1 - f0) * (w - left - 20);
   ctx.fillStyle = '#232323'; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#00000045'; ctx.fillRect(0, TL_RULER, X(S.start), h); ctx.fillRect(X(S.end), TL_RULER, w - X(S.end), h);
+  const rows = ds ? dsRows() : null, rowY = i => TL_RULER + 3 + i * RH;
+  if (ds) rows.forEach((r, i) => {
+    ctx.fillStyle = r.kind === 'summary' ? '#2d3340' : r.kind === 'group' ? '#2b3a55' : i % 2 ? '#262626' : '#2a2a2a';
+    ctx.fillRect(left, rowY(i), w - left, RH - 1);
+  });
+  ctx.fillStyle = '#00000045'; ctx.fillRect(left, TL_RULER, X(S.start) - left, h); ctx.fillRect(X(S.end), TL_RULER, w - X(S.end), h);
   ctx.fillStyle = '#2b2b2b'; ctx.fillRect(0, 0, w, TL_RULER);
   ctx.font = '10px Inter, sans-serif';
   for (let f = 0; f <= f1; f++) {
     const big = f % 10 === 0, mid = f % 5 === 0;
-    ctx.strokeStyle = big ? '#4a4a4a' : '#333'; ctx.beginPath(); ctx.moveTo(X(f), big ? TL_RULER : mid ? TL_RULER + 6 : TL_RULER + 12); ctx.lineTo(X(f), h); ctx.stroke();
+    ctx.strokeStyle = big ? '#4a4a4a' : '#333'; ctx.beginPath(); ctx.moveTo(X(f), big ? TL_RULER : mid ? TL_RULER + 6 : TL_RULER + 12); ctx.lineTo(X(f), ds ? TL_RULER + 6 : h); ctx.stroke();
+    if (ds && big) { ctx.strokeStyle = '#ffffff10'; ctx.beginPath(); ctx.moveTo(X(f), TL_RULER); ctx.lineTo(X(f), h); ctx.stroke(); }
     if (big || (mid && w > 700)) { ctx.fillStyle = '#9a9a9a'; ctx.fillText(String(f), X(f) + 2, 12); }
   }
-  const y = TL_RULER + (h - TL_RULER) / 2;
-  for (const [f, e] of tlFrames()) {
-    const x = X(f);
-    ctx.fillStyle = e.sel ? '#ffaa33' : '#dcdcdc'; ctx.strokeStyle = '#000';
-    ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+  if (ds) {
+    rows.forEach((r, i) => {
+      const y = rowY(i) + RH / 2 - 0.5, list = rowKeys(r);
+      // holds: two keys in a row with the same value (the channel does not change between them)
+      if (r.kind === 'ch') {
+        const ks = S.data.channels[r.id];
+        for (let k = 0; k < ks.length - 1; k++) if (Math.abs(ks[k].value - ks[k + 1].value) < 1e-4) { ctx.fillStyle = ks[k].select && ks[k + 1].select ? '#b07a2a' : '#5c5c5c'; ctx.fillRect(X(ks[k].frame), y - 3, X(ks[k + 1].frame) - X(ks[k].frame), 6); }
+      }
+      for (const [f, g] of frameGroups(list)) diamond(ctx, X(f), y, r.kind === 'ch' ? 5.5 : 6.5, g.sel ? '#ffaa33' : r.kind === 'ch' ? '#dcdcdc' : '#b9c3d6');
+    });
+    // channel names
+    ctx.fillStyle = '#2b2b2b'; ctx.fillRect(0, TL_RULER, NAMES, h - TL_RULER);
+    rows.forEach((r, i) => {
+      const y = rowY(i);
+      ctx.fillStyle = r.kind === 'ch' && r.id === S.active ? '#334d80' : r.kind === 'group' ? '#2f3b52' : r.kind === 'summary' ? '#313745' : '#2b2b2b';
+      ctx.fillRect(0, y, NAMES - 2, RH - 1);
+      if (r.kind === 'ch') { ctx.fillStyle = r.color; ctx.fillRect(18, y + 6, 8, 8); }
+      ctx.fillStyle = r.kind === 'ch' ? '#dcdcdc' : '#ffffff'; ctx.font = r.kind === 'ch' ? '11px Inter, sans-serif' : 'bold 11px Inter, sans-serif';
+      ctx.fillText(r.kind === 'summary' ? t('Summary') : r.label, r.kind === 'ch' ? 32 : 8, y + 14);
+    });
+    ctx.font = '10px Inter, sans-serif';
+  } else {
+    const y = TL_RULER + (h - TL_RULER) / 2;
+    for (const [f, e] of tlFrames()) diamond(ctx, X(f), y, 7, e.sel ? '#ffaa33' : '#dcdcdc');
   }
-  if (S.drag?.tlBox) { const b = S.drag.tlBox; ctx.strokeStyle = '#fff'; ctx.setLineDash([4, 3]); ctx.strokeRect(Math.min(b.x0, b.x1), TL_RULER + 2, Math.abs(b.x1 - b.x0), h - TL_RULER - 4); ctx.setLineDash([]); }
+  if (S.drag?.tlBox) { const b = S.drag.tlBox; ctx.strokeStyle = '#fff'; ctx.setLineDash([4, 3]); ctx.strokeRect(Math.min(b.x0, b.x1), ds ? Math.min(b.y0, b.y1) : TL_RULER + 2, Math.abs(b.x1 - b.x0), ds ? Math.abs(b.y1 - b.y0) : h - TL_RULER - 4); ctx.setLineDash([]); }
   const cx = X(S.frame);
   ctx.strokeStyle = '#4772b3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, TL_RULER); ctx.lineTo(cx, h); ctx.stroke(); ctx.lineWidth = 1;
   ctx.fillStyle = '#4772b3'; const lab = String(Math.round(S.frame)), lw = ctx.measureText(lab).width + 10;
   ctx.fillRect(cx - lw / 2, 1, lw, 16); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(lab, cx, 13); ctx.textAlign = 'left';
-  if (S.tlGrab) { ctx.fillStyle = '#ffffffcc'; ctx.fillText(tr('Move keyframes: {d} frames · click to confirm, Esc to cancel', { d: (S.tlGrab.df > 0 ? '+' : '') + (S.tlGrab.df || 0) }), 8, h - 6); }
-  tlCanvas._X = X; tlCanvas._inv = x => f0 + (x - 10) / (w - 20) * (f1 - f0);
+  if (S.tlGrab) { ctx.fillStyle = '#ffffffcc'; ctx.fillText(tr('Move keyframes: {d} frames · click to confirm, Esc to cancel', { d: (S.tlGrab.df > 0 ? '+' : '') + (S.tlGrab.df || 0) }), left + 8, h - 6); }
+  tlCanvas._X = X; tlCanvas._inv = x => f0 + (x - left - 10) / (w - left - 20) * (f1 - f0); tlCanvas._rows = rows; tlCanvas._rowAt = y => Math.floor((y - TL_RULER - 3) / RH);
 }
 function tlHit(x, y) {
   if (y < TL_RULER) return null;
+  if (dopeSheet()) {
+    const rows = tlCanvas._rows, i = tlCanvas._rowAt(y), r = rows?.[i];
+    if (!r || x < NAMES) return null;
+    let best = null, bd = 8;
+    for (const [f, e] of frameGroups(rowKeys(r))) { const d = Math.abs(tlCanvas._X(f) - x); if (d < bd) { bd = d; best = { f, e }; } }
+    return best;
+  }
   let best = null, bd = 9;
   for (const [f, e] of tlFrames()) { const d = Math.abs(tlCanvas._X(f) - x); if (d < bd) { bd = d; best = { f, e }; } }
   return best;
 }
-function startTlGrab(x, byDrag = false) {
-  const sel = selected();
+function startTlGrab(x, byDrag = false, dup = false) {
+  const sel = bottomSelected();
   if (!sel.length) return msg('Select keyframes first.', true);
   if (!byDrag) pushUndo();
-  S.tlGrab = { x0: x, byDrag, df: 0, orig: sel.map(({ id, k }) => ({ id, k, frame: k.frame, value: k.value, left: { ...k.left }, right: { ...k.right } })) };
+  S.tlGrab = { x0: x, byDrag, dup, df: 0, orig: sel.map(({ id, k }) => ({ id, k, frame: k.frame, value: k.value, left: { ...k.left }, right: { ...k.right } })) };
   drawTimeline();
 }
 function updateTlGrab(x) {
@@ -688,9 +770,20 @@ function updateTlGrab(x) {
 function endTlGrab(ok) {
   const g = S.tlGrab; if (!g) return;
   S.tlGrab = null;
-  if (!ok) { for (const o of g.orig) { o.k.frame = o.frame; o.k.value = o.value; o.k.left = { ...o.left }; o.k.right = { ...o.right }; } for (const id of new Set(g.orig.map(o => o.id))) recalcHandles(S.data.channels[id]); S.undo.pop(); changed(false); return; }
-  if (g.df) msg(tr('Moved {n} keyframes {d} frames.', { n: g.orig.length, d: (g.df > 0 ? '+' : '') + g.df }));
+  if (!ok || (g.dup && !g.df)) {
+    if (g.dup) { for (const id of new Set(g.orig.map(o => o.id))) { S.data.channels[id] = S.data.channels[id].filter(k => !g.orig.some(o => o.k === k)); recalcHandles(S.data.channels[id]); } }
+    else { for (const o of g.orig) { o.k.frame = o.frame; o.k.value = o.value; o.k.left = { ...o.left }; o.k.right = { ...o.right }; } for (const id of new Set(g.orig.map(o => o.id))) recalcHandles(S.data.channels[id]); }
+    S.undo.pop(); changed(false); if (g.dup && ok) msg('Duplicates must move to other frames: cancelled.', true); return;
+  }
+  if (g.df) msg(tr(g.dup ? 'Duplicated {n} keyframes {d} frames later.' : 'Moved {n} keyframes {d} frames.', { n: g.orig.length, d: (g.df > 0 ? '+' : '') + g.df }));
   changed(true);
+}
+// Shift D in the Dope Sheet or the Timeline: copy the selected keys and move the copies in time.
+function duplicateKeys() {
+  const sel = bottomSelected(); if (!sel.length) return msg('Select keyframes first.', true);
+  pushUndo();
+  for (const { id, k } of sel) { k.select = false; const c = { ...k, left: { ...k.left }, right: { ...k.right }, select: true }; S.data.channels[id].push(c); }
+  startTlGrab(S.tlPointer ?? 0, false, true); S.undo.pop();
 }
 function setupTimeline() {
   const pos = e => { const r = tlCanvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -701,6 +794,12 @@ function setupTimeline() {
     if (e.button !== 0) return;
     tlCanvas.setPointerCapture(e.pointerId);
     if (y < TL_RULER) { S.drag = { tlScrub: true }; setFrame(Math.round(tlCanvas._inv(x))); return; }
+    if (dopeSheet() && x < NAMES) {
+      const r = tlCanvas._rows?.[tlCanvas._rowAt(y)];
+      if (r?.kind === 'ch') { S.active = r.id; S.bone = CHANNELS[r.id].bone; S.hidden.delete(r.id); renderAll(); }
+      else if (r?.kind === 'group') selectBone(r.bone);
+      return;
+    }
     const hit = tlHit(x, y);
     if (hit) {
       const keys = hit.e.keys;
@@ -711,7 +810,7 @@ function setupTimeline() {
       renderAll(); return;
     }
     if (!e.shiftKey) clearSelection();
-    S.drag = { tlBox: { x0: x, x1: x } };
+    S.drag = { tlBox: { x0: x, x1: x, y0: y, y1: y } };
     renderAll();
   });
   tlCanvas.addEventListener('pointermove', e => {
@@ -719,7 +818,7 @@ function setupTimeline() {
     if (S.tlGrab) { updateTlGrab(x); return; }
     const d = S.drag; if (!d) return;
     if (d.tlScrub) { setFrame(Math.round(tlCanvas._inv(x))); return; }
-    if (d.tlBox) { d.tlBox.x1 = x; drawTimeline(); return; }
+    if (d.tlBox) { d.tlBox.x1 = x; d.tlBox.y1 = pos(e).y; drawTimeline(); return; }
     if (d.tlMove) {
       if (!d.started && Math.abs(x - d.x) < 3) return;
       if (!d.started) { d.started = true; pushUndo(); startTlGrab(d.x, true); }
@@ -731,12 +830,17 @@ function setupTimeline() {
     if (S.tlGrab?.byDrag) { endTlGrab(true); return; }
     if (d?.tlBox) {
       const a = tlCanvas._inv(Math.min(d.tlBox.x0, d.tlBox.x1)), b = tlCanvas._inv(Math.max(d.tlBox.x0, d.tlBox.x1));
-      if (b - a > 0.3) for (const { k } of allKeys(editable)) if (k.frame >= a && k.frame <= b) k.select = true;
+      if (b - a > 0.3) {
+        let list = allKeys(editable);
+        if (dopeSheet()) { const r0 = tlCanvas._rowAt(Math.min(d.tlBox.y0, d.tlBox.y1)), r1 = tlCanvas._rowAt(Math.max(d.tlBox.y0, d.tlBox.y1)); list = (tlCanvas._rows || []).slice(Math.max(0, r0), r1 + 1).flatMap(rowKeys); }
+        for (const { k } of list) if (k.frame >= a && k.frame <= b) k.select = true;
+      }
       renderAll();
     }
   };
   tlCanvas.addEventListener('pointerup', end);
   tlCanvas.addEventListener('pointercancel', end);
+  $('#bottom-type').onchange = e => { S.bottom = e.target.value; store.set('bottom', S.bottom); sizeBottom(); renderAll(); msg(S.bottom === 'dopesheet' ? 'Dope Sheet: every channel on its own row. Select keys and move them in time.' : 'Timeline: one row that sums up all the keys.'); };
   $('#b-play').onclick = togglePlay;
   $('#b-start').onclick = () => setFrame(S.start);
   $('#b-end').onclick = () => setFrame(S.end);
@@ -748,7 +852,7 @@ function setupTimeline() {
 }
 function setFrame(f) { const n = Math.max(0, Math.min(250, f)); if (Math.round(n) !== Math.round(S.frame) && Object.keys(S.override).length) dropOverrides(); S.frame = n; renderLive(); }
 function jumpKey(dir) {
-  const frames = [...new Set(allKeys(id => !CHANNELS[id].locked).map(e => e.k.frame))].sort((a, b) => a - b);
+  const frames = [...new Set((dopeSheet() ? stageKeys() : allKeys()).map(e => e.k.frame))].sort((a, b) => a - b);
   const cur = Math.round(S.frame);
   const f = dir > 0 ? frames.find(x => x > cur) : [...frames].reverse().find(x => x < cur);
   if (f != null) setFrame(f);
@@ -861,11 +965,12 @@ function changed(commit = true) {
   renderLive();
 }
 function enterStage() {
+  $('#bottom-type').value = S.bottom;
   S.focus = null; lastDone = null; S.hidden.clear(); S.hidden.add('locX'); // the travel curve is shown on demand
   S.active = 'locZ'; S.bone = 'Root'; S.override = {};
   loadData();
   S.toggles.ref = stage().independent ? !!stage().steps[S.step].reference : false;
-  frameAll(); renderAll(); checkProgress();
+  frameAll(); sizeBottom(); renderAll(); checkProgress();
 }
 
 $('#t-path').onchange = e => { S.toggles.path = e.target.checked; renderLive(); };
@@ -910,10 +1015,11 @@ document.addEventListener('keydown', e => {
     else if (k === 'Escape') closeMenu();
     else handled = false;
   } else if (S.area === 'timeline') {
-    if ((low === 'a') && e.altKey) selectAll(false);
-    else if (low === 'a') selectAll(true);
+    if ((low === 'a') && e.altKey) selectAll(false, dopeSheet() ? stageKeys() : allKeys(editable));
+    else if (low === 'a') selectAll(true, dopeSheet() ? stageKeys() : allKeys(editable));
+    else if (low === 'd' && e.shiftKey) duplicateKeys();
     else if (low === 'g') startTlGrab(S.tlPointer ?? 0);
-    else if (low === 'x' || k === 'Delete') deleteKeys();
+    else if (low === 'x' || k === 'Delete') deleteKeys(bottomSelected());
     else if (low === 'i') insertKey();
     else if (k === 'Escape') closeMenu();
     else handled = false;

@@ -485,3 +485,6 @@ footer span:nth-child(3){margin-left:auto}
 @media(max-width:1180px){.rig-body{grid-template-columns:minmax(0,1fr) 250px}}
 @media(max-width:900px){.rig-body{grid-template-columns:1fr;grid-template-rows:440px auto;height:auto}.props{border-left:0;border-top:1px solid var(--b-border)}}
 @media(max-width:640px){.rig-body{grid-template-rows:360px auto}}
+
+button.mode-pill{cursor:pointer}button.mode-pill:hover{background:var(--b-widget-hi)}button.mode-pill.edit{background:#7a5a1c;border-color:#b8872a}
+.edit-note{font-size:11.5px;color:#c9c9c9;line-height:1.5;margin:4px 0}

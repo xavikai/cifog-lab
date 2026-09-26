@@ -39,14 +39,48 @@ function ellipsoid(rx, ry, rz, cut) {
   return geo;
 }
 
+// The sculpted bust (tools/make-bust.mjs): 'BST1', vertex and index counts, bounds, quantised positions,
+// normals as signed bytes, then 16- or 32-bit indices. Positions are relative to the centre of the head.
+export function readBust(buffer) {
+  const dv = new DataView(buffer);
+  if (String.fromCharCode(...new Uint8Array(buffer, 0, 4)) !== 'BST1') throw new Error('Not a bust file');
+  const nv = dv.getUint32(4, true), ni = dv.getUint32(8, true), f = i => dv.getFloat32(12 + i * 4, true);
+  const min = [f(0), f(1), f(2)], size = [f(3), f(4), f(5)];
+  const q = new Uint16Array(buffer, 36, nv * 3), n8 = new Int8Array(buffer, 36 + nv * 6, nv * 3);
+  const idxOff = Math.ceil((36 + nv * 6 + nv * 3) / 4) * 4;
+  const index = nv >= 65536 ? new Uint32Array(buffer, idxOff, ni) : new Uint16Array(buffer, idxOff, ni);
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3);
+  for (let i = 0; i < nv * 3; i++) { const c = i % 3; pos[i] = min[c] + q[i] / 65535 * size[c]; nor[i] = n8[i] / 127; }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
+  geo.computeBoundingSphere();
+  return geo;
+}
+const bustData = fetch(new URL('./assets/bust.bin', import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
+
 export function buildSet(scene) {
   const plaster = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(ALBEDO.plaster, ALBEDO.plaster * 0.98, ALBEDO.plaster * 0.95, THREE.LinearSRGBColorSpace), roughness: 0.65 });
   const cast = m => { m.castShadow = true; m.receiveShadow = true; return m; };
   const set = new THREE.Group(); scene.add(set);
-  const head = cast(new THREE.Mesh(headGeometry(), plaster)); head.position.set(...HEAD.c); set.add(head);
-  const neck = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.058, 0.13, 32), plaster)); neck.position.set(0, 1.44, -0.012); set.add(neck);
-  const chest = cast(new THREE.Mesh(ellipsoid(0.18, 0.1, 0.12, Math.PI * 0.66), plaster)); chest.position.set(0, 1.32, -0.02); set.add(chest);
-  const socle = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.18, 32), plaster)); socle.position.set(0, 1.21, -0.02); set.add(socle);
+  // The bust: a simple placeholder until the sculpted mesh (assets/bust.bin) has loaded.
+  const bust = new THREE.Group(); set.add(bust);
+  const head = cast(new THREE.Mesh(headGeometry(), plaster)); head.position.set(...HEAD.c); bust.add(head);
+  const neck = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.058, 0.13, 32), plaster)); neck.position.set(0, 1.44, -0.012); bust.add(neck);
+  const chest = cast(new THREE.Mesh(ellipsoid(0.18, 0.1, 0.12, Math.PI * 0.66), plaster)); chest.position.set(0, 1.32, -0.02); bust.add(chest);
+  const ready = bustData.then(buf => {
+    const m = cast(new THREE.Mesh(readBust(buf), plaster)); m.position.set(...HEAD.c);
+    bust.clear(); bust.add(m);
+  }).catch(err => console.warn('The sculpted bust could not be loaded; using the simple one.', err));
+  // A model of the user's own replaces the bust (see setModel).
+  // Two-sided, so models with flipped faces still read correctly.
+  const own = new THREE.Group(), ownMat = plaster.clone(); ownMat.side = THREE.DoubleSide; ownMat.shadowSide = THREE.BackSide; own.visible = false; set.add(own);
+  const setModel = geo => {
+    own.clear();
+    if (geo) own.add(cast(new THREE.Mesh(geo, ownMat)));
+    own.visible = !!geo; bust.visible = !geo;
+  };
+  const socle = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.18, 32), plaster)); socle.position.set(0, 1.2, -0.02); set.add(socle);
   const lin = v => new THREE.Color().setRGB(v, v, v, THREE.LinearSRGBColorSpace);
   const pedestal = cast(new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.12, 0.3), new THREE.MeshStandardMaterial({ color: lin(0.3), roughness: 0.8 }))); pedestal.position.set(0, 0.56, -0.01); set.add(pedestal);
   // Grey ball (18 %) and chrome ball on a small stand: the reference balls of VFX lighting
@@ -66,7 +100,7 @@ export function buildSet(scene) {
   // Bounce card (foam board), placed by the app
   const card = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: lin(0.85), roughness: 0.9, side: THREE.DoubleSide }));
   card.castShadow = true; card.visible = false; set.add(card);
-  return { set, head, backMat, card, chrome };
+  return { set, head: bust, backMat, card, chrome, ready, setModel };
 }
 export function applySet(parts, state) {
   const v = BACKDROPS[state.backdrop] ?? 0.5;

@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { TARGETS, CAMERA, PROBES, HDRIS, FALSE_COLOR, lightPos, lightDir, lightFrame, apparentSize, measure, ratioLabel, stopsOf, luminance, MIDDLE_GREY, rad, deg } from './light.js?v=1';
-import { buildSet, applySet, Rig, World, Progressive } from './scene.js?v=1';
+import { buildSet, applySet, Rig, World, Progressive } from './scene.js?v=4';
+import { parseModel, fitModel } from './models.js?v=2';
 import { STAGES, startState, referenceState, LIGHT_IDS, LIGHT_NAMES } from './stages.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
 import dictionary from './i18n.js?v=1';
@@ -262,6 +263,7 @@ function renderProps() {
   h += `<div class="ol-row${sel === 'world' ? ' active' : ''}" data-sel="world"><svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor"/><path d="M1.5 6h9M6 1.5c2 2.5 2 6.5 0 9M6 1.5c-2 2.5-2 6.5 0 9" fill="none" stroke="currentColor"/></svg><span data-no-i18n>World</span><small></small></div></div></div>`;
   if (LIGHT_IDS.includes(sel)) h += lightPanel(sel, s.lights[sel]);
   else if (sel === 'card') h += cardPanel(s.card);
+  h += subjectPanel();
   h += worldPanel(s.world);
   h += `<div class="panel bl" data-no-i18n><h4>Backdrop<small>Material</small></h4><label class="bl-row"><span>Base Color</span><select data-g="backdrop">${opt('white', s.backdrop, 'White paper (85%)')}${opt('grey', s.backdrop, 'Grey paper (50%)')}${opt('black', s.backdrop, 'Black velvet (4%)')}</select><em></em></label></div>`;
   h += `<div class="panel bl" data-no-i18n><h4>Color Management<small>Render Properties</small></h4>
@@ -271,6 +273,44 @@ function renderProps() {
   h += `<div class="panel" id="meter-panel">${meterPanel()}</div>`;
   $('#props').innerHTML = h;
 }
+// ─── The subject: the lab's plaster bust or a model of the user's own ───────
+const MODEL = { data: null, name: '', zUp: false, turn: 0 };
+function subjectPanel() {
+  const own = !!MODEL.data;
+  return `<div class="panel"><h4>${esc(t('Subject'))}<small>${esc(t('on the socle'))}</small></h4>
+    <div class="seg small subject-seg"><button type="button" data-subject="bust" aria-pressed="${!own}">${esc(t('Plaster bust'))}</button><button type="button" data-subject="open" aria-pressed="${own}">${esc(t('Your model…'))}</button></div>
+    <input type="file" id="model-file" accept=".glb,.obj,.stl" hidden>
+    ${own ? `<p class="sb-empty model-name" data-no-i18n>${esc(MODEL.name)}</p>
+      <div class="model-tools"><button type="button" class="mini-link" data-model="turn">${esc(t('Turn 90°'))}</button><button type="button" class="mini-link" data-model="zup" aria-pressed="${MODEL.zUp}">${esc(t('Z up (Blender axes)'))}</button></div>
+      <p class="sb-empty">${esc(t('Your model is scaled to 40 cm, painted plaster and put on the socle. It stays in this browser tab. The light meter still reads the points of the lab\'s bust.'))}</p>`
+      : `<p class="sb-empty">${esc(t('Open a .glb, .obj or .stl file to light your own sculpt. Export it from Blender with File › Export.'))}</p>`}</div>`;
+}
+function applyModel() {
+  let geo = null;
+  if (MODEL.data) { geo = fitModel(MODEL.data, MODEL); }
+  vSet.setModel(geo); rSet.setModel(geo ? geo.clone() : null);
+  syncScenes();
+}
+async function openModel(file) {
+  try {
+    if (file.size > 80 * 1024 * 1024) throw new Error('too big');
+    MODEL.data = parseModel(file.name, await file.arrayBuffer()); MODEL.name = file.name; MODEL.turn = 0; MODEL.zUp = /\.(stl)$/i.test(file.name);
+    applyModel(); renderProps(); msg(tr('{f} is on the socle.', { f: file.name }));
+  } catch (err) {
+    MODEL.data = null; renderProps();
+    msg(err.message === 'compressed' ? 'This .glb is compressed (Draco or meshopt). Export it again without compression.' : err.message === 'too big' ? 'This model is too heavy for the browser. Decimate it or export a lighter version.' : err.message === 'format' ? 'Open a .glb, .obj or .stl file.' : 'This file could not be read as a 3D model.', true);
+  }
+}
+$('#props').addEventListener('click', e => {
+  const b = e.target.closest('[data-subject], [data-model]'); if (!b) return;
+  if (b.dataset.subject === 'open') { $('#model-file').click(); return; }
+  if (b.dataset.subject === 'bust') { MODEL.data = null; applyModel(); renderProps(); msg('Back to the plaster bust.'); return; }
+  if (b.dataset.model === 'turn') MODEL.turn = (MODEL.turn + 1) % 4;
+  if (b.dataset.model === 'zup') MODEL.zUp = !MODEL.zUp;
+  applyModel(); renderProps();
+});
+$('#props').addEventListener('change', e => { if (e.target.id === 'model-file' && e.target.files[0]) openModel(e.target.files[0]); });
+
 function lightPanel(id, l) {
   const seg = (f, cur, opts) => `<div class="seg small">${opts.map(([v, lab]) => `<button type="button" data-seg="${f}" data-val="${v}" aria-pressed="${cur === v}">${lab}</button>`).join('')}</div>`;
   let h = `<div class="panel bl" data-no-i18n><h4>${LIGHT_NAMES[id]}<small>Object Data · Light</small></h4>
@@ -421,5 +461,7 @@ document.addEventListener('keydown', e => {
 new ResizeObserver(resizeView).observe(vHost);
 onLangChange(() => renderAll());
 enterStep(); resizeView(); translateTitles();
+// When the sculpted bust has loaded, render the reference and the render again with it.
+Promise.all([vSet.ready, rSet.ready]).then(() => { renderReference(); syncScenes(); });
 requestAnimationFrame(renderLoop);
 window.__light = { S, prog, measure, where: id => { const g = gizmos.children.find(c => c.userData.id === id); const [x, y] = screenOf(g.userData.pos, viewCam()), r = vCanvas.getBoundingClientRect(); return [r.left + x, r.top + y]; } }; // for tests and curious students

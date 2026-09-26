@@ -48,8 +48,14 @@ export function buildScene() {
   // Poster wall with fine detail (to judge sharpness), 5 m behind
   const posterTex = canvasTexture(512, 256, (g, w, h) => {
     g.fillStyle = '#f1ede4'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#20242a'; g.font = 'bold 92px Arial'; g.fillText('CIFOG', 40, 120);
-    g.font = '28px Arial'; g.fillText('photo · lab · 2026', 44, 170);
+    // A resolution chart without text: a Siemens star and groups of lines that get finer
+    g.fillStyle = '#20242a';
+    const cx = 100, cy = 100, R = 82;
+    for (let i = 0; i < 36; i += 2) { g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, i * Math.PI / 18, (i + 1) * Math.PI / 18); g.closePath(); g.fill(); }
+    let x = 210;
+    for (const bw of [12, 8, 5, 3, 2]) { for (let k = 0; k < 4; k++) g.fillRect(x + k * bw * 2, 24, bw, 70); x += bw * 8 + 12; }
+    x = 210;
+    for (const bw of [12, 8, 5, 3, 2]) { for (let k = 0; k < 4; k++) g.fillRect(x, 110 + k * bw * 2, bw * 7, bw); x += bw * 8 + 12; }
     for (let i = 0; i < 24; i++) { g.fillStyle = i % 2 ? '#ffbf00' : '#2a6fd6'; g.fillRect(i * w / 24, 210, w / 24, 46); }
   });
   const posters = [];

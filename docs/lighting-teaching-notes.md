@@ -4,7 +4,9 @@ Explanations are in Catalan or Spanish. Blender's interface names (Point, Sun, S
 
 ## The set
 
-- **Subjects**: a plaster bust (albedo 72%) on a pedestal, a grey ball (18%) and a chrome ball on a stand.
+- **Subjects**: a plaster bust (albedo 72%) on a socle and a pedestal, a grey ball (18%) and a chrome ball on a stand.
+  - The bust is a sculpt of smooth blended shapes (head, features, hair, neck, shoulders and the classic cut of a bust) meshed with surface nets by `tools/make-bust.mjs` into `labs/lighting/assets/bust.bin` (about 53 000 vertices, 1.1 MB). A simple bust is shown until it loads.
+  - **Your model…** (Subject panel) loads a .glb (uncompressed), .obj or .stl, scales it to 40 cm, gives it the plaster material and puts it on the socle. Z up turns files with Blender's axes; Turn 90° turns it around the vertical. Faces that point inwards are turned round. It stays in the tab only. The light meter keeps reading the points of the lab's bust, so step checks are unchanged.
 - **Backdrop**: a paper sweep 1.2 m behind the bust. It can be white (85%), grey (50%) or black (4%).
 - **Lights**: four of them (Key_Light, Fill_Light, Rim_Light, BG_Light) and a Bounce_Card.
   - Each one is placed by Azimuth (0° = in front of the bust, +90° = camera right), Elevation and Distance.

@@ -68,13 +68,25 @@ test('reachFK finds FK rotations that touch a point', () => {
 
 test('every step starts unsolved and its solution solves it', () => {
   for (const stg of STAGES) {
-    const rig = rigFor(stg);
+    const base = rigFor(stg);
     for (const s of stg.steps) {
-      const flags = {}, st = s.start(rig);
-      const ctx = () => { const { W, info } = R.solve(rig, st); return { rig, W, info, flags }; };
+      const flags = {}, st = s.start(base);
+      const ctx = () => { const rig = rigFor(stg, st), { W, info } = R.solve(rig, st); return { rig, W, info, flags }; };
       assert.equal(!!s.check(st, ctx()), false, `${s.id} starts unsolved`);
-      s.solve(st, rig, flags);
+      s.solve(st, rigFor(stg, st), flags);
       assert.ok(s.check(st, ctx()), `${s.id} solved`);
     }
   }
+});
+test('a slight bend in Edit Mode decides which way the IK bends without a pole', () => {
+  for (const [knee, dir] of [[0.05, 1], [-0.05, -1]]) {
+    const leg = R.makeRig('leg', { knee }), st = R.defaultState(leg);
+    st.ik = { owner: 'Shin', target: 'IK_Foot', pole: null, poleAngle: 0, chain: 2, influence: 1 };
+    R.addWorldLocation(leg, st, R.solve(leg, st).W, 'IK_Foot', new Vector3(0, 0.6, 0.45));
+    const { info } = R.solve(leg, st);
+    assert.ok(info.kneeDir.z * dir > 0.9 && !info.straight, `knee ${knee}`);
+  }
+  const straight = R.makeRig('leg'), st = R.defaultState(straight);
+  st.ik = { owner: 'Shin', target: 'IK_Foot', pole: null, poleAngle: 0, chain: 2, influence: 1 };
+  assert.equal(R.solve(straight, st).info.straight, true);
 });

@@ -13,7 +13,8 @@ The interface uses Blender's English names (Pose Mode, Bone Constraints, Inverse
 - **FK**: every bone inherits the transform of its parent.
 - **IK constraint** (on the Shin): the tip of the chain reaches the head of the target bone.
   - Two bones are solved exactly.
-  - Without a pole, the chain keeps the X axis it has in FK. A leg modelled perfectly straight bends towards the bones' local Z: the knee goes backwards. This is the classic problem, and it is also why rigs bend the knee slightly in Edit Mode.
+  - Without a pole, the chain bends the way it is already bent in the rest pose (Edit Mode). A leg modelled perfectly straight gives no hint: the solver falls back on the bones' X axis and the knee goes backwards. That is the classic problem, and the reason rigs bend the knee slightly in Edit Mode.
+- **Edit Mode** (Tab, leg only): the bones go back to their rest position and the joints appear. Only the knee joint can be selected and moved, along Blender's Y (G Y, −Y is the front). The bend is stored as `knee` in the state and rebuilds the rig; bones within 10° of vertical keep the vertical roll rule, so the bend does not change their roll.
   - With a pole, the root bone's X axis turns towards the pole target, then by the Pole Angle. For this leg the knee points at the pole with -90°, the typical value in Blender. The right value depends on the roll of the bones.
   - Chain Length 0 means every parent up to the root, so the Hips rotate too.
   - Influence blends the FK and the IK rotations.
@@ -35,9 +36,10 @@ The interface uses Blender's English names (Pose Mode, Bone Constraints, Inverse
 ## Stage 2 · Inverse kinematics (leg)
 
 1. **Add the IK constraint**: moving IK_Foot moves only the foot (it is parented to the control). Add IK to the Shin with target IK_Foot, from Add Bone Constraint or with Shift I › To Active Bone, then set Chain Length 2.
-2. **Point the knee**: the foot is lifted and the straight leg bends its knee backwards. Set Pole Target Knee_Pole. The knee then points sideways; Pole Angle -90° makes it point forward.
-3. **Crouch with the foot planted**: G Z -0.5 on the Hips keeps the foot on the floor. G X 0.8 on the Knee_Pole points the knee outwards (15°–50°).
-4. **IK or FK: Influence**: 0 gives the FK leg back, 1 gives the IK back. This is the basis of an IK/FK switch.
+2. **A slight bend**: the foot is lifted and the straight leg bends its knee backwards. Tab into Edit Mode, click the knee joint, G Y -0.05, Tab back: the knee bends forward (check: bend 2–20 cm forward and the knee points forward).
+3. **Point the knee**: the knee bends forward but nothing controls where it points. Set Pole Target Knee_Pole. The knee then points sideways; Pole Angle -90° makes it point forward.
+4. **Crouch with the foot planted**: G Z -0.5 on the Hips keeps the foot on the floor. G X 0.8 on the Knee_Pole points the knee outwards (15°–50°).
+5. **IK or FK: Influence**: 0 gives the FK leg back, 1 gives the IK back. This is the basis of an IK/FK switch.
 
 ## Ideas to extend
 
