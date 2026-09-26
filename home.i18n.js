@@ -65,4 +65,13 @@ export default {
   "STRIPS · U REPEAT": { ca: "FRANGES · REPETICIÓ EN U", es: "FRANJAS · REPETICIÓN EN U" },
   "12 / TEXTURING": { ca: "12 / TEXTURITZAT", es: "12 / TEXTURIZADO" },
   "3 labs": { ca: "3 labs", es: "3 labs" },
+  "Stage &amp; scenography": { ca: "Escenari i escenografia", es: "Escenario y escenografía" },
+  "Stage & scenography": { ca: "Escenari i escenografia", es: "Escenario y escenografía" },
+  "The theatre as a machine: where the scenery waits, how it flies and what the audience must never see.": { ca: "El teatre com a màquina: on esperen els decorats, com pugen i baixen i què no ha de veure mai el públic.", es: "El teatro como máquina: dónde esperan los decorados, cómo suben y bajan y qué no debe ver nunca el público." },
+  "1 lab": { ca: "1 lab", es: "1 lab" },
+  "An opera house stage cut in half, after the Teatro Real: find the parts of the stage house, balance a counterweight, share loads between bars, move platforms and wagons, mask the wings and the lights from the worst seats and plan a scene change.": { ca: "L'escenari d'un teatre d'òpera tallat per la meitat, a partir del Teatro Real: troba les parts de la caixa escènica, equilibra un contrapès, reparteix càrregues entre vares, mou plataformes i carros, amaga els laterals i els llums des de les pitjors butaques i planifica un canvi d'escena.", es: "El escenario de un teatro de ópera cortado por la mitad, a partir del Teatro Real: encuentra las partes de la caja escénica, equilibra un contrapeso, reparte cargas entre varas, mueve plataformas y carros, esconde los hombros y las luces desde las peores butacas y planifica un cambio de escena." },
+  "Fly tower · platforms · sightlines · scene change": { ca: "Torre escènica · plataformes · visuals · canvi d'escena", es: "Telar · plataformas · visuales · cambio de escena" },
+  "FLY · MASK · CHANGE": { ca: "PUJAR · AFORAR · CANVIAR", es: "VOLAR · AFORAR · CAMBIAR" },
+  "13 / STAGECRAFT": { ca: "13 / ESCENOTÈCNIA", es: "13 / ESCENOTECNIA" },
+  "Grouped in the order of a 3D production: model, texture, light, animate, and program the game. And one visit to the theatre.": { ca: "Agrupats en l'ordre d'una producció 3D: modelar, texturitzar, il·luminar, animar i programar el joc. I una visita al teatre.", es: "Agrupados en el orden de una producción 3D: modelar, texturizar, iluminar, animar y programar el juego. Y una visita al teatro." },
 };
