@@ -32,7 +32,6 @@ With 8 px of padding after each strip the sheet is used exactly (960 + 64 = 1024
 
 | Step | Scene | Check |
 |---|---|---|
-| t1 Three ways to texture | four props | the three modes seen, ending on Trim sheet |
 | t2 Which strip is which? | four props | three strip questions answered (beam, iron, wood bevel) |
 | t3 Only in U | wall, plinth across the iron strip | an island moved ≥ 0.2 in U with no V change, and the plinth on its strip |
 | d1 Sizes from texel density | sample board | every strip at m × 512 px |
@@ -46,11 +45,10 @@ With 8 px of padding after each strip the sheet is used exactly (960 + 64 = 1024
 | b2 Weighted normals | same, Shade Smooth | shading is Weighted Normal |
 | b3 Chamfer width = strip height | chamfers 12 cm, islands refitted automatically | width 5.6–6.6 cm and every island passes |
 | p1 Texture a chest fast | chest with straps, just unwrapped, Fit to Trim | every island passes |
-| p2 The texture budget | four props | ≤ 2 materials, ≤ 10 MB, ≥ 450 px/m on every prop |
 | p3 Re-skin everything | four props | another version of the sheet |
 
-- **Texel density** is √(UV area × 1024² ÷ 3D area) over the island.
-- **Budget**: a texture set is colour, normal and roughness, block-compressed at 1 byte per pixel with mipmaps (+⅓): 16 MB at 2K, 4 MB at 1K. A unique layout is assumed to fill 70% of its texture. The shared trim sheet counts once. "Unique" props in the 3D view use a smaller copy of the sheet so their blur matches their density.
+- **Texel density** is √(UV area × 1024² ÷ 3D area) over the island. It is the plan of the sheet: 512 px/m means a strip is (real height in m × 512) px tall. The Texel Density Lab explains the concept itself.
+- The lab focuses on the trim sheet only: the comparison with unique and tileable textures and the texture budget step were removed.
 - **Normals**: Weighted Normal uses the biggest faces around each vertex (Face Area with a strong weight). Smooth by Angle uses 30°, so the 45° chamfers stay sharp.
 
 ## Simplifications
@@ -63,9 +61,9 @@ With 8 px of padding after each strip the sheet is used exactly (960 + 64 = 1024
 
 ## Teaching points worth stopping on
 
-- **t1**: ask why a unique texture is still used for hero props (unique detail, baked AO). Trims and uniques are often combined.
+- **t2**: start here: a trim sheet is one texture of strips that repeat along U, shared by every prop.
+- **d1**: stop on the rule height in px = size in m × 512; this is where texel density plans the sheet.
 - **t3**: move an island in V slowly across a strip edge and watch the 3D view pick up the neighbour.
 - **d3**: show mip 3 to 5 with no padding and look at the 3D board from far away: coloured lines appear at the strip edges.
 - **u2**: before staggering, turn the wall to see the continuous vertical joints.
 - **b1–b3**: compare the beam with Flat shading and the planks mapping, then the final version: the difference is a handful of quads and one strip.
-- **p2**: there are several valid answers (for example one unique 1K texture and trims for the rest). Discuss when that is worth it.

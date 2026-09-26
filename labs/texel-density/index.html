@@ -6,7 +6,7 @@
   <meta name="description" content="Understand texel density: see it with a checker map, compute it in px/m, match it with S, Average Islands Scale, Pack Islands and Set TD, choose a target from the camera and the memory budget, and break the rule on purpose.">
   <title>Texel Density Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=1">
+  <link rel="stylesheet" href="./style.css?v=2">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
 <body>
@@ -29,6 +29,7 @@
         <section class="editor pane" aria-label="UV Editor">
           <div class="editor-header">
             <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12" stroke="currentColor" opacity=".6"/></svg><span id="uv-title" data-no-i18n>UV Editor</span><span class="obj-badge" id="obj-badge" data-no-i18n></span></span>
+            <div class="seg small" id="uv-image" role="group" aria-label="Image"><span class="seg-label" data-no-i18n>Image</span><button type="button" data-img="checker" data-no-i18n>Checker</button><button type="button" data-img="texture" data-no-i18n>Texture</button></div>
             <label class="hdr-field" id="pivot-field"><span data-no-i18n>Pivot</span><select id="pivot" data-no-i18n><option value="bbox">Bounding Box Center</option><option value="individual">Individual Origins</option></select></label>
           </div>
           <div class="view-host uv-host" id="uv-host">
@@ -76,7 +77,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>Texel density in Blender</h2><p>Blender measures UVs but has no texel density number of its own; add-ons such as <strong>Texel Density Checker</strong> add it. The rest is ordinary UV editing.</p></div><ol><li>Make a checker: <strong>Image › New</strong>, Generated Type <strong>Color Grid</strong> or <strong>UV Grid</strong>, at the size of your real texture. Show it in the UV Editor and in the material.</li><li><strong>Apply the scale</strong> of your objects first: <kbd>Ctrl</kbd> <kbd>A</kbd> › Scale in the 3D Viewport.</li><li>In the UV Editor: <strong>UV › Average Islands Scale</strong> (<kbd>Ctrl</kbd> <kbd>A</kbd>) evens the islands of an object, <strong>UV › Pack Islands</strong> fills the square with a margin.</li><li>With <strong>Texel Density Checker</strong> (N panel): set the texture size, read the density, type the target and press <strong>Set TD</strong>.</li><li>Scale islands by hand with <kbd>S</kbd> for exceptions: hero areas up, hidden faces down.</li><li>Write the target in the art bible of the project, with the texture sizes it gives for common object sizes.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Texel Density Lab</span><a href="https://docs.blender.org/manual/en/latest/modeling/meshes/uv/editing.html" target="_blank" rel="noopener">Blender: UV editing ↗</a><span>Teaching model · simulated textures.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=1"></script>
+  <script type="module" src="./app.js?v=2"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>

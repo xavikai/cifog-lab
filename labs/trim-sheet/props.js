@@ -1,6 +1,6 @@
 // Trim Sheet Lab: the medieval props (wall, column, chest, beam) as quad meshes with UV islands. Pure JS.
-import { UV_PER_M, DEFAULT_STRIPS, stripOf } from './sheet.js';
-import { islandFaces, ideal, place, rotate, bbox, translate, scale as scaleUV } from './uv.js';
+import { UV_PER_M, DEFAULT_STRIPS, stripOf } from './sheet.js?v=1';
+import { islandFaces, ideal, place, rotate, bbox, translate, scale as scaleUV } from './uv.js?v=2';
 
 function newMesh() { return { pos: [], faces: [], islands: {}, extras: [], keys: new Map() }; }
 // Vertices at the same place are merged, so neighbouring faces share them (needed for smooth normals).
@@ -23,29 +23,14 @@ function ruled(m, id, P, S, T, n, s0 = 0) {
 const at = (off, p) => [p[0] + off[0], p[1] + off[1], p[2] + off[2]];
 
 // ─── Props ───────────────────────────────────────────────────────────────────
-// A small wall module with real depth: each stone course wraps around all four sides.
-// The front stays six quads wide so its individual blocks remain easy to pick in the lesson.
+// A piece of wall: plinth, three stone courses and a wooden beam on top. Front faces only.
 export function wall(m = newMesh(), off = [0, 0, 0], pre = '') {
-  const depth = 0.25;
-  const course = (id, y0, height, n = 6) => {
-    ruled(m, id, (s, t) => at(off, [-1.5 + s, y0 + t, 0]), 3, height, n);
-    ruled(m, id, (s, t) => at(off, [1.5, y0 + t, -s]), depth, height, 1, 3);
-    ruled(m, id, (s, t) => at(off, [1.5 - s, y0 + t, -depth]), 3, height, n, 3 + depth);
-    ruled(m, id, (s, t) => at(off, [-1.5, y0 + t, -depth + s]), depth, height, 1, 6 + depth);
-    // Two shallow engaged piers make the module read as architecture rather than a flat board.
-    for (const [j, x0] of [-1.43, 1.23].entries()) {
-      const u0 = 6 + 2 * depth + j * 0.46;
-      ruled(m, id, (s, t) => at(off, [x0 + s, y0 + t, 0.12]), 0.2, height, 1, u0);
-      ruled(m, id, (s, t) => at(off, [x0 + 0.2, y0 + t, 0.12 - s]), 0.12, height, 1, u0 + 0.2);
-      ruled(m, id, (s, t) => at(off, [x0, y0 + t, s]), 0.12, height, 1, u0 + 0.32);
-    }
-  };
   island(m, pre + 'plinth', 'Plinth', 'plinth');
-  course(pre + 'plinth', 0, 0.125);
+  ruled(m, pre + 'plinth', (s, t) => at(off, [-1.5 + s, t, 0]), 3, 0.125, 6);
   for (let r = 0; r < 3; r++) {
     const id = pre + 'row' + (r + 1), y0 = 0.125 + 0.5 * r;
     island(m, id, `Stone row ${r + 1}`, 'stone');
-    course(id, y0, 0.5);
+    ruled(m, id, (s, t) => at(off, [-1.5 + s, y0 + t, 0]), 3, 0.5, 6);
   }
   island(m, pre + 'beamFront', 'Beam front', 'beam');
   ruled(m, pre + 'beamFront', (s, t) => at(off, [-1.6 + s, 1.625 + t, 0.2]), 3.2, 0.25, 8);

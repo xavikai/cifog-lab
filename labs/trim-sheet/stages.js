@@ -1,7 +1,7 @@
 // Trim Sheet Lab: stages, steps and checks. Pure JS (tested with node).
-import { TYPES, TYPE_IDS, DEFAULT_LAYOUT, DEFAULT_PAD, DEFAULT_STRIPS, stripsOf, stripOf, setMB, SIZE } from './sheet.js';
-import { scene, solvedUV, scatter, arc, propOf, PROPS_OF_ALL } from './props.js?v=2';
-import { report, islandFaces, bbox, place, faceArea } from './uv.js';
+import { TYPES, TYPE_IDS, DEFAULT_LAYOUT, DEFAULT_PAD, DEFAULT_STRIPS, stripsOf, stripOf, SIZE } from './sheet.js?v=1';
+import { scene, solvedUV, scatter, arc } from './props.js?v=2';
+import { report, islandFaces, bbox, place } from './uv.js?v=2';
 
 const meshCache = new Map();
 export function meshOf(st) {
@@ -13,7 +13,7 @@ export function defaultState() {
   return {
     scene: 'wall', straps: false, bevel: 0.0625, uv: null, autoUV: false,
     layout: DEFAULT_LAYOUT.map(s => ({ ...s })), pad: DEFAULT_PAD, mip: 0,
-    shading: 'angle', texMode: 'trim', palette: 'oak', budget: null, fit: false, flags: {},
+    shading: 'angle', palette: 'oak', fit: false, flags: {},
   };
 }
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -43,50 +43,14 @@ export const QUIZ = [
   { q: 'Click the strip used by the iron straps of the chest.', a: 'iron' },
   { q: 'Click the strip used by the chamfered edges of the beam on the floor.', a: 'bevelWood' },
 ];
-// Texture budget of the "all" scene: each prop uses a unique 2K or 1K texture set, or the shared trim sheet.
-export const BUDGET = { mb: 10, materials: 2, density: 450 };
-const areaCache = {};
-export function propAreas() {
-  if (!areaCache.done) {
-    const m = scene('all');
-    for (const p of PROPS_OF_ALL) areaCache[p] = 0;
-    m.faces.forEach((f, i) => { areaCache[propOf(f.island)] += faceArea(m, i); });
-    areaCache.done = true;
-  }
-  return areaCache;
-}
-export function budgetStats(budget) {
-  const areas = propAreas(), dens = {};
-  let mb = 0, materials = 0, trim = false;
-  for (const p of PROPS_OF_ALL) {
-    const b = budget[p];
-    if (b === 'trim') { trim = true; dens[p] = 512; continue; }
-    const res = b === '2k' ? 2048 : 1024;
-    mb += setMB(res); materials++;
-    dens[p] = Math.sqrt(res * res * 0.7 / areas[p]);   // a unique layout fills about 70% of its texture
-  }
-  if (trim) { mb += setMB(SIZE); materials++; }
-  const ok = materials <= BUDGET.materials && mb <= BUDGET.mb && Object.values(dens).every(d => d >= BUDGET.density);
-  return { mb, materials, dens, ok };
-}
-
 // ─── Stages ──────────────────────────────────────────────────────────────────
 export const STAGES = [
   {
-    id: 'read', name: 'Read a trim sheet', sub: 'Unique · tileable · trims',
+    id: 'read', name: 'Read a trim sheet', sub: 'Strips · U repeat · quiz',
     steps: [
       {
-        id: 't1', title: 'Three ways to texture',
-        text: 'The same four props, textured in three ways. A unique texture gives every surface its own pixels, so a big scene gets few pixels per metre. A tileable texture repeats well, but everything looks the same. A trim sheet stores strips that repeat along U: planks, stones, beams, iron… and every prop takes the strips it needs from one texture. Try the three modes and compare the numbers.',
-        how: ['In the 3D Viewport header, switch <b>Texture</b> between <b>Unique</b>, <b>Tileable</b> and <b>Trim sheet</b>.', 'Watch the UV Editor: Unique gives every face its own space; Tileable repeats one square; Trim sheet shares horizontal strips. Compare texel density in the side panel.', 'Finish on <b>Trim sheet</b>.'],
-        why: 'Trim sheets are how game environments get sharp detail on many props with very little texture memory.',
-        start: { scene: 'all', texMode: 'unique' },
-        check: s => !!(s.flags.seen_unique && s.flags.seen_tile && s.flags.seen_trim && s.texMode === 'trim'),
-        solve: s => { Object.assign(s.flags, { seen_unique: true, seen_tile: true, seen_trim: true }); s.texMode = 'trim'; },
-      },
-      {
         id: 't2', title: 'Which strip is which?',
-        text: 'A trim sheet is a stack of horizontal strips. Each strip is planned for a kind of part and a real size. Hover the strips in the UV Editor: the 3D view shows every part that uses it. Then answer the three questions by clicking a strip.',
+        text: 'A trim sheet is one texture made of horizontal strips that repeat along U: planks, stone courses, beams, iron straps, bevels… Every prop takes the strips it needs, so one material textures a whole set. Each strip is planned for a kind of part and a real size. Hover the strips in the UV Editor: the 3D view shows every part that uses it. Then answer the three questions by clicking a strip.',
         how: ['Hover a strip in the <b>UV Editor</b>: its parts light up in the 3D view.', 'Read the question in the side panel and click the right strip.', 'Answer the three questions.'],
         why: 'Reading a sheet is the first skill: you need to know what every strip is for before you can map anything to it.',
         start: { scene: 'all' },
@@ -110,9 +74,9 @@ export const STAGES = [
     steps: [
       {
         id: 'd1', title: 'Sizes from texel density',
-        text: 'Plan a sheet from the props, not from the image. At 512 px per metre, a strip for a 0.5 m row of stones must be 256 px tall; a 0.25 m beam needs 128 px, a 12.5 cm iron strap 64 px and a 6 cm chamfer 32 px. The heights of this sheet are wrong. Give every strip the height its parts need.',
+        text: 'Plan a sheet from the props, not from the image. The plan is the texel density: how many pixels of the sheet cover one metre of a prop. This sheet uses 512 px/m, so a strip is as many pixels tall as its part is metres tall × 512: a 0.5 m row of stones needs 256 px, a 0.25 m beam 128 px, a 12.5 cm iron strap 64 px and a 6 cm chamfer 32 px. With the same density on every strip, every prop is equally sharp. The heights of this sheet are wrong: give every strip the height its parts need.',
         how: ['In the <b>Trim Sheet</b> panel, change the <b>Height</b> of each strip.', 'The table shows the real size each strip needs: height in px = size in m × 512.', 'The sample board in the 3D view shows every strip at its real size.'],
-        why: 'The same texel density on every strip keeps all the props equally sharp next to each other.',
+        why: 'The same texel density on every strip keeps all the props equally sharp next to each other. The Texel Density Lab shows how a project chooses its target, like the 512 px/m of this sheet.',
         start: { scene: 'board', layout: [{ type: 'plank', px: 128 }, { type: 'stone', px: 256 }, { type: 'beam', px: 256 }, { type: 'molding', px: 64 }, { type: 'iron', px: 64 }, { type: 'plinth', px: 128 }, { type: 'bevelWood', px: 16 }, { type: 'bevelStone', px: 32 }], pad: 8 },
         check: s => layoutInfo(s).sizesOk,
         solve: s => { s.layout.forEach(l => { l.px = TYPES[l.type].m * 512; }); },
@@ -216,7 +180,7 @@ export const STAGES = [
     ],
   },
   {
-    id: 'reuse', name: 'One sheet, many props', sub: 'Fit to Trim · budget · re-skin',
+    id: 'reuse', name: 'One sheet, many props', sub: 'Fit to Trim · re-skin',
     steps: [
       {
         id: 'p1', title: 'Texture a chest fast',
@@ -231,15 +195,6 @@ export const STAGES = [
         },
         check: s => allOk(s),
         solve: s => { s.uv = solvedUV(meshOf(s)); },
-      },
-      {
-        id: 'p2', title: 'The texture budget',
-        text: 'A game level has a memory budget, and every material is at least one draw call. Choose how to texture the four props so the scene stays within the budget: at most 2 materials, at most 10 MB of textures, and at least 450 px/m on every prop.',
-        how: ['In the side panel, choose <b>Unique 2K</b>, <b>Unique 1K</b> or <b>Trim sheet</b> for each prop.', 'Read the totals: materials, memory and the density of each prop.', 'Unique textures get blurrier in the 3D view when their density drops.'],
-        why: 'One trim sheet shared by many props means one material, one texture set in memory and the same sharpness everywhere.',
-        start: { scene: 'all', budget: { wall: '2k', column: '1k', chest: '1k', beam: '1k' } },
-        check: s => budgetStats(s.budget).ok,
-        solve: s => { s.budget = { wall: 'trim', column: 'trim', chest: 'trim', beam: 'trim' }; },
       },
       {
         id: 'p3', title: 'Re-skin everything',

@@ -1,7 +1,7 @@
 // Trim Sheet Lab: UV islands. A mesh is { pos, faces: [{ v:[4 vertex ids], loc:[[s,t]×4], island }], islands }.
 // `loc` is the ideal flat layout of a face in metres (s along the trim, t across it).
 // UVs are stored per face corner: uv[face] = [[u,v]×4]. Pure maths, no DOM.
-import { SIZE, DENSITY, UV_PER_M, stripAt } from './sheet.js';
+import { SIZE, DENSITY, UV_PER_M, stripAt } from './sheet.js?v=1';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

@@ -247,12 +247,102 @@ const fract = x => x - Math.floor(x);
 const hash = (a, b) => fract(Math.sin(a * 127.1 + b * 311.7) * 43758.5453);
 const mix = (a, b, k) => a.map((x, i) => x + (b[i] - x) * k);
 const line = (x, w) => { const d = Math.abs(fract(x + 0.5) - 0.5); return d < w ? 1 : 0; };
-// Bricks: 21.5 × 6.5 cm with 1 cm of mortar, half-brick bond. p in metres. Returns sRGB 0–1.
+const inBox = (s, t, a0, b0, a1, b1) => s >= a0 && s <= a1 && t >= b0 && t <= b1;
+// Tiny text: glyphs of 5 × 7 dots, on or off at random. (o0, o1) = bottom left, cw = glyph width, n = glyph count.
+function text(s, t, o0, o1, cw, n) {
+  const qx = (s - o0) / cw, qy = (t - o1) / cw;
+  if (qx < 0 || qy < 0 || qx >= n || qy >= 1.4) return 0;
+  const g = Math.floor(qx), dx = Math.floor(fract(qx) * 6), dy = Math.floor(qy / 1.4 * 8);
+  if (dx > 4 || dy > 6) return 0;
+  return hash(g * 5.3 + dx + o0 * 91, dy + o1 * 57) >= 0.52 ? 1 : 0;
+}
+const mixc = (a, b, k) => a.map((x, i) => x + (b[i] - x) * k);
+const mul = (c, k) => c.map(x => x * k);
+function patPlanks(s, t) {
+  const r = Math.floor(t / 0.125), fy = fract(t / 0.125), h = hash(r, 7);
+  let c = mixc([0.66, 0.47, 0.27], [0.53, 0.36, 0.2], h);
+  const g = fract(t * 55 + 0.25 * Math.sin(s * 8 + r * 4) + h * 3);
+  if (g <= 0.22) c = mul(c, 0.8);
+  const nx = (((s + h * 0.1) % 0.25) + 0.25) % 0.25 - 0.03, ny = (fy - 0.5) * 0.125;
+  if (Math.hypot(nx, ny) <= 0.007) c = mul(c, 0.35);
+  return fy < 0.05 ? mul(c, 0.3) : c;
+}
+// Bricks: 21.5 × 6.5 cm with 1 cm of mortar, half-brick bond. s, t in metres. Returns sRGB 0–1.
 export function brickColor(s, t) {
-  const row = Math.floor(t / 0.075), x = s / 0.225 + (row % 2) * 0.5, col = Math.floor(x);
-  const inMortar = fract(t / 0.075) > 0.8667 || fract(x) > 0.9556;
-  if (inMortar) return [0.72, 0.70, 0.66];
-  const h = hash(col, row), base = mix([0.62, 0.25, 0.17], [0.48, 0.18, 0.13], h);
-  const speck = hash(Math.floor(s / 0.012), Math.floor(t / 0.012)) > 0.86 ? 0.75 : 1;
-  return base.map(c => c * speck * (0.9 + 0.1 * line(s / 0.03 + h, 0.12)));
+  const row = Math.floor(t / 0.075), x = s / 0.225 + (((row % 2) + 2) % 2) * 0.5, col = Math.floor(x);
+  if (fract(t / 0.075) > 0.8667 || fract(x) > 0.9556) return [0.72, 0.70, 0.66];
+  const c = mixc([0.62, 0.25, 0.17], [0.48, 0.18, 0.13], hash(col, row));
+  return hash(Math.floor(s / 0.012), Math.floor(t / 0.012)) > 0.86 ? mul(c, 0.75) : c;
+}
+function patStaves(s, t) {
+  const w = 0.11781, i = Math.floor(s / w), fx = fract(s / w), h = hash(i, 3);
+  let c = mixc([0.62, 0.42, 0.23], [0.47, 0.3, 0.16], h);
+  if (fract(s * 70 + 0.3 * Math.sin(t * 5 + i * 2) + h * 5) <= 0.25) c = mul(c, 0.82);
+  if (fx < 0.05) c = mul(c, 0.35);
+  if ((t >= 0.10 && t <= 0.16) || (t >= 0.74 && t <= 0.80)) return mul([0.26, 0.26, 0.27], Math.hypot(fx - 0.5, fract(t / 0.06) - 0.5) <= 0.12 ? 1.5 : 1);
+  return c;
+}
+function patCabinet(s, t) {
+  let c = mul([0.36, 0.5, 0.47], 0.95 + 0.08 * hash(Math.floor(s / 0.01), Math.floor(t / 0.01)));
+  const seam = Math.abs(fract(s / 0.4 + 0.5) - 0.5) * 0.4;
+  if (seam <= 0.003) c = mul(c, 0.4);
+  if (Math.abs(seam - 0.035) <= 0.003) c = mul(c, 1.25);
+  if (Math.hypot(((s % 0.4) + 0.4) % 0.4 - 0.2, t - 0.62) <= 0.013) c = [0.8, 0.72, 0.45];
+  return c;
+}
+function patVendFront(s, t) {
+  let c = [0.75, 0.12, 0.12];
+  if (inBox(s, t, 0.05, 0.55, 0.62, 1.78)) {
+    let g = [0.10, 0.13, 0.17];
+    const qx = s - 0.05, qy = t - 0.55, shelf = Math.floor(qy / 0.245), sy = fract(qy / 0.245) * 0.245, col = Math.floor(qx / 0.08), sx = fract(qx / 0.08) * 0.08;
+    const hc = hash(col, shelf), can = hc < 0.25 ? [0.85, 0.1, 0.1] : hc < 0.5 ? [0.1, 0.45, 0.85] : hc < 0.75 ? [0.95, 0.75, 0.1] : [0.2, 0.7, 0.3];
+    if (sx > 0.008 && sx < 0.072 && sy > 0.045 && sy < 0.165) { g = can; if (sy > 0.085 && sy < 0.12) g = mul([0.95, 0.95, 0.95], 1 - 0.85 * text(sx, sy, 0.012, 0.093, 0.008, 6)); }
+    if (sy > 0.012 && sy < 0.034) g = mul([0.92, 0.92, 0.92], 1 - 0.85 * text(sx, sy, 0.014, 0.016, 0.0075, 5));
+    c = g;
+  }
+  if (inBox(s, t, 0.66, 0.85, 0.86, 1.75)) {
+    c = [0.16, 0.16, 0.16];
+    if (inBox(s, t, 0.68, 1.55, 0.84, 1.70)) c = mixc([0.05, 0.18, 0.08], [0.4, 1, 0.5], text(s, t, 0.69, 1.59, 0.022, 6));
+    c = mixc(c, [0.85, 0.85, 0.85], text(s, t, 0.68, 1.49, 0.0085, 18));
+    c = mixc(c, [0.85, 0.85, 0.85], text(s, t, 0.68, 1.46, 0.0085, 12));
+    if (inBox(s, t, 0.80, 1.30, 0.812, 1.42)) c = [0.02, 0.02, 0.02];
+    const kx = (s - 0.685) / 0.05, ky = (t - 0.95) / 0.05, ix = Math.floor(kx), iy = Math.floor(ky), fx = fract(kx), fy = fract(ky);
+    if (ix >= 0 && ix < 3 && iy >= 0 && iy < 5 && fx < 0.8 && fy < 0.8) c = mul([0.72, 0.72, 0.72], 1 - 0.9 * text(fx * 0.05, fy * 0.05, 0.012, 0.01, 0.016, 1));
+  }
+  if (inBox(s, t, 0.1, 0.15, 0.6, 0.42)) c = inBox(s, t, 0.12, 0.17, 0.58, 0.40) ? [0.06, 0.06, 0.06] : [0.3, 0.3, 0.3];
+  if (t > 1.8) c = mixc([0.95, 0.95, 0.95], [0.75, 0.12, 0.12], text(s, t, 0.12, 1.815, 0.05, 13));
+  return c;
+}
+function patVendSide(s, t) {
+  let c = mul([0.72, 0.11, 0.11], 0.96 + 0.06 * hash(Math.floor(s / 0.02), Math.floor(t / 0.02)));
+  if (t > 1.1 && t < 1.45) c = mixc([0.95, 0.95, 0.95], [0.72, 0.11, 0.11], text(s, t, 0.08, 1.16, 0.1, 6));
+  if (inBox(s, t, 0.3, 0.3, 0.52, 0.44)) { c = [0.98, 0.86, 0.2]; for (let i = 0; i < 6; i++) c = mixc(c, [0.05, 0.05, 0.05], text(s, t, 0.31, 0.415 - i * 0.018, 0.0065, 30)); }
+  return c;
+}
+const PATTERNS = [patPlanks, brickColor, patStaves, patCabinet, patVendFront, patVendSide];
+// The colour (sRGB 0–1) of pattern `k` at (s, t) metres: the same pictures the 3D view paints.
+export const patternColor = (k, s, t) => PATTERNS[k](s, t);
+// Paint the texture image of an object from its UVs: every pixel inside an island gets the colour of the
+// point of the face it lands on. Pixels outside the islands stay grey (they are wasted). size ≤ res.
+export function paintTexture(m, uv, obj, size) {
+  const data = new Uint8ClampedArray(size * size * 4);
+  for (let i = 0; i < size * size; i++) { data[i * 4] = 46; data[i * 4 + 1] = 46; data[i * 4 + 2] = 48; data[i * 4 + 3] = 255; }
+  for (const f of objectFaces(m, obj)) {
+    const P = uv[f], L = m.faces[f].loc, pat = m.islands[m.faces[f].island].pat;
+    // Affine map uv → loc from three corners (the faces are parallelograms in UV).
+    const a = [P[1][0] - P[0][0], P[1][1] - P[0][1]], b = [P[3][0] - P[0][0], P[3][1] - P[0][1]];
+    const la = [L[1][0] - L[0][0], L[1][1] - L[0][1]], lb = [L[3][0] - L[0][0], L[3][1] - L[0][1]];
+    const det = a[0] * b[1] - a[1] * b[0]; if (Math.abs(det) < 1e-12) continue;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const [u, v] of P) { u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+    const x0 = Math.max(0, Math.floor(u0 * size)), x1 = Math.min(size - 1, Math.ceil(u1 * size)), y0 = Math.max(0, Math.floor((1 - v1) * size)), y1 = Math.min(size - 1, Math.ceil((1 - v0) * size));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const du = (x + 0.5) / size - P[0][0], dv = 1 - (y + 0.5) / size - P[0][1];
+      const p = (du * b[1] - dv * b[0]) / det, q = (a[0] * dv - a[1] * du) / det;   // du,dv = p·a + q·b
+      if (p < -1e-6 || q < -1e-6 || p > 1 + 1e-6 || q > 1 + 1e-6) continue;
+      const c = PATTERNS[pat](L[0][0] + p * la[0] + q * lb[0], L[0][1] + p * la[1] + q * lb[1]), k = (y * size + x) * 4;
+      data[k] = c[0] * 255; data[k + 1] = c[1] * 255; data[k + 2] = c[2] * 255;
+    }
+  }
+  return data;
 }

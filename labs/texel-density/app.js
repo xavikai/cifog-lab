@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { RES, CHECKER, OBJECTS, MARGIN, TARGETS, SCREEN, islandFaces, objectFaces, bbox, cloneUV, translate, scale as scaleUV, rotate as rotateUV,
-  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, setMB, packedDensity1, minRes, brickColor, objectsOf, areas } from './td.js?v=1';
+  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture } from './td.js?v=2';
 import { STAGES, MEASURE, SEE_QUIZ, RULES, HERO, HERO_WHY, BUDGET_MB, startState, meshOf, densityOf, islandDensityOf, islandsOf, isInside, overlapsOf,
-  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, sceneStats, memoryFor, wasted } from './stages.js?v=1';
+  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, sceneStats, memoryFor, wasted } from './stages.js?v=2';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=1';
+import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -192,6 +192,7 @@ const material = new THREE.ShaderMaterial({
     }`,
 });
 const overlayMat = new THREE.MeshBasicMaterial({ color: 0xffa629, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide });
+const edgeMat = new THREE.LineBasicMaterial({ color: 0xffa629, depthTest: false, transparent: true });
 const extraMats = { wall: new THREE.MeshLambertMaterial({ color: 0x6b5a50 }), barrel: new THREE.MeshLambertMaterial({ color: 0x7a5230 }) };
 const CAMS = { crate: [[1.2, 1.0, 1.5], [0, 0.25, 0]], cabinet: [[1.6, 1.4, 2.4], [0, 0.4, 0]], vending: [[1.9, 1.9, 3.4], [0, 0.95, 0]], wall: [[1.2, 1.6, 5.2], [0, 1.0, 0]], trio: [[0.4, 2.8, 7.4], [0, 0.6, 0]], shop: [[0.2, 3.1, 8.2], [0, 0.8, 0]] };
 function frame() {
@@ -241,12 +242,14 @@ function build3D() {
   buildOverlay(); buildLabels(); dirty = true;
 }
 function buildOverlay() {
-  if (overlayObj) { world.remove(overlayObj); overlayObj.geometry.dispose(); overlayObj = null; }
+  if (overlayObj) { world.remove(overlayObj); overlayObj.geometry.dispose(); overlayObj.children[0]?.geometry.dispose(); overlayObj = null; }
   if (!meshObj || !S.sel.size) { dirty = true; return; }
   const m = meshOf(S.st), pos = [];
   for (const id of S.sel) if (m.islands[id]) for (const f of islandFaces(m, id)) { const v = m.faces[f].v; for (const k of [0, 1, 2, 0, 2, 3]) pos.push(...m.pos[v[k]]); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  overlayObj = new THREE.Mesh(g, overlayMat); world.add(overlayObj); dirty = true;
+  overlayObj = new THREE.Mesh(g, overlayMat);
+  overlayObj.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeMat));
+  world.add(overlayObj); dirty = true;
 }
 function updateUV3D() {
   if (!meshObj) return;
@@ -267,6 +270,13 @@ function buildLabels() {
     const d = densityOf(S.st, o), tg = S.st.target, ok = sid() === 'c2' ? d >= tg * 0.95 && !wasted(S.st, o, tg) : onTarget(d, tg, 0.05) && isInside(S.st, o) && (sid() !== 'a3' || !wasted(S.st, o, tg)), cls = tg ? (ok ? 'good' : 'bad') : '';
     return `<span data-obj="${o}" class="${o === S.st.active ? 'active' : ''}">${esc(objName(o))}${hide ? '' : `<b class="${cls}" data-no-i18n>${px(d)}</b>`}</span>`;
   }).join('');
+  // The selected face: its real size in metres (the UV Editor shows its size in pixels).
+  if (S.sel.size === 1 && !hide) {
+    const id = [...S.sel][0], f = islandFaces(m, id), rs = realSize(m, f), c = [0, 0, 0]; let n = 0;
+    for (const i of f) for (const v of m.faces[i].v) { const p = m.pos[v]; c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; n++; }
+    labelAnchors.push(['face', new THREE.Vector3(c[0] / n, c[1] / n, c[2] / n)]);
+    host.insertAdjacentHTML('beforeend', `<span data-obj="face" class="face">${esc(islName(m, id))}<b data-no-i18n>${+rs.w.toFixed(2)} × ${+rs.h.toFixed(2)} m</b></span>`);
+  }
   placeLabels();
 }
 function placeLabels() {
@@ -319,9 +329,24 @@ function drawUV() {
   const w = uvHost.clientWidth, h = uvHost.clientHeight, st = S.st;
   ctx.fillStyle = '#232323'; ctx.fillRect(0, 0, w, h);
   if (isLoupe()) { drawLoupe(w, h); uvDirty = false; return; }
-  const obj = st.active, res = st.res[obj], n = res / CHECKER, [x0, y0] = toScr(0, 1), cell = V.sc / n;
-  // The checker grid: one square = 64 × 64 texels, as on the model.
-  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { ctx.fillStyle = (i + j) % 2 ? '#8d8d8d' : '#5a5a5a'; ctx.fillRect(x0 + i * cell, y0 + j * cell, cell + 0.5, cell + 0.5); }
+  const obj = st.active, res = st.res[obj], n = res / CHECKER, [x0, y0] = toScr(0, 1), cell = V.sc / n, texel = V.sc / res;
+  if (st.uvImage === 'texture' && !S.modal) {
+    // The texture image itself, painted from the UVs: its pixels are the texels.
+    ctx.imageSmoothingEnabled = texel < 1; ctx.drawImage(textureImage(obj), x0, y0, V.sc, V.sc); ctx.imageSmoothingEnabled = true;
+  } else {
+    // The checker grid: one square = 64 × 64 texels, as on the model.
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { ctx.fillStyle = (i + j) % 2 ? '#8d8d8d' : '#5a5a5a'; ctx.fillRect(x0 + i * cell, y0 + j * cell, cell + 0.5, cell + 0.5); }
+  }
+  // Zoomed in: the grid of texture pixels.
+  if (texel >= 8) {
+    const i0 = Math.max(0, Math.floor(-x0 / texel)), i1 = Math.min(res, Math.ceil((w - x0) / texel)), j0 = Math.max(0, Math.floor(-y0 / texel)), j1 = Math.min(res, Math.ceil((h - y0) / texel));
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = i0; i <= i1; i++) { const x = Math.round(x0 + i * texel) + 0.5; ctx.moveTo(x, Math.max(0, y0)); ctx.lineTo(x, Math.min(h, y0 + V.sc)); }
+    for (let j = j0; j <= j1; j++) { const y = Math.round(y0 + j * texel) + 0.5; ctx.moveTo(Math.max(0, x0), y); ctx.lineTo(Math.min(w, x0 + V.sc), y); }
+    ctx.stroke();
+    ctx.font = '11.5px Inter, Segoe UI, sans-serif'; ctx.textBaseline = 'middle'; const note = t('Each small square is one texture pixel.'), nw = ctx.measureText(note).width;
+    ctx.fillStyle = 'rgba(15,15,15,.85)'; ctx.fillRect(8, h - 34, nw + 12, 20); ctx.fillStyle = '#ffc266'; ctx.fillText(note, 14, h - 24);
+  }
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, V.sc, V.sc);
   ctx.font = '11px Inter, Segoe UI, sans-serif'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#cfcfcf';
   ctx.fillText(`${res} px`, x0 + V.sc - ctx.measureText(`${res} px`).width, y0 - 9); ctx.fillText('0', x0 - 10, y0 + V.sc + 8); ctx.fillText('1', x0 + V.sc + 3, y0 + V.sc + 8);
@@ -343,8 +368,35 @@ function drawUV() {
     }
   }
   ctx.lineWidth = 1;
+  if (S.sel.size === 1 && !hide) drawDimensions(m, [...S.sel][0], res);
   if (!isInside(st, obj)) { ctx.fillStyle = '#ff8a65'; ctx.fillText(t('Some islands are outside the square: they repeat the texture.'), 8, h - 12); }
   uvDirty = false;
+}
+// Dimension lines on the selected island: how many pixels of the image it covers.
+function drawDimensions(m, id, res) {
+  const b = bbox(S.st.uv, islandFaces(m, id)), [xa, ya] = toScr(b.u0, b.v1), [xb, yb] = toScr(b.u1, b.v0);
+  ctx.strokeStyle = '#ffc266'; ctx.fillStyle = '#ffc266'; ctx.lineWidth = 1.5; ctx.font = '600 11.5px Inter, Segoe UI, sans-serif'; ctx.textBaseline = 'middle';
+  const yT = ya - 10, xL = xa - 10;
+  ctx.beginPath(); ctx.moveTo(xa, yT); ctx.lineTo(xb, yT); ctx.moveTo(xa, yT - 4); ctx.lineTo(xa, yT + 4); ctx.moveTo(xb, yT - 4); ctx.lineTo(xb, yT + 4);
+  ctx.moveTo(xL, ya); ctx.lineTo(xL, yb); ctx.moveTo(xL - 4, ya); ctx.lineTo(xL + 4, ya); ctx.moveTo(xL - 4, yb); ctx.lineTo(xL + 4, yb); ctx.stroke();
+  const lw = `${Math.round(b.w * res)} px`, lh = `${Math.round(b.h * res)} px`, tw = ctx.measureText(lw).width;
+  ctx.fillStyle = 'rgba(15,15,15,.85)'; ctx.fillRect((xa + xb) / 2 - tw / 2 - 4, yT - 9, tw + 8, 18); ctx.fillStyle = '#ffc266'; ctx.fillText(lw, (xa + xb) / 2 - tw / 2, yT);
+  ctx.save(); ctx.translate(xL, (ya + yb) / 2); ctx.rotate(-Math.PI / 2); const th = ctx.measureText(lh).width;
+  ctx.fillStyle = 'rgba(15,15,15,.85)'; ctx.fillRect(-th / 2 - 4, -9, th + 8, 18); ctx.fillStyle = '#ffc266'; ctx.fillText(lh, -th / 2, 0); ctx.restore();
+  ctx.lineWidth = 1;
+}
+// The painted texture of an object, cached until its UVs or its size change.
+const texCache = new Map();
+function textureImage(obj) {
+  const st = S.st, m = meshOf(st), size = Math.min(2048, st.res[obj]);
+  const key = `${st.scene}|${obj}|${size}|${objectFaces(m, obj).map(f => st.uv[f].map(p => p.map(x => x.toFixed(4)).join(',')).join(';')).join('|')}`;
+  if (!texCache.has(key)) {
+    if (texCache.size > 6) texCache.clear();
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    c.getContext('2d').putImageData(new ImageData(paintTexture(m, st.uv, obj, size), size, size), 0, 0);
+    texCache.set(key, c);
+  }
+  return texCache.get(key);
 }
 (function uvLoop() { requestAnimationFrame(uvLoop); if (uvDirty && S.st) drawUV(); })();
 
@@ -399,7 +451,8 @@ function islandAt(u, v) {
 function pick(id, add) {
   if (!add) S.sel.clear();
   if (id) { if (add && S.sel.has(id)) S.sel.delete(id); else S.sel.add(id); }
-  uvDirty = true; buildOverlay(); renderProps();
+  if (id && sid() === 'm0') { S.st.flags['isl_' + id] = true; saveData(); checkProgress(); }
+  uvDirty = true; buildOverlay(); buildLabels(); renderProps();
 }
 let pan = null;
 uvc.addEventListener('pointerdown', e => {
@@ -423,14 +476,15 @@ uvc.addEventListener('pointermove', e => {
   const [u, v] = toUV(x, y), id = islandAt(u, v), tip = $('#uv-tip');
   if (id && sid() !== 's2') {
     const m = meshOf(S.st), b = bbox(S.st.uv, islandFaces(m, id)), res = S.st.res[S.st.active], rs = realSize(m, islandFaces(m, id));
-    tip.hidden = false; tip.textContent = tr('{name} · {b} × {c} px · face {d} × {e} m', { name: islName(m, id), b: Math.round(b.w * res), c: Math.round(b.h * res), d: +rs.w.toFixed(2), e: +rs.h.toFixed(2) });
+    tip.hidden = false; tip.textContent = tr('{name} · {b} × {c} px of the image · face {d} × {e} m', { name: islName(m, id), b: Math.round(b.w * res), c: Math.round(b.h * res), d: +rs.w.toFixed(2), e: +rs.h.toFixed(2) });
   } else tip.hidden = true;
 });
 uvc.addEventListener('pointerleave', () => { pointer.inUV = false; $('#uv-tip').hidden = true; });
 uvc.addEventListener('wheel', e => {
   e.preventDefault(); if (isLoupe()) return;
   const r = uvc.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, k = e.deltaY > 0 ? 1 / 1.15 : 1.15;
-  const sc = Math.max(60, Math.min(6000, V.sc * k)), f = sc / V.sc; V.ox = x - (x - V.ox) * f; V.oy = y - (y - V.oy) * f; V.sc = sc; uvDirty = true;
+  const sc = Math.max(60, Math.min(12000, V.sc * k)), f = sc / V.sc; V.ox = x - (x - V.ox) * f; V.oy = y - (y - V.oy) * f; V.sc = sc; uvDirty = true;
+  if (sid() === 'm0' && V.sc / S.st.res[S.st.active] >= 8 && !S.st.flags.zoom_px) { S.st.flags.zoom_px = true; saveData(); renderProps(); checkProgress(); }
 }, { passive: false });
 
 function startModal(kind) {
@@ -576,11 +630,23 @@ function measurePanel() {
   const st = S.st, m = meshOf(st), i = st.flags.quiz | 0, id = [...S.sel][0] ?? 'crate.front', f = islandFaces(m, id), b = bbox(st.uv, f), rs = realSize(m, f), res = st.res.crate;
   const q = MEASURE[Math.min(i, MEASURE.length - 1)];
   return `<div class="panel"><h4>${esc(t('Measure'))}<small data-no-i18n>${esc(islName(m, id))}</small></h4>
-    ${statRow('Texture size', `${res} px`)}${statRow('Island in UV', `${b.w.toFixed(3)} × ${b.h.toFixed(3)}`)}${statRow('Island in pixels', `${Math.round(b.w * res)} × ${Math.round(b.h * res)} px`)}${statRow('Face in 3D', `${+rs.w.toFixed(3)} × ${+rs.h.toFixed(3)} m`)}
+    ${statRow('Texture size', `${res} px`)}${statRow('Island in UV', `${b.w.toFixed(3)} × ${b.h.toFixed(3)}`)}${statRow('Island on the image', `${Math.round(b.w * res)} × ${Math.round(b.h * res)} px`)}${statRow('Face in 3D', `${+rs.w.toFixed(3)} × ${+rs.h.toFixed(3)} m`)}
     <div class="formula" data-no-i18n>px/m = island px ÷ face m<br>= texture px × √(UV area ÷ 3D area)</div></div>
     <div class="panel quiz"><h4>${esc(t('Question'))}<small>${Math.min(i + 1, MEASURE.length)} / ${MEASURE.length}</small></h4>
     ${i < MEASURE.length ? `<p class="q">${esc(t(q.q))}</p><div class="answer-row"><input type="number" id="m-answer" min="0" step="1" inputmode="numeric" aria-label="px/m"><span>px/m</span><button type="button" id="m-check">${esc(t('Check'))}</button></div>` : `<p class="q done">${esc(t('✓ All three right.'))}</p>`}
     ${S.feedback ? `<p class="td-note ${S.feedback.ok ? 'good' : 'bad'}">${esc(S.feedback.text)}</p>` : ''}</div>`;
+}
+function islandInfoPanel() {
+  const st = S.st, m = meshOf(st), fl = st.flags, res = st.res[st.active], id = [...S.sel][0];
+  let h = `<div class="panel"><h4>${esc(t('The texture image'))}<small data-no-i18n>${res} × ${res} px</small></h4>
+    <p class="td-note">${esc(t('The UV square from 0 to 1 is the whole image: 0 is one edge and 1 the other, whatever its size in pixels.'))}</p>`;
+  if (id) {
+    const f = islandFaces(m, id), b = bbox(st.uv, f), rs = realSize(m, f);
+    h += `${statRow(tr('Island: {name}', { name: islName(m, id) }), '')}${statRow('Island in UV', `${b.w.toFixed(3)} × ${b.h.toFixed(3)}`)}${statRow('Island on the image', `${Math.round(b.w * res)} × ${Math.round(b.h * res)} px`)}${statRow('Face in 3D', `${+rs.w.toFixed(2)} × ${+rs.h.toFixed(2)} m`)}
+      <div class="formula" data-no-i18n>${b.w.toFixed(3)} × ${res} px = ${Math.round(b.w * res)} px</div>`;
+  } else h += `<p class="td-note">${esc(t('Click a face of the crate or an island.'))}</p>`;
+  const n = Object.keys(fl).filter(k => k.startsWith('isl_')).length;
+  return h + `<ul class="knob-ticks"><li class="${n >= 3 ? 'done' : ''}">${esc(tr('Three different islands ({n}/3)', { n: Math.min(3, n) }))}</li><li class="${fl.img_texture ? 'done' : ''}">${esc(t('Image: Texture'))}</li><li class="${fl.zoom_px ? 'done' : ''}">${esc(t('Zoom in until you see the pixels'))}</li></ul></div>`;
 }
 function knobsPanel() {
   const st = S.st, k = knobs(st), fl = st.flags;
@@ -624,6 +690,7 @@ function renderProps() {
   const multi = objectsOf(st.scene).length > 1;
   if (id === 's1') h += tdPanel() + objectsPanel();
   else if (id === 's2') h += quizPanel(SEE_QUIZ) + tdPanel({ hide: true });
+  else if (id === 'm0') h += islandInfoPanel();
   else if (id === 'm1') h += measurePanel();
   else if (id === 'm2') h += knobsPanel() + islandsPanel() + uvToolsPanel(false);
   else if (id === 'a1') h += tdPanel() + islandsPanel() + uvToolsPanel(false);
@@ -677,10 +744,17 @@ $('#shading').addEventListener('click', e => {
   pushUndo(); S.st.view = b.dataset.view; if (S.st.view === 'checker') S.st.flags.seen_checker = true; changed();
 });
 $('#pivot').addEventListener('change', e => { S.pivot = e.target.value; });
+$('#uv-image').addEventListener('click', e => {
+  const b = e.target.closest('[data-img]'); if (!b) return;
+  pushUndo(); S.st.uvImage = b.dataset.img; if (b.dataset.img === 'texture') S.st.flags.img_texture = true;
+  changed(); if (b.dataset.img === 'texture') msg('The texture image: each island paints its faces with the pixels it covers. Grey pixels are not used by any face.');
+});
 function renderHeaders() {
   const st = S.st, loupe = isLoupe();
   $('#shading').querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.view === (loupe ? 'texture' : st.view))); b.disabled = loupe && b.dataset.view === 'checker'; });
   $('#pivot-field').hidden = !canEdit();
+  $('#uv-image').hidden = loupe;
+  $('#uv-image').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.img === (st.uvImage || 'checker'))));
   $('#pivot').value = S.pivot;
   $('#uv-title').textContent = loupe ? 'Pixel loupe' : 'UV Editor';
   const badge = $('#obj-badge'); badge.hidden = loupe; badge.textContent = loupe ? '' : `${objName(st.active)} · ${resLabel(st.res[st.active])}`;
@@ -691,7 +765,7 @@ function renderHeaders() {
 function pushUndo() { S.undo.push(JSON.stringify(S.st)); if (S.undo.length > 60) S.undo.shift(); S.redo = []; }
 function undo() { if (!S.undo.length) { msg('Nothing to undo.'); return; } S.redo.push(JSON.stringify(S.st)); const prev = S.st; S.st = JSON.parse(S.undo.pop()); if (prev.cam !== S.st.cam) frame(); changed(); msg('Undo.'); }
 function redo() { if (!S.redo.length) return; S.undo.push(JSON.stringify(S.st)); S.st = JSON.parse(S.redo.pop()); changed(); msg('Redo.'); }
-const dataKey = () => `step:${stage().id}-${S.step}`;
+const dataKey = () => `step:${stage().id}-${step().id}`;
 function saveData() { store.set(dataKey(), S.st); }
 function loadData() {
   const saved = store.get(dataKey(), null), fresh = startState(step());
@@ -702,7 +776,7 @@ function renderStageSwitch() {
   $('#stage-switch').innerHTML = `<span class="control-label">${esc(t('STAGE'))}</span>` + STAGES.map((s, i) => `<button type="button" class="model-button${i === S.stageIndex ? ' active' : ''}" data-stage="${i}" aria-pressed="${i === S.stageIndex}"><b>${i + 1}</b>${esc(t(s.name))}<small>${esc(t(s.sub))}</small></button>`).join('');
 }
 $('#stage-switch').addEventListener('click', e => { const b = e.target.closest('[data-stage]'); if (!b) return; saveData(); S.stageIndex = +b.dataset.stage; S.step = 0; store.set('stage', S.stageIndex); enterStep(); });
-const doneKey = i => `${stage().id}-${i}`;
+const doneKey = i => `${stage().id}-${stage().steps[i].id}`;
 const stepDone = i => i === S.step ? !!step().check(S.st) : !!S.done[doneKey(i)];
 function renderGuide() {
   const st = stage(), g = $('#guide'), n = st.steps.length;
@@ -753,7 +827,7 @@ function changed(save = true) {
 }
 function enterStep() {
   loadData(); S.undo = []; S.redo = []; S.sel.clear(); S.modal = null; S.feedback = null;
-  if (sid() === 'm1') S.sel.add('crate.front');
+  if (sid() === 'm1' || sid() === 'm0') S.sel.add('crate.front');
   lastOk = null; lastCard = ''; lastOk = stepDone(S.step);
   $('#status-msg').textContent = ''; clearTimeout(msgTimer);
   renderStageSwitch(); frame(); fitUV(); changed(false);
@@ -794,4 +868,4 @@ canvas.addEventListener('contextmenu', e => { e.preventDefault(); if (S.modal) c
 // ─── Start ───────────────────────────────────────────────────────────────────
 resizeUV(); resize3D(); enterStep();
 // For tests and debugging.
-window.__td = { S, STAGES, solve: () => { step().solve(S.st); changed(); }, go: (a, b) => { saveData(); S.stageIndex = a; S.step = b; enterStep(); }, select: ids => { S.sel = new Set(ids); changed(false); }, toScr, V, densityOf: o => densityOf(S.st, o), areas, packedDensity1, rightTarget };
+window.__td = { S, STAGES, pick: id => pick(id, false), solve: () => { step().solve(S.st); changed(); }, go: (a, b) => { saveData(); S.stageIndex = a; S.step = b; enterStep(); }, select: ids => { S.sel = new Set(ids); changed(false); }, toScr, V, densityOf: o => densityOf(S.st, o), areas, packedDensity1, rightTarget };

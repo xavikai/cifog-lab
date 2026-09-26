@@ -1,6 +1,6 @@
 // Texel Density Lab: stages, steps and checks. Pure JS (tested with node).
 import { buildScene, objectsOf, packedUV, placeIsland, islandFaces, objectFaces, objectDensity, islandDensity, density, areas, inside, overlaps,
-  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, setMB, bbox, translate, scale } from './td.js?v=1';
+  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, setMB, bbox, translate, scale } from './td.js?v=2';
 
 const meshCache = new Map();
 export function meshOf(st) {
@@ -9,7 +9,7 @@ export function meshOf(st) {
   return meshCache.get(key);
 }
 export function defaultState() {
-  return { scene: 'trio', uv: null, res: {}, scale: {}, view: 'texture', target: null, flags: {}, cam: 'strategy', camTarget: 512, active: null };
+  return { scene: 'trio', uv: null, res: {}, scale: {}, view: 'texture', uvImage: 'checker', target: null, flags: {}, cam: 'strategy', camTarget: 512, active: null };
 }
 const clone = o => JSON.parse(JSON.stringify(o));
 export function startState(step) {
@@ -37,8 +37,8 @@ const CRATE_UV_START = 0.25;   // UV units per metre at the start of m2
 
 // ─── Step m1: measure ────────────────────────────────────────────────────────
 export const MEASURE = [
-  { q: 'Select the Front island. It is 256 px wide and the face is 0.5 m wide. How many px/m is that?', res: 1024, d: 0.5, a: 512 },
-  { q: 'Same islands, but the texture is now 2048 px. The island covers the same part of the image. How many px/m now?', res: 2048, d: 0.5, a: 1024 },
+  { q: 'The Front island covers 256 px of the image in width, and the face is 0.5 m wide. How many px/m is that?', res: 1024, d: 0.5, a: 512 },
+  { q: 'Same islands, but the image is now 2048 px wide. The island covers the same part of the square, so it now covers twice as many pixels. How many px/m now?', res: 2048, d: 0.5, a: 1024 },
   { q: 'Back to 1024 px, and the islands were scaled down to half (S 0.5). How many px/m now?', res: 1024, d: 0.25, a: 256 },
 ];
 function measureSetup(st, i) { const q = MEASURE[Math.min(i, MEASURE.length - 1)]; st.res.crate = q.res; crateGrid(st, q.d); }
@@ -139,11 +139,21 @@ export const STAGES = [
     ],
   },
   {
-    id: 'measure', name: 'Measure it', sub: 'px ÷ m · three knobs',
+    id: 'measure', name: 'Measure it', sub: 'Islands · px ÷ m · three knobs',
     steps: [
       {
+        id: 'm0', title: 'Islands on the image',
+        text: 'A texture is an image: a grid of pixels, here 1024 × 1024. The UV Editor shows that same image as the square from 0 to 1. Unwrapping cuts the model into islands (groups of faces that stay together) and lays them flat on the image: each island says which pixels of the image paint its faces. So "pixels of texture" are the pixels of the image that an island covers. The UV map has no pixels of its own: it only places the faces on the texture.',
+        how: ['Click a face of the crate: its island lights up in the UV Editor with its size in px of the image, and the 3D view shows the size of the face in m. Click three different faces.', 'In the UV Editor header, switch <b>Image</b> to <b>Texture</b>: the planks you see on the crate are painted on the image, inside each island. The grey around them is wasted pixels.', 'Zoom into an island with the <b>Wheel</b> until the pixel grid appears: every small square is one pixel of the texture (a texel).'],
+        why: 'A face gets exactly the pixels its island covers on the image. A big island means many pixels for that face, so it looks sharp: that is the whole idea of texel density.',
+        start: { scene: 'crate', view: 'texture', uvImage: 'checker' },
+        setup: s => crateGrid(s, 0.5),
+        check: s => !!(s.flags.img_texture && s.flags.zoom_px && Object.keys(s.flags).filter(k => k.startsWith('isl_')).length >= 3),
+        solve: s => { Object.assign(s.flags, { img_texture: true, zoom_px: true, isl_a: true, isl_b: true, isl_c: true }); s.uvImage = 'texture'; },
+      },
+      {
         id: 'm1', title: 'Pixels ÷ metres',
-        text: 'Texel density is a division: pixels of texture over metres of surface. For a square island: its width in pixels (its width in UV × the texture size) divided by the width of the face in metres. For any shape: texture size × √(UV area ÷ 3D area), which is what the add-ons compute. Read the numbers of the crate and answer three questions.',
+        text: 'Texel density is a division: pixels of the image over metres of surface. For a square island: the pixels it covers across (its width in the UV square × the size of the image) divided by the width of the face in metres. For any shape: texture size × √(UV area ÷ 3D area), which is what the add-ons compute. Read the numbers of the crate and answer three questions.',
         how: ['Click the <b>Front</b> island in the UV Editor (or the front of the crate).', 'The <b>Measure</b> panel shows the island in pixels and the face in metres.', 'Type the density in px/m and press <b>Check</b>.'],
         why: 'Once you can compute it by hand, the numbers of the add-ons stop being magic: you know what to change to move them.',
         start: { scene: 'crate', view: 'checker' },
