@@ -632,3 +632,5 @@ footer span:nth-child(3){margin-left:auto}
 #pivot-field[hidden],#obj-badge[hidden]{display:none!important}
 .td-labels span.face{border-color:#ffc266;color:#ffc266;transform:translate(-50%,-50%)}
 #uv-image[hidden]{display:none!important}
+.ruler-btn{margin-left:10px;background:#3a3a3a;border:1px solid #1b1b1b;color:#ddd;border-radius:4px;padding:2px 8px;font-size:11.5px}.ruler-btn[aria-pressed="true"]{background:#6b5a12;color:#ffe066;border-color:#ffe06688}
+.td-labels span.rul{border-color:#ffd400;color:#ffd400;transform:translate(-50%,-140%)}

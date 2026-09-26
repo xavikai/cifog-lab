@@ -1,9 +1,10 @@
 // Stages of the Rig Lab. Every step loads its own starting pose, so students can jump between steps.
 import { Vector3 } from '../../vendor/three.module.js';
-import { makeRig, defaultState, cloneState, solve, posOf, rotAngle, reachFK, addWorldLocation } from './rig.js';
+import { Quaternion } from '../../vendor/three.module.js';
+import { makeRig, defaultState, cloneState, solve, posOf, rotAngle, reachFK, addWorldLocation, setWorldRotation, restBend } from './rig.js?v=3';
 
 // The rig of a stage, with the knee bend (Edit Mode) of the state, if there is one.
-export const rigFor = (stage, st) => makeRig(stage.rig, { knee: st?.knee || 0 });
+export const rigFor = (stage, st) => makeRig(stage.rig, { knee: st?.knee || 0, kneeSide: st?.kneeSide || 0, roll: st?.roll || 0 });
 export const KNEE_BEND = 0.05;   // the slight forward bend of the solutions (5 cm)
 
 // A pose to copy (stage 1, step 2). Shown as a ghost.
@@ -20,6 +21,62 @@ function leg(knee, ik) { const rig = makeRig('leg', { knee }), st = defaultState
 function liftedFoot(rig, st) { addWorldLocation(rig, st, solve(rig, st).W, 'IK_Foot', new Vector3(0, 0.6, 0.45)); return st; }
 const kneeOut = info => info.kneeDir ? Math.atan2(info.kneeDir.x, info.kneeDir.z) * 180 / Math.PI : 0;
 export const kneeForward = info => info.kneeDir ? info.kneeDir.z : -1;
+
+// ─── Stage 3: a pole target that does not make the leg jump ─────────────────
+// A leg modelled with its knee bent 30° outwards (crooked, as many character meshes are).
+export const CROOKED = { angle: 30, bend: 0.07 };
+CROOKED.knee = +(CROOKED.bend * Math.cos(CROOKED.angle * Math.PI / 180)).toFixed(4);
+CROOKED.side = +(CROOKED.bend * Math.sin(CROOKED.angle * Math.PI / 180)).toFixed(4);
+const legRig = st => makeRig('leg', { knee: st.knee || 0, kneeSide: st.kneeSide || 0, roll: st.roll || 0 });
+// The rest pose with the IK on and off: the pole where it is, every other bone unposed.
+function restPair(st) {
+  const rig = legRig(st), a = cloneState(st);
+  for (const [n, p] of Object.entries(a.pose)) if (n !== 'Knee_Pole') { p.rot = [0, 0, 0]; p.loc = [0, 0, 0]; }
+  const on = { ...a, ik: { ...a.ik, influence: 1 } }, off = { ...a, ik: null };
+  return { rig, on: solve(rig, on).W, off: solve(rig, off).W };
+}
+// How much the leg moves when the IK constraint turns on in the rest pose: knee jump (m) and twist of the Thigh (°).
+export function restJump(st) {
+  if (!st.ik) return { knee: 0, twist: 0 };
+  const { rig, on, off } = restPair(st), i = rig.index.Thigh, j = rig.index.Shin;
+  const xa = new Vector3(1, 0, 0).applyQuaternion(on[i].q), xb = new Vector3(1, 0, 0).applyQuaternion(off[i].q);
+  return { knee: on[j].h.distanceTo(off[j].h), twist: Math.acos(Math.max(-1, Math.min(1, xa.dot(xb)))) * 180 / Math.PI };
+}
+// Angle between the pole (seen from the hip-to-ankle line) and the direction the knee is modelled in.
+export function poleOffPlane(st) {
+  const rig = legRig(st), { W } = solve(rig, { ...st, ik: null });
+  const A = posOf(rig, W, 'Thigh'), C = posOf(rig, W, 'Shin', 't'), u = C.clone().sub(A).normalize();
+  const perp = v => v.addScaledVector(u, -v.dot(u));
+  const pole = perp(posOf(rig, W, 'Knee_Pole').sub(A)), bend = perp(restBend(rig, rig.index.Thigh, rig.index.Shin));
+  if (pole.length() < 1e-6 || bend.length() < 1e-6) return 180;
+  return pole.angleTo(bend) * 180 / Math.PI;
+}
+// The jump of the knee when a posed leg switches from IK (Influence 1) to its FK rotations (Influence 0).
+export function switchPop(st) {
+  if (!st.ik) return 0;
+  const rig = legRig(st), on = solve(rig, { ...st, ik: { ...st.ik, influence: 1 } }).W, off = solve(rig, { ...st, ik: { ...st.ik, influence: 0 } }).W;
+  const j = rig.index.Shin; return Math.max(on[j].h.distanceTo(off[j].h), on[j].t.distanceTo(off[j].t));
+}
+// Pose › Apply › Visual Transform: the bones keep the pose the constraint gives them (root first).
+export function applyVisual(st, names) {
+  for (const n of ['Hips', 'Thigh', 'Shin', 'Foot'].filter(x => names.includes(x))) {
+    const rig = legRig(st), { W } = solve(rig, st), w = W[rig.index[n]];
+    setWorldRotation(rig, st, W, n, w.q.clone());
+  }
+  return st;
+}
+// Where the pole should be: in front of the knee, along the direction the knee is modelled in.
+export function planePole(st, dist = 1.5) {
+  const rig = legRig(st), bend = restBend(rig, rig.index.Thigh, rig.index.Shin).normalize(), knee = rig.bones[rig.index.Shin].headV;
+  return knee.clone().addScaledVector(bend, dist);
+}
+function crookedLeg(extra = {}) {
+  const st = defaultState(makeRig('leg'));
+  Object.assign(st, { knee: CROOKED.knee, kneeSide: CROOKED.side, roll: 0, ...extra });
+  st.ik = IK({ pole: 'Knee_Pole', poleAngle: -90 });
+  return st;
+}
+function movePoleTo(st, target) { const rig = legRig(st), { W } = solve(rig, st); addWorldLocation(rig, st, W, 'Knee_Pole', target.clone().sub(posOf(rig, W, 'Knee_Pole'))); return st; }
 
 export const STAGES = [
   {
@@ -103,6 +160,41 @@ export const STAGES = [
         start: () => { const { st } = leg(KNEE_BEND, IK({ pole: 'Knee_Pole', poleAngle: -90 })); st.pose.Hips.loc = [0, -0.5, 0]; return st; },
         check: (st, c) => !!st.ik && !!c.flags.lowInfluence && (st.ik.influence ?? 1) > 0.99,
         solve: (st, rig, flags) => { flags.lowInfluence = true; st.ik.influence = 1; },
+      },
+    ],
+  },
+  {
+    id: 'pole', name: 'Pole without jumps', sub: 'Crooked leg · roll · IK/FK', rig: 'leg',
+    steps: [
+      {
+        id: 'p1', title: 'The pole in the plane of the leg',
+        text: 'This leg was modelled like many characters: the knee is not straight ahead, it is bent 30° outwards. The pole is straight in front, so turning the IK on already moves the knee, before anyone animates: that is the jump. The hip, the knee and the ankle make a plane; the pole must be in that plane, in front of the knee. Move the Knee_Pole until the knee does not move.',
+        how: ['Look at the <b>Readout</b>: <b>Knee jump when IK turns on</b> must go below 1 cm and <b>Pole off the leg plane</b> below 3°.', 'Select <b>Knee_Pole</b> and move it sideways with <kbd>G</kbd> <kbd>X</kbd>: the dashed line from the knee shows where the plane points.', 'In Blender: in Edit Mode, snap the 3D cursor to the knee joint and place the pole along the knee direction, not along the world axis.'],
+        why: 'The IK always puts the knee in the plane that contains the pole. If that plane is not the one the leg was modelled in, the knee swings to it the moment the constraint is on.',
+        lines: true,
+        start: () => crookedLeg(),
+        check: st => restJump(st).knee < 0.01 && poleOffPlane(st) < 3,
+        solve: st => movePoleTo(st, planePole(st)),
+      },
+      {
+        id: 'p2', title: 'Roll the bones with the knee',
+        text: 'The pole is in the plane now and the knee stays put, but the Thigh still twists 30° around itself when the IK turns on: a mesh skinned to it would twist too. The IK uses the X axis of the bones: it wants X at a right angle to the plane of the leg. These bones still have roll 0, made for a knee that points straight ahead. Give the Thigh and the Shin the roll of this crooked knee.',
+        how: ['Press <kbd>Tab</kbd> for <b>Edit Mode</b>. In the Edit Mode panel, change <b>Roll</b> (it rolls the Thigh and the Shin).', 'Watch <b>Leg twist when IK turns on</b> in the Readout: it must go below 3° (try −30°: the knee turns outwards, the X axis turns with it). Turn on <b>Axes</b> to see the X axes.', 'In Blender: Edit Mode › <b>Armature › Bone Roll › Recalculate Roll</b> (<kbd>Shift</kbd><kbd>N</kbd>) or type the Roll in the Bone properties; then check the Pole Angle again.'],
+        why: 'Pole Angle −90° only works when the bone roll matches the knee. A wrong roll makes the leg twist, and fixing it with the Pole Angle moves the knee instead: fix the roll.',
+        lines: true, roll: true,
+        start: () => { const st = crookedLeg(); return movePoleTo(st, planePole(st)); },
+        check: st => restJump(st).twist < 3 && restJump(st).knee < 0.01 && Math.abs((st.ik?.poleAngle ?? -90) + 90) < 0.5,
+        solve: st => { st.roll = -30; movePoleTo(st, planePole(st)); },
+      },
+      {
+        id: 'p3', title: 'IK to FK without a pop',
+        text: 'The leg is crouched with IK. Its FK rotations are still the rest pose, so if you drag Influence to 0 the leg jumps back to straight: the pop animators hate. Before switching, copy the pose the IK gives the bones into their own rotations: Apply › Visual Transform. Then turn the IK off: nothing moves.',
+        how: ['Select the <b>Thigh</b> and the <b>Shin</b> (<kbd>Shift</kbd> click).', 'Click <b>Apply › Visual Transform</b> in the Transform panel (<kbd>Ctrl</kbd><kbd>A</kbd> in Blender\'s Pose Mode).', 'Drag the IK <b>Influence</b> to 0: the <b>Pop when switching</b> readout stays below 2 cm.'],
+        why: 'Real rigs have separate IK and FK chains and snap buttons (Rigify has them) that do exactly this before the switch is keyed. Snapping first is the rule for any IK/FK switch.',
+        lines: false,
+        start: () => { const st = defaultState(makeRig('leg')); st.knee = KNEE_BEND; st.ik = IK({ pole: 'Knee_Pole', poleAngle: -90 }); st.pose.Hips.loc = [0, -0.5, 0]; return st; },
+        check: (st, c) => !!st.ik && (st.ik.influence ?? 1) <= 0.05 && switchPop(st) < 0.02 && !!c.flags.appliedVisual,
+        solve: (st, rig, flags) => { applyVisual(st, ['Thigh', 'Shin']); st.ik.influence = 0; flags.appliedVisual = true; },
       },
     ],
   },

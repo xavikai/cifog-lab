@@ -1,10 +1,10 @@
 // Rig Lab: a Blender-style Pose Mode with FK on an arm and an IK constraint with a pole target on a leg.
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import * as RG from './rig.js?v=2';
-import { STAGES, rigFor, ghostPoints, cupPoint, withPose, GHOST_POSE, kneeForward } from './stages.js?v=2';
+import * as RG from './rig.js?v=3';
+import { STAGES, rigFor, ghostPoints, cupPoint, withPose, GHOST_POSE, kneeForward, restJump, poleOffPlane, switchPop, applyVisual, planePole } from './stages.js?v=3';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=1';
+import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -28,7 +28,7 @@ const bone = name => S.rig.bones[S.rig.index[name]];
 const key = () => `data-${stage().id}-${S.step}`;
 function saveData() { store.set(key(), S.st); }
 // One rig per knee bend (the bend is edited in Edit Mode and stored in the state).
-function rigOf(st) { const k = +(st?.knee || 0).toFixed(4), id = `${stage().rig}|${k}`; return RIGS[id] ??= rigFor(stage(), { knee: k }); }
+function rigOf(st) { const k = +(st?.knee || 0).toFixed(4), sd = +(st?.kneeSide || 0).toFixed(4), rl = +(st?.roll || 0).toFixed(2), id = `${stage().rig}|${k}|${sd}|${rl}`; return RIGS[id] ??= rigFor(stage(), { knee: k, kneeSide: sd, roll: rl }); }
 function loadData() {
   const base = rigOf(null), saved = store.get(key(), null);
   S.st = saved && saved.pose && Object.keys(saved.pose).length === base.bones.length ? saved : step().start(base);
@@ -76,6 +76,7 @@ const octa = (() => {
 })();
 const octaEdges = new THREE.EdgesGeometry(octa);
 const meshMat = new THREE.MeshStandardMaterial({ color: 0xb9bdc5, roughness: 0.62, metalness: 0.02 });
+const capMat = new THREE.MeshStandardMaterial({ color: 0xe0813a, roughness: 0.5 });
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0x7fd3ff, transparent: true, opacity: 0.22, depthWrite: false });
 
 // The piece of mesh each bone carries (rigid, no skinning: this lab is about the bones).
@@ -116,13 +117,23 @@ function buildScene() {
       o.octa.renderOrder = 10; o.edges.renderOrder = 11; o.octa.add(o.edges); o.node.add(o.octa);
     } else { o.shape = controlShape(b); o.shape.renderOrder = 12; o.node.add(o.shape); }
     const g = pieceGeometry(b);
-    if (g) { o.piece = new THREE.Mesh(g, meshMat); o.node.add(o.piece); }
+    if (g) {
+      o.piece = new THREE.Mesh(g, meshMat); o.node.add(o.piece);
+      // The mesh does not change when a bone is rolled in Edit Mode: undo the roll for the piece.
+      if (S.rig.roll && (b.name === 'Thigh' || b.name === 'Shin')) o.piece.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -S.rig.roll * Math.PI / 180);
+      // A kneecap on the front of the thigh and the shin, facing where the knee was modelled.
+      if (b.name === 'Thigh' || b.name === 'Shin') {
+        const phi = Math.atan2(S.rig.kneeSide || 0, Math.max(1e-6, S.rig.knee || 0)), r = b.name === 'Thigh' ? 0.22 : 0.17;
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.12, b.length * 0.5, 0.05), capMat);
+        cap.position.set(Math.sin(phi) * r, b.length * (b.name === 'Thigh' ? 0.7 : 0.3), -Math.cos(phi) * r); cap.rotation.y = -phi; o.piece.add(cap);
+      }
+    }
     o.axes = new THREE.AxesHelper(0.35); o.axes.material.depthTest = false; o.axes.renderOrder = 13; o.node.add(o.axes);
     root.add(o.node);
     return o;
   });
   const dashed = color => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineDashedMaterial({ color, dashSize: 0.08, gapSize: 0.06, depthTest: false, transparent: true })); l.renderOrder = 14; root.add(l); return l; };
-  const ikLine = dashed(0xe8c14a), poleLine = dashed(0xdddddd), parentLines = S.rig.bones.map(() => dashed(0x9a9a9a));
+  const ikLine = dashed(0xe8c14a), poleLine = dashed(0xdddddd), planeLine = dashed(0x5fd08a), parentLines = S.rig.bones.map(() => dashed(0x9a9a9a));
   // Joints of Edit Mode: the heads and tails of the deforming bones
   const joints = new THREE.Group(); root.add(joints);
   const jointGeo = new THREE.SphereGeometry(0.07, 16, 12);
@@ -130,7 +141,7 @@ function buildScene() {
   // Ghost pose and cup
   const extras = new THREE.Group(); root.add(extras);
   scene.add(root);
-  objs = { root, bones, ikLine, poleLine, parentLines, extras, joints };
+  objs = { root, bones, ikLine, poleLine, planeLine, parentLines, extras, joints };
   buildExtras();
 }
 function buildExtras() {
@@ -188,6 +199,9 @@ function updateScene() {
   if (objs.ikLine.visible) { const tipI = info.chain[info.chain.length - 1]; objs.ikLine.geometry.setFromPoints([W[tipI].t, info.target]); objs.ikLine.computeLineDistances(); }
   objs.poleLine.visible = S.show.lines && !!(info.active && ik.pole && S.rig.index[ik.pole] != null && info.chain.length === 2);
   if (objs.poleLine.visible) { objs.poleLine.geometry.setFromPoints([W[info.chain[1]].h, W[S.rig.index[ik.pole]].h]); objs.poleLine.computeLineDistances(); }
+  // Stage 3: the direction the knee is modelled in (the plane of the leg), where the pole belongs.
+  objs.planeLine.visible = !!step().lines && S.rig.kind === 'leg';
+  if (objs.planeLine.visible) { const k = S.rig.bones[S.rig.index.Shin].headV; objs.planeLine.geometry.setFromPoints([k, planePole(S.st, 1.9)]); objs.planeLine.computeLineDistances(); }
   requestRender();
 }
 let renderQueued = false;
@@ -479,8 +493,9 @@ function editPanel() {
   return `<div class="panel"><h4>${esc(t('Edit Mode'))}<small>${esc(t('rest pose'))}</small></h4>
     <p class="edit-note">${esc(t(S.editSel === 'knee' ? 'Knee joint (tail of Thigh, head of Shin).' : 'Click the knee joint to select it.'))}</p>
     <div class="tf-axes"><span></span><span class="ax-x">X</span><span class="ax-y">Y</span><span class="ax-z">Z</span></div>
-    <div class="tf-grid"><span>${esc(t('Knee'))}</span><input type="number" value="0.35" disabled><input type="number" step="0.01" id="knee-y" value="${fmt(-k)}"${S.editSel === 'knee' ? '' : ' disabled'}><input type="number" value="1.2" disabled></div>
-    <p class="edit-note">${esc(t('Blender axes: −Y is the front. Only the knee moves in this lab.'))}</p></div>`;
+    <div class="tf-grid"><span>${esc(t('Knee'))}</span><input type="number" value="${fmt(0.35 + (S.st.kneeSide || 0))}" disabled><input type="number" step="0.01" id="knee-y" value="${fmt(-k)}"${S.editSel === 'knee' ? '' : ' disabled'}><input type="number" value="1.2" disabled></div>
+    <p class="edit-note">${esc(t('Blender axes: −Y is the front. Only the knee moves in this lab.'))}</p>
+    ${step().roll ? `<div class="tf-grid roll-row"><span data-no-i18n>Roll</span><input type="number" step="1" id="bone-roll" value="${fmt(S.st.roll || 0)}"><em>° · Thigh, Shin</em></div><p class="edit-note">${esc(t('Bone › Roll: turns the bones around their own Y axis. The mesh does not move.'))}</p>` : ''}</div>`;
 }
 function renderProps() {
   const rig = S.rig, a = S.active ? bone(S.active) : null;
@@ -502,6 +517,7 @@ function transformHtml(a) {
     <div class="tf-axes"><span></span><span class="ax-x">X</span><span class="ax-y">Y</span><span class="ax-z">Z</span></div>
     <div class="tf-grid"><span>${esc(t('Location'))}</span>${p.loc.map((v, i) => `<input type="number" step="0.05" data-tf="loc" data-i="${i}" value="${fmt(v)}"${loc}>`).join('')}</div>
     <div class="tf-grid"><span>${esc(t('Rotation'))}</span>${p.rot.map((v, i) => `<input type="number" step="1" data-tf="rot" data-i="${i}" value="${fmt(v)}">`).join('')}</div>
+    ${S.rig.kind === 'leg' && S.st.ik ? `<button type="button" class="add-constraint" id="apply-visual" data-no-i18n>Apply › Visual Transform <kbd>Ctrl A</kbd></button>` : ''}
     <p class="sb-empty">${esc(t(a.canMove ? 'XYZ Euler, in degrees. Location and rotation are in the bone\'s own axes.' : a.connected ? 'Connected to its parent: only rotation. XYZ Euler, in degrees, in the bone\'s own axes.' : 'Location locked in this lab. XYZ Euler, in degrees, in the bone\'s own axes.'))}</p>`;
 }
 function renderTransformLive() { const el = $('#tf-panel'); if (el) el.innerHTML = transformHtml(S.active ? bone(S.active) : null); const r = $('#readout-panel'); if (r) r.innerHTML = readoutHtml(); }
@@ -530,6 +546,11 @@ function constraintHtml(a) {
   if (ik) h += `<p class="sb-empty" style="margin-top:6px">${esc(tr('The IK constraint of this armature is on {b}.', { b: ik.owner }))}</p>`;
   return h;
 }
+function doApplyVisual() {
+  if (!S.sel.size) return msg('Select the bones first (Thigh and Shin).', true);
+  pushUndo(); applyVisual(S.st, [...S.sel]); S.flags.appliedVisual = true; changed();
+  msg('Visual Transform applied: the bones keep the IK pose in their own rotations.');
+}
 function readoutHtml() {
   const { W, info } = S.res, rig = S.rig, s = step();
   let h = `<h4>${esc(t('Readout'))}</h4>`;
@@ -540,6 +561,14 @@ function readoutHtml() {
     if (s.cup) { const d = tip.distanceTo(cupPoint(rig)); h += row('Fingertips → cup', d.toFixed(2) + ' m', d < 0.15); h += row('Chest twist', RG.rotAngle(S.st.pose.Chest.rot).toFixed(0) + '°', RG.rotAngle(S.st.pose.Chest.rot) >= 20); }
     const bt = RG.toBlender(tip); h += row('Fingertips (X Y Z)', bt.map(v => v.toFixed(2)).join('  '));
   } else {
+    if (stage().id === 'pole' && S.st.ik) {
+      const j = restJump(S.st), off = poleOffPlane(S.st);
+      if (step().id !== 'p3') {
+        h += row('Pole off the leg plane', off.toFixed(1) + '°', off < 3);
+        h += row('Knee jump when IK turns on', (j.knee * 100).toFixed(1) + ' cm', j.knee < 0.01);
+        h += row('Leg twist when IK turns on', j.twist.toFixed(1) + '°', j.twist < 3);
+      } else { const pop = switchPop(S.st); h += row('Pop when switching IK → FK', (pop * 100).toFixed(1) + ' cm', pop < 0.02); }
+    }
     if (info.active) {
       h += row('Foot → target', info.dist.toFixed(3) + ' m', info.dist < 0.02);
       if (info.kneeDir) {
@@ -557,6 +586,7 @@ function readoutHtml() {
 $('#props').addEventListener('click', e => {
   const b = e.target.closest('[data-bone]'); if (b) { select(b.dataset.bone, e.shiftKey); return; }
   if (e.target.closest('#add-constraint')) { const r = e.target.closest('#add-constraint').getBoundingClientRect(); openMenu('constraint', r.left, r.bottom + 2); return; }
+  if (e.target.closest('#apply-visual')) { doApplyVisual(); return; }
   if (e.target.closest('#ik-delete')) { pushUndo(); S.st.ik = null; changed(); msg('Constraint deleted.'); }
 });
 $('#props').addEventListener('input', e => {
@@ -581,6 +611,7 @@ $('#props').addEventListener('change', e => {
     changed(); return;
   }
   if (tf && S.active) { pushUndo(); S.st.pose[S.active][tf][+e.target.dataset.i] = +e.target.value || 0; changed(); }
+  if (e.target.id === 'bone-roll') { pushUndo(); S.st.roll = Math.max(-180, Math.min(180, +e.target.value || 0)); changed(); return; }
   if (e.target.id === 'knee-y') { pushUndo(); S.st.knee = Math.max(-0.3, Math.min(0.3, -(+e.target.value || 0))); changed(); }
 });
 
@@ -663,6 +694,7 @@ document.addEventListener('keydown', e => {
   if (k === 'Tab') toggleMode();
   else if (ctrl && low === 'z') e.shiftKey ? redo() : undo();
   else if (ctrl && low === 'y') redo();
+  else if (ctrl && low === 'a' && S.mode === 'pose') { e.preventDefault(); if (S.rig.kind === 'leg' && S.st.ik) doApplyVisual(); }
   else if (S.mode === 'edit' && (low === 'r' || low === 'a' || (low === 'i' && e.shiftKey))) msg('In Edit Mode this lab only moves the knee joint (G).', true);
   else if (low === 'i' && e.shiftKey) openMenu('addik', S.pointer?.cx ?? innerWidth / 2, S.pointer?.cy ?? innerHeight / 2);
   else if (low === 'r' && e.altKey) clearTransform('rot');

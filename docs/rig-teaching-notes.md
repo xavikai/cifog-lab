@@ -46,3 +46,18 @@ The interface uses Blender's English names (Pose Mode, Bone Constraints, Inverse
 - Limit Rotation on the knee; a reverse-foot setup; a second leg with .L/.R names and mirroring.
 - Stretch and bone scale.
 - An IK/FK switch on an arm with a custom property.
+
+
+## Stage 3 · Pole without jumps (crooked leg, roll, IK/FK)
+
+Why knees jump, and how to fix it:
+
+| Step | Setup | Check | The fix in Blender |
+|---|---|---|---|
+| p1 The pole in the plane of the leg | Leg modelled with the knee bent 30° outwards; pole straight in front | knee jump when the IK turns on < 1 cm, pole < 3° off the plane | Put the pole in the plane hip–knee–ankle, in front of the knee (snap the 3D cursor to the knee, move along the knee direction). A green dashed line shows that direction. |
+| p2 Roll the bones with the knee | Pole in the plane, roll 0 | Thigh twist when the IK turns on < 3°, Pole Angle still −90 | Give the leg bones the roll of the knee (Bone › Roll, or Armature › Bone Roll › Recalculate Roll). Fixing it with the Pole Angle moves the knee instead. |
+| p3 IK to FK without a pop | Crouched with IK; FK rotations still at rest | Influence ≤ 0.05 and knee pop < 2 cm, after Apply › Visual Transform | Snap FK to IK before switching (Pose › Apply › Visual Transform, or the snap buttons of Rigify-style rigs with separate IK and FK chains). |
+
+- The golden test for any IK leg: in the rest pose, turning the IK constraint on must not move anything. If the knee moves, the pole is off the plane; if the leg twists, the roll (or the Pole Angle) is wrong.
+- Model legs with a slight bend at the knee in the direction it will bend, and keep the knee in a clean plane. If the mesh is crooked, the bones must follow the crooked plane, not the world axes.
+- The lab's solver now bends the knee towards −Z of the root bone, as Blender does, so roll 0 and Pole Angle −90° give no twist on a leg whose knee points forward. The mesh pieces keep their rest orientation when the roll changes, and an orange kneecap shows any twist.

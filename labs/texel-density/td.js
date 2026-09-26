@@ -346,3 +346,31 @@ export function paintTexture(m, uv, obj, size) {
   }
   return data;
 }
+
+// ─── The 1 m ruler ───────────────────────────────────────────────────────────
+// A straight ruler laid on an island, along its width (s), through its middle: up to 1 m long.
+// Returns its length in metres, points on the surface (3D) and on the texture (UV), and its length in UV units.
+function bilinear(c, p, q) {
+  const a = c[0], b = c[1], d = c[2], e = c[3], n = a.length;
+  return Array.from({ length: n }, (_, k) => (a[k] * (1 - p) + b[k] * p) * (1 - q) + (e[k] * (1 - p) + d[k] * p) * q);
+}
+export function ruler(m, uv, id, samples = 24) {
+  const f = islandFaces(m, id), rs = realSize(m, f);
+  let s0 = Infinity, t0 = Infinity;
+  for (const i of f) for (const [s, t] of m.faces[i].loc) { s0 = Math.min(s0, s); t0 = Math.min(t0, t); }
+  const L = Math.min(1, rs.w), sa = s0 + (rs.w - L) / 2, tm = t0 + rs.h / 2;
+  const pts3 = [], ptsUV = [];
+  for (let k = 0; k <= samples; k++) {
+    const s = sa + L * k / samples;
+    for (const i of f) {
+      const lc = m.faces[i].loc, ls0 = Math.min(...lc.map(p => p[0])), ls1 = Math.max(...lc.map(p => p[0])), lt0 = Math.min(...lc.map(p => p[1])), lt1 = Math.max(...lc.map(p => p[1]));
+      if (s < ls0 - 1e-9 || s > ls1 + 1e-9) continue;
+      const p = (s - lc[0][0]) / (lc[1][0] - lc[0][0]), q = (tm - lc[0][1]) / (lc[3][1] - lc[0][1]);
+      void lt0; void lt1;
+      pts3.push(bilinear(m.faces[i].v.map(v => m.pos[v]), p, q)); ptsUV.push(bilinear(uv[i], p, q));
+      break;
+    }
+  }
+  let lenUV = 0; for (let k = 1; k < ptsUV.length; k++) lenUV += Math.hypot(ptsUV[k][0] - ptsUV[k - 1][0], ptsUV[k][1] - ptsUV[k - 1][1]);
+  return { L, pts3, ptsUV, lenUV };
+}

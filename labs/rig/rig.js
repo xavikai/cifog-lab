@@ -47,12 +47,13 @@ function restFrame(dir) {
 }
 
 // opts.knee: how far the knee joint was moved forward in Edit Mode (metres, three.js +Z = the front).
+// opts.kneeSide: how far the knee was modelled to the side (+X, outwards). opts.roll: bone roll of Thigh and Shin (degrees).
 export function makeRig(kind, opts = {}) {
-  const def = RIGS[kind], knee = kind === 'leg' ? +(opts.knee || 0) : 0;
+  const def = RIGS[kind], leg = kind === 'leg', knee = leg ? +(opts.knee || 0) : 0, side = leg ? +(opts.kneeSide || 0) : 0, roll = leg ? +(opts.roll || 0) : 0;
   const bones = def.bones.map(b => {
     const o = { type: 'bone', connected: false, move: false, ...b, head: [...b.head], tail: [...b.tail] };
-    if (knee && b.name === 'Thigh') o.tail[2] += knee;
-    if (knee && b.name === 'Shin') o.head[2] += knee;
+    if (b.name === 'Thigh') { o.tail[2] += knee; o.tail[0] += side; }
+    if (b.name === 'Shin') { o.head[2] += knee; o.head[0] += side; }
     return o;
   });
   const index = Object.fromEntries(bones.map((b, i) => [b.name, i]));
@@ -60,6 +61,7 @@ export function makeRig(kind, opts = {}) {
     b.headV = V(b.head); b.tailV = V(b.tail);
     b.length = b.headV.distanceTo(b.tailV);
     b.restQ = restFrame(b.tailV.clone().sub(b.headV));
+    if (roll && (b.name === 'Thigh' || b.name === 'Shin')) b.restQ.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), roll * DEG));
     b.parentIndex = b.parent ? index[b.parent] : -1;
     if (b.parentIndex >= 0) {
       const p = bones[b.parentIndex], pinv = p.restQ.clone().invert();
@@ -68,7 +70,7 @@ export function makeRig(kind, opts = {}) {
     }
     b.canMove = b.move && !b.connected;
   }
-  return { kind, name: def.name, bones, index, knee };
+  return { kind, name: def.name, bones, index, knee, kneeSide: side, roll };
 }
 // How much a two-bone chain is bent in its rest pose (Edit Mode), as a vector from the straight line to the joint.
 export function restBend(rig, ia, ib) {
@@ -157,7 +159,7 @@ function twoBone(rig, W, [ia, ib], T, ik, info) {
   let r = null;
   if (ik.pole && rig.index[ik.pole] != null) {
     const pv = perp(W[rig.index[ik.pole]].h.clone().sub(A));
-    if (pv.length() > 1e-5) r = rotateAbout(pv.normalize(), u, -(ik.poleAngle || 0));
+    if (pv.length() > 1e-5) r = rotateAbout(pv.normalize(), u, ik.poleAngle || 0);
   }
   if (!r) {
     // No pole: the chain bends the way it is already bent in the rest pose (turned with the parent of the chain).
@@ -167,14 +169,15 @@ function twoBone(rig, W, [ia, ib], T, ik, info) {
     if (!info.straight) {
       if (a.parentIndex >= 0) bend.applyQuaternion(W[a.parentIndex].q.clone().multiply(rig.bones[a.parentIndex].restQ.clone().invert()));
       const kb = perp(bend);
-      if (kb.length() > 1e-5) r = new Vector3().crossVectors(u, kb.normalize()).normalize();
+      if (kb.length() > 1e-5) r = new Vector3().crossVectors(kb.normalize(), u).normalize();
     }
     if (!r) {
       const x = perp(new Vector3(1, 0, 0).applyQuaternion(W[ia].q));
-      r = x.length() > 1e-5 ? x.normalize() : perp(new Vector3(0, 0, 1)).normalize();
+      r = (x.length() > 1e-5 ? x.normalize() : perp(new Vector3(0, 0, 1)).normalize()).negate();
     }
   }
-  const k = new Vector3().crossVectors(r, u).normalize();
+  // The joint bends towards −Z of the root bone (its X axis is r), as in Blender.
+  const k = new Vector3().crossVectors(u, r).normalize();
   const along = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - along * along));
   const B = A.clone().addScaledVector(u, along).addScaledVector(k, h), tip = A.clone().addScaledVector(u, d);
   const frame = (Y) => { const Z = new Vector3().crossVectors(r, Y).normalize(); const X = new Vector3().crossVectors(Y, Z); return new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(X, Y, Z)); };

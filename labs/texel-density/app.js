@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { RES, CHECKER, OBJECTS, MARGIN, TARGETS, SCREEN, islandFaces, objectFaces, bbox, cloneUV, translate, scale as scaleUV, rotate as rotateUV,
-  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture } from './td.js?v=2';
+  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture, ruler } from './td.js?v=3';
 import { STAGES, MEASURE, SEE_QUIZ, RULES, HERO, HERO_WHY, BUDGET_MB, startState, meshOf, densityOf, islandDensityOf, islandsOf, isInside, overlapsOf,
-  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, sceneStats, memoryFor, wasted } from './stages.js?v=2';
+  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, sceneStats, memoryFor, wasted } from './stages.js?v=3';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=2';
+import dictionary from './i18n.js?v=3';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -241,7 +241,20 @@ function build3D() {
   }
   buildOverlay(); buildLabels(); dirty = true;
 }
+let rulerObj = null;
+const rulerMat = new THREE.MeshBasicMaterial({ color: 0xffd400, depthTest: false, transparent: true });
+// The island the ruler lies on: the selected one (one island selected, ruler on, numbers not hidden).
+const rulerIsland = () => S.st.ruler && S.sel.size === 1 && sid() !== 's2' && !isLoupe() ? [...S.sel][0] : null;
+function buildRuler() {
+  if (rulerObj) { world.remove(rulerObj); rulerObj.geometry.dispose(); rulerObj = null; }
+  const id = rulerIsland(); if (!id) return;
+  const r = ruler(meshOf(S.st), S.st.uv, id, 20), m = meshOf(S.st), n = m.faces[islandFaces(m, id)[0]];
+  // Lift the line a little off the surface along the face normal so it is never hidden inside it.
+  const curve = new THREE.CatmullRomCurve3(r.pts3.map(p => new THREE.Vector3(...p)), false, 'catmullrom', 0);
+  rulerObj = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.025, 6, false), rulerMat); rulerObj.renderOrder = 10; world.add(rulerObj); void n;
+}
 function buildOverlay() {
+  buildRuler();
   if (overlayObj) { world.remove(overlayObj); overlayObj.geometry.dispose(); overlayObj.children[0]?.geometry.dispose(); overlayObj = null; }
   if (!meshObj || !S.sel.size) { dirty = true; return; }
   const m = meshOf(S.st), pos = [];
@@ -271,11 +284,17 @@ function buildLabels() {
     return `<span data-obj="${o}" class="${o === S.st.active ? 'active' : ''}">${esc(objName(o))}${hide ? '' : `<b class="${cls}" data-no-i18n>${px(d)}</b>`}</span>`;
   }).join('');
   // The selected face: its real size in metres (the UV Editor shows its size in pixels).
-  if (S.sel.size === 1 && !hide) {
+  if (S.sel.size === 1 && !hide && !rulerIsland()) {
     const id = [...S.sel][0], f = islandFaces(m, id), rs = realSize(m, f), c = [0, 0, 0]; let n = 0;
     for (const i of f) for (const v of m.faces[i].v) { const p = m.pos[v]; c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; n++; }
     labelAnchors.push(['face', new THREE.Vector3(c[0] / n, c[1] / n, c[2] / n)]);
     host.insertAdjacentHTML('beforeend', `<span data-obj="face" class="face">${esc(islName(m, id))}<b data-no-i18n>${+rs.w.toFixed(2)} × ${+rs.h.toFixed(2)} m</b></span>`);
+  }
+  const rid = rulerIsland();
+  if (rid) {
+    const r = ruler(m, S.st.uv, rid, 20), p0 = r.pts3[0], p1 = r.pts3[r.pts3.length - 1], mid = [(p0[0] + p1[0]) / 2, Math.max(p0[1], p1[1]) + 0.08, (p0[2] + p1[2]) / 2], res = S.st.res[m.islands[rid].obj];
+    labelAnchors.push(['ruler', new THREE.Vector3(...mid)]);
+    host.insertAdjacentHTML('beforeend', `<span data-obj="ruler" class="rul" data-no-i18n>${+r.L.toFixed(2)} m → ${Math.round(r.lenUV * res)} px</span>`);
   }
   placeLabels();
 }
@@ -313,7 +332,7 @@ function pick3D(id, add) {
     if (S.st.view === 'checker') S.st.flags['sel_' + o] = true;
   }
   pick(id, add);
-  if (id) { buildLabels(); checkProgress(); }
+  if (id) { buildLabels(); renderHeaders(); checkProgress(); }
 }
 
 // ─── UV Editor ───────────────────────────────────────────────────────────────
@@ -369,8 +388,25 @@ function drawUV() {
   }
   ctx.lineWidth = 1;
   if (S.sel.size === 1 && !hide) drawDimensions(m, [...S.sel][0], res);
+  if (rulerIsland()) drawRulerUV(m, rulerIsland(), res);
   if (!isInside(st, obj)) { ctx.fillStyle = '#ff8a65'; ctx.fillText(t('Some islands are outside the square: they repeat the texture.'), 8, h - 12); }
   uvDirty = false;
+}
+// The 1 m ruler on the texture: its length in pixels of the image is the texel density.
+function drawRulerUV(m, id, res) {
+  const r = ruler(m, S.st.uv, id, 20), P = r.ptsUV.map(([u, v]) => toScr(u, v));
+  ctx.strokeStyle = '#ffd400'; ctx.lineWidth = 3; ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.lineWidth = 1.5;
+  for (let k = 0; k < P.length; k += 2) {
+    const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, s = k % 10 === 0 ? 9 : 5;
+    ctx.beginPath(); ctx.moveTo(P[k][0] - dy / l * s, P[k][1] + dx / l * s); ctx.lineTo(P[k][0] + dy / l * s, P[k][1] - dx / l * s); ctx.stroke();
+  }
+  const px = Math.round(r.lenUV * res), per = Math.round(px / r.L);
+  const label = r.L < 0.999 ? tr('{a} m of surface → {b} px of the image → {c} px/m', { a: +r.L.toFixed(2), b: px, c: per }) : tr('1 m of surface → {b} px of the image = {c} px/m', { b: px, c: per });
+  ctx.font = '600 12px Inter, Segoe UI, sans-serif'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width, [mx, my] = P[Math.floor(P.length / 2)], lx = Math.max(6, Math.min(uvHost.clientWidth - tw - 16, mx - tw / 2 - 5)), ly = my + 20;
+  ctx.fillStyle = 'rgba(20,18,0,.88)'; ctx.fillRect(lx, ly - 10, tw + 10, 20); ctx.fillStyle = '#ffd400'; ctx.fillText(label, lx + 5, ly);
+  ctx.lineWidth = 1;
 }
 // Dimension lines on the selected island: how many pixels of the image it covers.
 function drawDimensions(m, id, res) {
@@ -452,6 +488,7 @@ function pick(id, add) {
   if (!add) S.sel.clear();
   if (id) { if (add && S.sel.has(id)) S.sel.delete(id); else S.sel.add(id); }
   if (id && sid() === 'm0') { S.st.flags['isl_' + id] = true; saveData(); checkProgress(); }
+  if (id && sid() === 's0' && S.st.ruler) { S.st.flags['rul_' + meshOf(S.st).islands[id].obj] = true; saveData(); checkProgress(); }
   uvDirty = true; buildOverlay(); buildLabels(); renderProps();
 }
 let pan = null;
@@ -688,7 +725,7 @@ function quizPanel(list, answers) {
 function renderProps() {
   const st = S.st, id = sid(); let h = '';
   const multi = objectsOf(st.scene).length > 1;
-  if (id === 's1') h += tdPanel() + objectsPanel();
+  if (id === 's0' || id === 's1') h += tdPanel() + objectsPanel();
   else if (id === 's2') h += quizPanel(SEE_QUIZ) + tdPanel({ hide: true });
   else if (id === 'm0') h += islandInfoPanel();
   else if (id === 'm1') h += measurePanel();
@@ -744,6 +781,7 @@ $('#shading').addEventListener('click', e => {
   pushUndo(); S.st.view = b.dataset.view; if (S.st.view === 'checker') S.st.flags.seen_checker = true; changed();
 });
 $('#pivot').addEventListener('change', e => { S.pivot = e.target.value; });
+$('#ruler-btn').addEventListener('click', () => { pushUndo(); S.st.ruler = !S.st.ruler; changed(); if (S.st.ruler && S.sel.size !== 1) msg('Click a face or an island to lay the ruler on it.'); });
 $('#uv-image').addEventListener('click', e => {
   const b = e.target.closest('[data-img]'); if (!b) return;
   pushUndo(); S.st.uvImage = b.dataset.img; if (b.dataset.img === 'texture') S.st.flags.img_texture = true;
@@ -753,6 +791,7 @@ function renderHeaders() {
   const st = S.st, loupe = isLoupe();
   $('#shading').querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.view === (loupe ? 'texture' : st.view))); b.disabled = loupe && b.dataset.view === 'checker'; });
   $('#pivot-field').hidden = !canEdit();
+  $('#ruler-btn').setAttribute('aria-pressed', String(!!st.ruler)); $('#ruler-btn').hidden = loupe || sid() === 's2';
   $('#uv-image').hidden = loupe;
   $('#uv-image').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.img === (st.uvImage || 'checker'))));
   $('#pivot').value = S.pivot;
@@ -868,4 +907,4 @@ canvas.addEventListener('contextmenu', e => { e.preventDefault(); if (S.modal) c
 // ─── Start ───────────────────────────────────────────────────────────────────
 resizeUV(); resize3D(); enterStep();
 // For tests and debugging.
-window.__td = { S, STAGES, pick: id => pick(id, false), solve: () => { step().solve(S.st); changed(); }, go: (a, b) => { saveData(); S.stageIndex = a; S.step = b; enterStep(); }, select: ids => { S.sel = new Set(ids); changed(false); }, toScr, V, densityOf: o => densityOf(S.st, o), areas, packedDensity1, rightTarget };
+window.__td = { S, STAGES, dbgRuler: () => ({ has: !!rulerObj, parent: !!rulerObj?.parent, n: rulerObj?.geometry.attributes.position.count, box: rulerObj ? new THREE.Box3().setFromObject(rulerObj).min.toArray().concat(new THREE.Box3().setFromObject(rulerObj).max.toArray()) : null }), pick: id => pick(id, false), solve: () => { step().solve(S.st); changed(); }, go: (a, b) => { saveData(); S.stageIndex = a; S.step = b; enterStep(); }, select: ids => { S.sel = new Set(ids); changed(false); }, toScr, V, densityOf: o => densityOf(S.st, o), areas, packedDensity1, rightTarget };

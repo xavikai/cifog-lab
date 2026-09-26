@@ -90,3 +90,19 @@ test('a slight bend in Edit Mode decides which way the IK bends without a pole',
   st.ik = { owner: 'Shin', target: 'IK_Foot', pole: null, poleAngle: 0, chain: 2, influence: 1 };
   assert.equal(R.solve(straight, st).info.straight, true);
 });
+import { restJump, poleOffPlane, switchPop, applyVisual } from '../labs/rig/stages.js';
+test('a crooked leg: the pole must be in the leg plane and the roll must match the knee', () => {
+  const [p1, p2] = STAGES.find(s => s.id === 'pole').steps;
+  const a = p1.start(); assert.ok(restJump(a).knee > 0.02); assert.ok(poleOffPlane(a) > 25);
+  p1.solve(a); assert.ok(restJump(a).knee < 0.005); assert.ok(poleOffPlane(a) < 1); assert.ok(restJump(a).twist > 25, 'still twisted with roll 0');
+  a.roll = -30; assert.ok(restJump(a).twist < 1 && restJump(a).knee < 0.005);
+  const b = p2.start(); b.ik.poleAngle = -60; assert.ok(restJump(b).knee > 0.02, 'fixing the twist with the Pole Angle moves the knee');
+});
+test('a straight-ish leg with roll 0 and Pole Angle −90 does not move when the IK turns on', () => {
+  const st = R.defaultState(R.makeRig('leg')); st.knee = 0.05; st.ik = { owner: 'Shin', target: 'IK_Foot', pole: 'Knee_Pole', poleAngle: -90, chain: 2, influence: 1 };
+  const j = restJump(st); assert.ok(j.knee < 0.002 && j.twist < 0.5);
+});
+test('Visual Transform before switching removes the IK/FK pop', () => {
+  const p3 = STAGES.find(s => s.id === 'pole').steps[2], st = p3.start();
+  assert.ok(switchPop(st) > 0.1); applyVisual(st, ['Thigh', 'Shin']); assert.ok(switchPop(st) < 0.005);
+});

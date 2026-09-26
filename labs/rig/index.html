@@ -6,7 +6,7 @@
   <meta name="description" content="Pose an armature like in Blender: forward kinematics on an arm, then an IK constraint with a pole target on a leg.">
   <title>Rig Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css?v=2">
+  <link rel="stylesheet" href="./style.css?v=3">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
 <body>
@@ -79,7 +79,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>An FK arm and an IK leg</h2><p>This lab shows a simplified Blender: a few bones, rigid pieces of mesh and one IK constraint. Selecting, rotating, moving and the IK options behave like Blender's.</p></div><ol><li>Add an <strong>Armature</strong>, extrude the bones in <strong>Edit Mode</strong> (<strong>E</strong>) and name them. Bend the knee and the elbow slightly in Edit Mode so the IK knows which way to bend.</li><li>Switch to <strong>Pose Mode</strong> (<strong>Ctrl Tab</strong>). Rotate with <strong>R</strong>; <strong>R X X</strong> uses the bone's own axis. <strong>Alt R</strong> clears it.</li><li>Add control bones that do not deform: in the Bone properties turn off <strong>Deform</strong>, and clear their parent (<strong>Alt P</strong>) so they move freely.</li><li>Select the control, then <strong>Shift</strong>-click the Shin and press <strong>Shift I › To Active Bone</strong>. Set <strong>Chain Length</strong> to 2.</li><li>Set the <strong>Pole Target</strong> and fix the <strong>Pole Angle</strong> (often -90°) until the knee points at it.</li><li>Parent the foot to the IK control so it stays flat, and use the constraint's <strong>Influence</strong> for an IK/FK switch.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Rig Lab</span><a href="https://docs.blender.org/manual/en/latest/animation/constraints/tracking/ik_solver.html" target="_blank" rel="noopener">Blender: IK Constraint ↗</a><span>Teaching model · simplified Pose Mode.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=2"></script>
+  <script type="module" src="./app.js?v=3"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 // Texel Density Lab: stages, steps and checks. Pure JS (tested with node).
 import { buildScene, objectsOf, packedUV, placeIsland, islandFaces, objectFaces, objectDensity, islandDensity, density, areas, inside, overlaps,
-  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, setMB, bbox, translate, scale } from './td.js?v=2';
+  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, setMB, bbox, translate, scale } from './td.js?v=3';
 
 const meshCache = new Map();
 export function meshOf(st) {
@@ -9,7 +9,7 @@ export function meshOf(st) {
   return meshCache.get(key);
 }
 export function defaultState() {
-  return { scene: 'trio', uv: null, res: {}, scale: {}, view: 'texture', uvImage: 'checker', target: null, flags: {}, cam: 'strategy', camTarget: 512, active: null };
+  return { scene: 'trio', uv: null, res: {}, scale: {}, view: 'texture', uvImage: 'checker', ruler: false, target: null, flags: {}, cam: 'strategy', camTarget: 512, active: null };
 }
 const clone = o => JSON.parse(JSON.stringify(o));
 export function startState(step) {
@@ -119,8 +119,17 @@ export const STAGES = [
     id: 'see', name: 'See it', sub: 'Checker map · px/m',
     steps: [
       {
+        id: 's0', title: 'A ruler of one metre',
+        text: 'Texel density answers one question: if you lay a ruler of one metre on the surface, how many pixels of the texture does it cover? Click a prop: the yellow ruler lies on it, and the same ruler is drawn on its texture in the UV Editor, where you can count the pixels. That number is the texel density, in px/m. It belongs to the model, like its size: it comes from the size of the texture, the size of its UV islands and the size of the object, and it does not change with the camera.',
+        how: ['Click the <b>Wall</b> in the 3D view: 1 m of wall covers 335 px of its 1024 px texture, so it has 335 px/m.', 'Zoom into the ruler in the <b>UV Editor</b> (<b>Wheel</b>): every small square is one pixel of the texture.', 'Click the <b>Crate</b> and the <b>Barrel</b> too. The crate is only 0.5 m wide: its ruler is half a metre, so multiply its pixels by 2.'],
+        why: 'A number per metre lets you compare objects of any size. What the camera changes is how many px/m you need, the target, which is stage 4.',
+        start: { scene: 'trio', view: 'texture', uvImage: 'texture', ruler: true },
+        check: s => !!(s.flags.rul_crate && s.flags.rul_wall && s.flags.rul_barrel),
+        solve: s => { Object.assign(s.flags, { rul_crate: true, rul_wall: true, rul_barrel: true }); },
+      },
+      {
         id: 's1', title: 'The checker map',
-        text: 'Texel density is how many pixels of texture cover one metre of surface. These three props all have a 1024 px texture, but they are not equally sharp: the big wall spreads its pixels over much more surface than the small crate. A checker map makes density visible: every square is 64 × 64 texels, so bigger squares mean fewer pixels per metre. Switch to the checker and click each prop to read its density.',
+        text: 'The ruler measures one place at a time. A checker map shows the density everywhere at once. These three props all have a 1024 px texture, but they are not equally sharp: the big wall spreads its pixels over much more surface than the small crate. A checker map makes density visible: every square is 64 × 64 texels, so bigger squares mean fewer pixels per metre. Switch to the checker and click each prop to read its density.',
         how: ['In the 3D Viewport header, switch the shading from <b>Texture</b> to <b>Checker</b>.', 'Click the <b>Crate</b>, the <b>Wall</b> and the <b>Barrel</b> in the 3D view.', 'Read the <b>Density</b> of each one (px/m) in the Texel Density panel, and compare the size of the squares.'],
         why: 'Texel density is invisible in a finished texture, but a checker map shows it at a glance. It is the first thing artists turn on to check their UVs.',
         start: { scene: 'trio', view: 'texture' },
@@ -146,7 +155,7 @@ export const STAGES = [
         text: 'A texture is an image: a grid of pixels, here 1024 × 1024. The UV Editor shows that same image as the square from 0 to 1. Unwrapping cuts the model into islands (groups of faces that stay together) and lays them flat on the image: each island says which pixels of the image paint its faces. So "pixels of texture" are the pixels of the image that an island covers. The UV map has no pixels of its own: it only places the faces on the texture.',
         how: ['Click a face of the crate: its island lights up in the UV Editor with its size in px of the image, and the 3D view shows the size of the face in m. Click three different faces.', 'In the UV Editor header, switch <b>Image</b> to <b>Texture</b>: the planks you see on the crate are painted on the image, inside each island. The grey around them is wasted pixels.', 'Zoom into an island with the <b>Wheel</b> until the pixel grid appears: every small square is one pixel of the texture (a texel).'],
         why: 'A face gets exactly the pixels its island covers on the image. A big island means many pixels for that face, so it looks sharp: that is the whole idea of texel density.',
-        start: { scene: 'crate', view: 'texture', uvImage: 'checker' },
+        start: { scene: 'crate', view: 'texture', uvImage: 'checker', ruler: true },
         setup: s => crateGrid(s, 0.5),
         check: s => !!(s.flags.img_texture && s.flags.zoom_px && Object.keys(s.flags).filter(k => k.startsWith('isl_')).length >= 3),
         solve: s => { Object.assign(s.flags, { img_texture: true, zoom_px: true, isl_a: true, isl_b: true, isl_c: true }); s.uvImage = 'texture'; },
@@ -156,7 +165,7 @@ export const STAGES = [
         text: 'Texel density is a division: pixels of the image over metres of surface. For a square island: the pixels it covers across (its width in the UV square × the size of the image) divided by the width of the face in metres. For any shape: texture size × √(UV area ÷ 3D area), which is what the add-ons compute. Read the numbers of the crate and answer three questions.',
         how: ['Click the <b>Front</b> island in the UV Editor (or the front of the crate).', 'The <b>Measure</b> panel shows the island in pixels and the face in metres.', 'Type the density in px/m and press <b>Check</b>.'],
         why: 'Once you can compute it by hand, the numbers of the add-ons stop being magic: you know what to change to move them.',
-        start: { scene: 'crate', view: 'checker' },
+        start: { scene: 'crate', view: 'checker', ruler: true },
         setup: s => measureSetup(s, 0),
         check: s => (s.flags.quiz | 0) >= MEASURE.length,
         solve: s => { s.flags.quiz = MEASURE.length; measureSetup(s, MEASURE.length - 1); },
