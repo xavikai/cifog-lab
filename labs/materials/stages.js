@@ -1,10 +1,14 @@
 // Stages of the Material Lab. Every step loads a material (links, values, images, colour spaces)
 // and checks what the student changes. Pure JS: no DOM, so it can be tested.
-import { DEFAULT_LINKS, resolveGraph, sourceFor } from './graph.js';
+import { DEFAULT_LINKS, resolveGraph, sourceFor } from './graph.js?v=5';
 
 export const DEFAULT_VALUES = {
  base:'#c98159', roughness:.45, metallic:0, ior:1.5, alpha:1, strength:1,
- transmission:0, coat:0, coatRough:.03, emission:'#ffffff', emissionStrength:0,
+ subsurface:0, subRadiusX:1, subRadiusY:.2, subRadiusZ:.1, subScale:.05,
+ specLevel:.5, specTint:'#ffffff', aniso:0, anisoRot:0,
+ transmission:0, coat:0, coatRough:.03, coatIor:1.5, coatTint:'#ffffff',
+ sheen:0, sheenRough:.5, sheenTint:'#ffffff',
+ emission:'#ffffff', emissionStrength:0, tfThick:0, tfIor:1.33,
  bumpStrength:1, dispScale:.1, dispMid:.5,
  mappingType:'Point', vectorX:0, vectorY:0, vectorZ:0, locationX:0, locationY:0, locationZ:0, rotationX:0, rotationY:0, rotationZ:0, scaleX:1, scaleY:1, scaleZ:1,
 };
@@ -30,10 +34,57 @@ export function hsv(hex) {
 }
 const between = (v, a, b) => v >= a && v <= b;
 
+export const DEFAULT_SETTINGS = {
+ engine:'eevee', raytracing:false, rtTransmission:false,
+ glare:false, glareThreshold:1, glareStrength:1, glareSize:.5, vpCompositor:'disabled',
+ dispMethod:'bump', adaptive:false, dispMod:false, modStrength:.25, modMid:.5,
+};
+// Material Output › Displacement moves the mesh only if the material setting allows it.
+// EEVEE treats Displacement Only as Displacement and Bump.
+export function displacementMode(st) {
+ const g = resolveGraph(st.links), s = st.settings, connected = !!g.displacement;
+ const method = s.engine === 'eevee' && s.dispMethod === 'displacement' ? 'both' : s.dispMethod;
+ return { connected, method, moves: connected && method !== 'bump', bumps: connected && method !== 'displacement' };
+}
+// Faces along each side of the preview plane or cube: Subdivision Surface levels, or Adaptive Subdivision in Cycles.
+export const effectiveLevel = st => st.settings.adaptive && st.settings.engine === 'cycles' ? 8 : st.subdiv;
+// Does the surface really change shape? (material displacement or Displace modifier, with enough vertices)
+export const meshMoves = st => (displacementMode(st).moves || (st.settings.dispMod && st.settings.modStrength > 0)) && (st.shape === 'sphere' || effectiveLevel(st) >= 6);
+// Transmission refracts the objects behind it: always in Cycles, in EEVEE only with Raytracing and Raytraced Transmission.
+export const refractsScene = s => s.engine === 'cycles' || (s.raytracing && s.rtTransmission);
+// Emission lights the objects around it: Cycles yes; EEVEE with Raytracing (screen-space, approximate).
+export const emissionLights = s => s.engine === 'cycles' || s.raytracing;
+// Glare is a compositor effect: it is seen in the viewport only with Compositor › Always.
+export const glareVisible = s => s.glare && s.vpCompositor === 'always';
+
+// Presets of the Studio stage (values of the Principled BSDF; everything else goes back to the defaults).
+export const PRESETS = {
+ gold:     { name:'Gold', values:{ base:'#ffe29b', metallic:1, roughness:.2 } },
+ brushed:  { name:'Brushed steel', values:{ base:'#c9cdd2', metallic:1, roughness:.35, aniso:.8, anisoRot:0 } },
+ carpaint: { name:'Car paint', values:{ base:'#9b1010', roughness:.4, coat:1, coatRough:.03 } },
+ glass:    { name:'Clear glass', values:{ base:'#ffffff', roughness:0, transmission:1, ior:1.5 } },
+ frosted:  { name:'Frosted glass', values:{ base:'#e8f2ff', roughness:.35, transmission:1, ior:1.5 } },
+ skin:     { name:'Skin', values:{ base:'#e0a888', roughness:.45, subsurface:1, subRadiusX:1, subRadiusY:.2, subRadiusZ:.1, subScale:.08 } },
+ jade:     { name:'Jade', values:{ base:'#4f9a6a', roughness:.2, subsurface:1, subRadiusX:.4, subRadiusY:1, subRadiusZ:.5, subScale:.12, coat:.5, coatRough:.05 } },
+ velvet:   { name:'Velvet', values:{ base:'#3a0f3f', roughness:.8, sheen:1, sheenRough:.4, sheenTint:'#ffd6ff' } },
+ bubble:   { name:'Soap bubble', values:{ base:'#ffffff', roughness:0, transmission:1, ior:1, tfThick:450, tfIor:1.33 } },
+ neon:     { name:'Neon tube', values:{ base:'#111111', roughness:.3, emission:'#ff2bd6', emissionStrength:8 } },
+ rubber:   { name:'Rubber', values:{ base:'#1d1d1d', roughness:.85, specLevel:.3 } },
+};
+export function applyPreset(st, id) {
+ const p = PRESETS[id]; if (!p) return;
+ const keepMap = ['mappingType', 'vectorX', 'vectorY', 'vectorZ', 'locationX', 'locationY', 'locationZ', 'rotationX', 'rotationY', 'rotationZ', 'scaleX', 'scaleY', 'scaleZ'];
+ const kept = Object.fromEntries(keepMap.map(k => [k, st.values[k]]));
+ st.values = { ...DEFAULT_VALUES, ...kept, ...p.values };
+ st.preset = id; st.flags.preset = true; st.flags.edited = false;
+}
+
 export function defaultState() {
  return {
   set:'brick', nodes:NODE_SETS.basic, links:{ ...DEFAULT_LINKS }, values:{ ...DEFAULT_VALUES, base:'#ffffff', roughness:.8 }, cs:{ ...DEFAULT_CS },
-  shape:'sphere', subdiv:7, env:'room', open:{ transmission:false, coat:false, emission:false }, flags:{},
+  shape:'sphere', subdiv:7, env:'room', open:{ subsurface:false, specular:false, transmission:false, coat:false, sheen:false, emission:false, thinfilm:false }, flags:{},
+  // Blender settings outside the node tree: Render Properties, Modifiers and Material Properties › Settings.
+  settings:{ ...DEFAULT_SETTINGS }, backdrop:false, tab:'render',
  };
 }
 const merge = (a, b) => { for (const [k, v] of Object.entries(b)) { if (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object' && k !== 'links') merge(a[k], v); else a[k] = JSON.parse(JSON.stringify(v)); } return a; };
@@ -115,7 +166,7 @@ export const STAGES = [
   ],
  },
  {
-  id:'maps', name:'Maps & colour space', sub:'sRGB · Non-Color · masks',
+  id:'maps', name:'Maps & colour space', sub:'sRGB · Non-Color · masks · alpha',
   steps:[
    {
     id:'c1', title:'Colour or data?',
@@ -144,10 +195,19 @@ export const STAGES = [
     check:s => { const r = sourceFor(s.links, 'bsdf:roughness'); return !!r && r.node === 'rough' && r.invert && s.cs.rough === 'Non-Color'; },
     solve:s => { s.links['invert:color'] = 'rough:color'; s.links['bsdf:roughness'] = 'invert:color'; },
    },
+   {
+    id:'c4', title:'A cut-out leaf',
+    text:'A leaf is one flat quad: the shape comes from an alpha mask, white where the leaf is and black where it is not. Connect the mask to Alpha to cut the leaf out of the quad.',
+    how:['Drag <b>Image Texture (Alpha) › Color</b> to <b>Principled BSDF › Alpha</b>. The mask must be <b>Non-Color</b>.','The leaf appears with its shape; the rest of the quad disappears.','In EEVEE, alpha works with the default <b>Render Method</b> (Dithered); use Blended only for soft, semi-transparent surfaces.'],
+    why:'Alpha cut-outs are how games and scenes draw foliage, hair cards, fences and decals with very few polygons.',
+    start:{ set:'leaf', nodes:NODE_SETS.leaf, shape:'plane', links:{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'mask:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf' }, values:{ base:'#ffffff', roughness:.5 } },
+    check:s => graphOf(s).alpha === 'mask' && s.cs.mask === 'Non-Color',
+    solve:s => { s.links['bsdf:alpha'] = 'mask:color'; s.cs.mask = 'Non-Color'; },
+   },
   ],
  },
  {
-  id:'relief', name:'Relief', sub:'Bump · displacement · subdivisions',
+  id:'relief', name:'Relief', sub:'Bump · displacement · subdivision · modifier',
   steps:[
    {
     id:'r1', title:'Bump from a height map',
@@ -160,62 +220,144 @@ export const STAGES = [
    },
    {
     id:'r2', title:'Real displacement',
-    text:'Displacement really moves the surface: the mesh changes shape, so the silhouette and the shadows change too. It goes into the Displacement input of the Material Output, not into the shader. Displace this plane with the height map.',
-    how:['Drag <b>Image Texture (Height) › Color</b> to <b>Displacement › Height</b>.','Drag <b>Displacement › Displacement</b> to <b>Material Output › Displacement</b>.','Turn the view to a grazing angle: the tiles really stick out. Try <b>Scale</b> and <b>Midlevel</b>.'],
-    why:'In Blender, the material setting Displacement must be “Displacement Only” or “Displacement and Bump” to move the mesh; with “Bump Only” it only changes the shading.',
-    start:{ set:'tiles', nodes:NODE_SETS.relief, shape:'plane', subdiv:7, links:{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'height:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf' }, values:{ base:'#ffffff', roughness:.55 } },
-    check:s => graphOf(s).displacement === 'height' && s.values.dispScale > 0,
-    solve:s => { s.links['disp:height'] = 'height:color'; s.links['output:displacement'] = 'disp:displacement'; },
+    text:'Displacement really moves the surface: the mesh changes shape, so the silhouette and the shadows change too. It goes into the Displacement input of the Material Output, not into the shader. But connecting it is not enough: by default the material setting Displacement is Bump Only, and then the height is only used as bump. Connect the nodes, look at the edge of the plane, then change the setting.',
+    how:['Drag <b>Image Texture (Height) › Color</b> to <b>Displacement › Height</b>, and <b>Displacement › Displacement</b> to <b>Material Output › Displacement</b>.','Turn the view to a grazing angle: with <b>Bump Only</b> the edge stays flat.','In <b>Properties › Material › Settings › Surface</b>, set <b>Displacement</b> to <b>Displacement Only</b> or <b>Displacement and Bump</b>: the tiles stick out.'],
+    why:'Bump Only is the default because true displacement is expensive. Displacement and Bump moves the mesh for the big shapes and keeps the bump for the fine detail. EEVEE also displaces, and treats Displacement Only as Displacement and Bump.',
+    start:{ set:'tiles', nodes:NODE_SETS.relief, shape:'plane', subdiv:7, tab:'material', links:{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'height:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf' }, values:{ base:'#ffffff', roughness:.55 } },
+    check:s => graphOf(s).displacement === 'height' && s.values.dispScale > 0 && s.settings.dispMethod !== 'bump',
+    solve:s => { s.links['disp:height'] = 'height:color'; s.links['output:displacement'] = 'disp:displacement'; s.settings.dispMethod = 'both'; },
    },
    {
     id:'r3', title:'Enough vertices',
-    text:'Displacement can only move vertices that exist. This plane has one face and four corners, so the displacement does nothing. Subdivide the plane until the tiles appear: 64 × 64 faces or more.',
-    how:['Raise <b>Subdivisions</b> under the preview (it works like a Subdivision Surface modifier set to Simple).','Watch the tiles appear, first blocky, then clean.','In Cycles, Adaptive Subdivision does this automatically near the camera.'],
+    text:'Displacement can only move vertices that exist. This plane has one face and four corners, so the displacement does nothing, even with the right setting. Add geometry with the Subdivision Surface modifier (Simple), 6 levels or more. In Cycles, Adaptive Subdivision can do it for you: it subdivides more near the camera.',
+    how:['In <b>Properties › Modifiers › Subdivision Surface</b>, raise <b>Levels Viewport</b>.','Watch the tiles appear, first blocky, then clean.','Or: switch the <b>Render Engine</b> to <b>Cycles</b> and turn on <b>Adaptive Subdivision</b>. In EEVEE it does nothing.'],
     why:'Displacement is powerful but expensive: it needs dense geometry. Use it for close-ups and big shapes; use bump and normal maps for fine detail.',
-    start:{ set:'tiles', nodes:NODE_SETS.relief, shape:'plane', subdiv:0, links:{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'height:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf', 'disp:height':'height:color', 'output:displacement':'disp:displacement' }, values:{ base:'#ffffff', roughness:.55 } },
-    check:s => graphOf(s).displacement === 'height' && s.subdiv >= 6,
+    start:{ set:'tiles', nodes:NODE_SETS.relief, shape:'plane', subdiv:0, tab:'modifiers', settings:{ dispMethod:'both' }, links:{ ...{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'height:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf' }, 'disp:height':'height:color', 'output:displacement':'disp:displacement' }, values:{ base:'#ffffff', roughness:.55 } },
+    check:s => graphOf(s).displacement === 'height' && s.settings.dispMethod !== 'bump' && effectiveLevel(s) >= 6,
     solve:s => { s.subdiv = 7; },
+   },
+   {
+    id:'r4', title:'The Displace modifier',
+    text:'There is a second way to displace: the Displace modifier. It moves the vertices with a texture before the material is even read, so it works the same in EEVEE and Cycles, you see it in every viewport mode and you can apply it to keep the new shape. Here the material has no displacement: use the modifier instead, and check it in both engines.',
+    how:['In <b>Properties › Modifiers</b>, turn on <b>Displace</b> (it uses the Height image as its texture) and raise <b>Strength</b>.','Keep enough <b>Subdivision Surface</b> levels above it in the stack.','Switch the <b>Render Engine</b> between EEVEE and Cycles: the shape is the same.'],
+    why:'Modifier displacement is geometry: it is in the mesh for every engine and for the game export. Material displacement is a render effect that you can mix with nodes.',
+    start:{ set:'tiles', nodes:NODE_SETS.relief, shape:'plane', subdiv:7, tab:'modifiers', links:{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'height:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf' }, values:{ base:'#ffffff', roughness:.55 } },
+    check:s => s.settings.dispMod && s.settings.modStrength > 0 && s.subdiv >= 6 && !!(s.flags.seen_eevee && s.flags.seen_cycles),
+    solve:s => { Object.assign(s.settings, { dispMod:true, modStrength:.25 }); s.subdiv = Math.max(7, s.subdiv); s.flags.seen_eevee = s.flags.seen_cycles = true; },
    },
   ],
  },
  {
-  id:'beyond', name:'Beyond the basics', sub:'Emission · glass · coat · alpha',
+  id:'light', name:'Light & glass', sub:'Emission · Glare · EEVEE and Cycles',
   steps:[
    {
-    id:'b1', title:'Emission',
-    text:'Emission makes a surface give off light of its own: screens, LEDs, lava, neon. It is added on top of everything else and it does not depend on the lights of the scene. Make this ball glow.',
-    how:['Open the <b>Emission</b> panel of the Principled BSDF.','Pick an <b>Emission Color</b> and raise <b>Strength</b> to 1 or more.','In Blender, Cycles also lights the scene with it; Eevee does it more approximately.'],
+    id:'e1', title:'Emission',
+    text:'Emission makes a surface give off light of its own: screens, LEDs, lava, neon. It is added on top of everything else and it does not depend on the lights of the scene. Make this ball glow in the dark studio. Notice that it is bright, but it has no halo around it.',
+    how:['Open the <b>Emission</b> panel of the Principled BSDF.','Pick an <b>Emission Color</b> and raise <b>Strength</b> to 1 or more.','Look at the edge of the ball: the colour stops there. The glow is not part of the material.'],
     why:'Emission is how you make light sources that are objects, and it is what makes a screen or a sign readable in a dark shot.',
-    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#2a2a2a', roughness:.4 }, open:{ emission:true } },
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, env:'dark', values:{ metallic:0, base:'#2a2a2a', roughness:.4 }, open:{ emission:true } },
     check:s => s.values.emissionStrength >= 1 && hsv(s.values.emission).v >= .2,
-    solve:s => Object.assign(s.values, { emission:'#39b7ff', emissionStrength:3 }),
+    solve:s => Object.assign(s.values, { emission:'#39b7ff', emissionStrength:4 }),
    },
    {
-    id:'b2', title:'Glass',
-    text:'Glass lets the light go through and bends it (refraction). Transmission sends the light through the surface, IOR (index of refraction) sets how much it bends: water is 1.33, glass about 1.5, diamond 2.42. Make clear glass.',
-    how:['Open the <b>Transmission</b> panel and set <b>Weight</b> to 1.','Set <b>Roughness</b> to 0.1 or less (frosted glass is rougher) and <b>Metallic</b> to 0.','Set <b>IOR</b> between 1.4 and 1.6. Turn the environment to see the refraction.'],
+    id:'e2', title:'Glow in the Compositor',
+    text:'The halo around bright lights (bloom or glare) is a post-process: it is added to the finished image. In Blender it is the Glare node, type Bloom, in the Compositor, between Render Layers and the Composite output. To see it while you work, the viewport must run the compositor too.',
+    how:['In <b>Properties › Render › Compositor</b>, add the <b>Glare</b> node (type <b>Bloom</b>).','Set <b>Viewport Shading › Compositor</b> to <b>Always</b>: now the halo appears in the viewport.','Try <b>Threshold</b> (only pixels brighter than it glow) and <b>Strength</b> and <b>Size</b>.'],
+    why:'A final render goes through the compositor anyway; the viewport only does it with Compositor set to Always. EEVEE has no separate Bloom checkbox any more: the Glare node works for both engines.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, env:'dark', tab:'render', values:{ metallic:0, base:'#2a2a2a', roughness:.4, emission:'#39b7ff', emissionStrength:4 }, open:{ emission:true } },
+    check:s => glareVisible(s.settings) && s.settings.glareStrength > 0 && s.values.emissionStrength > 0,
+    solve:s => Object.assign(s.settings, { glare:true, vpCompositor:'always' }),
+   },
+   {
+    id:'e3', title:'Emission lights the scene',
+    text:'An emissive object is also a light for its neighbours. Cycles traces that light, so the floor under the ball turns blue. EEVEE needs Raytracing to catch it on screen; without it, the floor stays dark unless you bake light probes. Compare the two engines.',
+    how:['In <b>Properties › Render</b>, set <b>Render Engine</b> to <b>Cycles</b> and look at the floor.','Back to <b>EEVEE</b>: the floor goes dark.','Turn on <b>Raytracing</b> in EEVEE: the floor gets some of the light back.'],
+    why:'For a lamp or a screen that must really light a scene in EEVEE, add a real light next to it. In Cycles, emission shaders are real lights (but noisier than lamps).',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, env:'dark', tab:'render', values:{ metallic:0, base:'#2a2a2a', roughness:.4, emission:'#39b7ff', emissionStrength:5 }, open:{ emission:true } },
+    check:s => !!(s.flags.emit_cycles && s.flags.emit_eevee_rt),
+    solve:s => { s.flags.emit_cycles = s.flags.emit_eevee_rt = true; Object.assign(s.settings, { engine:'eevee', raytracing:true }); },
+   },
+   {
+    id:'e4', title:'Glass in Cycles',
+    text:'Glass lets the light go through and bends it (refraction). Transmission sends the light through the surface, IOR (index of refraction) sets how much it bends: water is 1.33, glass about 1.5, diamond 2.42. The render engine is Cycles, which traces the light through the glass: the board behind the ball appears upside down and distorted. Make clear glass.',
+    how:['Open the <b>Transmission</b> panel and set <b>Weight</b> to 1.','Set <b>Roughness</b> to 0.1 or less (frosted glass is rougher) and <b>Metallic</b> to 0.','Set <b>IOR</b> between 1.4 and 1.6 and look at the board through the ball.'],
     why:'Glass, water and plastic bottles are transmission materials. Metallic must be 0: a metal is never transparent.',
-    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#ffffff', roughness:.4, ior:1.1 }, env:'overcast', open:{ transmission:true } },
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#ffffff', roughness:.4, ior:1.1 }, env:'overcast', backdrop:true, settings:{ engine:'cycles' }, open:{ transmission:true } },
     check:s => s.values.transmission >= .95 && s.values.roughness <= .1 && between(s.values.ior, 1.4, 1.6) && s.values.metallic <= .05,
     solve:s => Object.assign(s.values, { transmission:1, roughness:.02, ior:1.5, metallic:0 }),
    },
    {
-    id:'b3', title:'Car paint',
+    id:'e5', title:'Glass in EEVEE',
+    text:'The same glass in EEVEE looks different: it refracts the sky, but the board behind it is missing. By default EEVEE refracts only the world (its light probes). To refract the objects around, it needs Raytracing in the render settings and Raytraced Transmission in the material settings. The object must also have real thickness: a single plane cannot bend light like a solid ball.',
+    how:['In <b>Properties › Render</b>, turn on <b>Raytracing</b>.','In <b>Properties › Material › Settings</b>, turn on <b>Raytraced Transmission</b>.','Now the board appears through the ball, close to what Cycles shows.'],
+    why:'EEVEE refracts what is on screen, so it is fast but approximate: objects out of view, coloured shadows and caustics are Cycles territory.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#ffffff', roughness:.02, ior:1.5, transmission:1 }, env:'overcast', backdrop:true, tab:'render', settings:{ engine:'eevee' }, open:{ transmission:true } },
+    check:s => s.settings.engine === 'eevee' && s.settings.raytracing && s.settings.rtTransmission && s.values.transmission >= .95,
+    solve:s => Object.assign(s.settings, { engine:'eevee', raytracing:true, rtTransmission:true }),
+   },
+  ],
+ },
+ {
+  id:'layers', name:'Layers of the Principled', sub:'Coat · Sheen · Subsurface · Thin Film · Anisotropic',
+  steps:[
+   {
+    id:'l1', title:'Car paint',
     text:'Car paint, varnished wood and lacquered plastic have two layers: a coloured base and a thin clear coat on top. The coat gives sharp reflections while the base stays softer. Add a clear coat to this red paint.',
-    how:['Open the <b>Coat</b> panel and set <b>Weight</b> to 1.','Keep the coat <b>Roughness</b> at 0.1 or less.','Keep the base <b>Roughness</b> at 0.3 or more: two reflections, one sharp, one soft.'],
+    how:['Open the <b>Coat</b> panel and set <b>Weight</b> to 1.','Keep the coat <b>Roughness</b> at 0.1 or less.','Keep the base <b>Roughness</b> at 0.3 or more: two reflections, one sharp, one soft. <b>Tint</b> colours the coat, like a tinted varnish.'],
     why:'Layered materials are one of the ways Principled BSDF covers most real surfaces with one node.',
     start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#9b1010', roughness:.45 }, open:{ coat:true } },
     check:s => s.values.coat >= .9 && s.values.coatRough <= .1 && s.values.roughness >= .3,
     solve:s => Object.assign(s.values, { coat:1, coatRough:.03, roughness:Math.max(.3, s.values.roughness) }),
    },
    {
-    id:'b4', title:'A cut-out leaf',
-    text:'A leaf is one flat quad: the shape comes from an alpha mask, white where the leaf is and black where it is not. Connect the mask to Alpha to cut the leaf out of the quad.',
-    how:['Drag <b>Image Texture (Alpha) › Color</b> to <b>Principled BSDF › Alpha</b>. The mask must be <b>Non-Color</b>.','The leaf appears with its shape; the rest of the quad disappears.','In Eevee, check that the material\'s render method allows transparency.'],
-    why:'Alpha cut-outs are how games and scenes draw foliage, hair cards, fences and decals with very few polygons.',
-    start:{ set:'leaf', nodes:NODE_SETS.leaf, shape:'plane', links:{ 'mapping:input':'coordinates:uv', 'color:vector':'mapping:vector', 'mask:vector':'mapping:vector', 'bsdf:base':'color:color', 'output:surface':'bsdf:bsdf' }, values:{ base:'#ffffff', roughness:.5 } },
-    check:s => graphOf(s).alpha === 'mask' && s.cs.mask === 'Non-Color',
-    solve:s => { s.links['bsdf:alpha'] = 'mask:color'; s.cs.mask = 'Non-Color'; },
+    id:'l2', title:'Velvet',
+    text:'Velvet and many fabrics have tiny fibres that catch the light at grazing angles: the edges glow while the centre stays dark. That is Sheen, a soft layer on top of the base. Make this purple cloth look like velvet.',
+    how:['Open the <b>Sheen</b> panel and set <b>Weight</b> to 0.8 or more.','Try <b>Roughness</b>: low values give a thin rim, high values a wide soft glow.','Choose a light <b>Tint</b>: the colour of the fibres in the light.'],
+    why:'Sheen is what separates cloth from plastic. It is subtle facing the camera and strong at the silhouette.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#3a0f3f', roughness:.8 }, open:{ sheen:true } },
+    check:s => s.values.sheen >= .8 && s.values.sheenRough >= .2 && hsv(s.values.sheenTint).v >= .6,
+    solve:s => Object.assign(s.values, { sheen:1, sheenRough:.4, sheenTint:'#ffd6ff' }),
+   },
+   {
+    id:'l3', title:'Skin and wax',
+    text:'In skin, wax, marble, jade or milk, light goes into the surface, scatters inside and comes out somewhere else. That is Subsurface Scattering: shadows get soft and coloured, and thin parts glow. Radius says how far each colour (red, green, blue) travels; in skin red goes furthest. Scale sets the distance in scene units.',
+    how:['Open the <b>Subsurface</b> panel and set <b>Weight</b> to 1.','Keep <b>Radius</b> with the red value highest (1, 0.2, 0.1 is the default for skin).','Raise <b>Scale</b> and look at the line between light and shadow: it turns warm and soft.'],
+    why:'Without subsurface, skin looks like painted plastic. The Scale must match the size of the object: a head is about 0.2 m, so small scales; a big wax statue needs larger ones.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#e0a888', roughness:.45 }, open:{ subsurface:true } },
+    check:s => s.values.subsurface >= .9 && s.values.subRadiusX >= s.values.subRadiusY && s.values.subRadiusX >= s.values.subRadiusZ && s.values.subScale >= .05,
+    solve:s => Object.assign(s.values, { subsurface:1, subRadiusX:1, subRadiusY:.2, subRadiusZ:.1, subScale:.1 }),
+   },
+   {
+    id:'l4', title:'Soap bubble',
+    text:'A soap bubble, an oil stain or a heat-treated metal show rainbow colours that change with the angle. They come from a very thin film on the surface: light bounces on both sides of the film and the waves interfere. Thin Film recreates it with the thickness of the film in nanometres.',
+    how:['Open the <b>Thin Film</b> panel.','Set <b>Thickness</b> between 200 and 1000 nm: each thickness gives other colours.','Keep the film <b>IOR</b> around 1.33 (soapy water). The main IOR stays at 1.0: a bubble is a thin skin with air inside. Turn the view: the colours move.'],
+    why:'Thin Film works on glass and on metals (think of titanium or a burnt exhaust pipe). At 0 nm it is off.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:0, base:'#ffffff', roughness:0, transmission:1, ior:1 }, env:'studio', backdrop:true, settings:{ engine:'cycles' }, open:{ thinfilm:true } },
+    check:s => between(s.values.tfThick, 200, 1000) && between(s.values.tfIor, 1.2, 1.6),
+    solve:s => Object.assign(s.values, { tfThick:450, tfIor:1.33 }),
+   },
+   {
+    id:'l5', title:'Brushed metal',
+    text:'Brushed steel, a vinyl record or the bottom of a pan have tiny parallel grooves. The highlight stretches across the grooves instead of being round. That is anisotropic reflection. Make this steel look brushed.',
+    how:['Open the <b>Specular</b> panel and raise <b>Anisotropic</b> to 0.6 or more.','Keep <b>Metallic</b> at 1 and <b>Roughness</b> between 0.2 and 0.6: a mirror has nothing to stretch.','Change <b>Anisotropic Rotation</b> to turn the direction of the grooves. The direction follows the UVs (or a Tangent input).'],
+    why:'Anisotropy needs roughness and a direction. The Specular panel also has IOR Level (the strength of the reflection of non-metals) and Tint.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, values:{ metallic:1, base:'#c9cdd2', roughness:.35 }, env:'studio', open:{ specular:true } },
+    check:s => s.values.aniso >= .6 && s.values.metallic >= .95 && between(s.values.roughness, .2, .6),
+    solve:s => Object.assign(s.values, { aniso:.8, metallic:1, roughness:Math.min(.6, Math.max(.2, s.values.roughness)) }),
+   },
+  ],
+ },
+ {
+  id:'studio', name:'Studio', sub:'Every panel · presets · both engines',
+  steps:[
+   {
+    id:'s1', title:'Your own material',
+    text:'Free lab: the whole Principled BSDF, the render settings and the modifiers. Start from a preset, change it and compare EEVEE and Cycles. Try a jade dragon, frosted glass, a velvet sofa or a neon sign.',
+    how:['Choose a <b>Preset</b> at the top of the preview.','Open the panels of the Principled BSDF and change the values.','Use <b>Properties › Render</b> to compare EEVEE and Cycles, and add the Glare node for emissive presets.'],
+    why:'Real materials are combinations: coat on metal, sheen on a dark base, subsurface with a little coat. The presets are starting points, not answers.',
+    start:{ set:'plain', nodes:NODE_SETS.core, links:ONLY_OUTPUT, env:'studio', backdrop:true },
+    check:s => !!(s.flags.preset && s.flags.edited),
+    solve:s => { applyPreset(s, 'jade'); s.values.roughness = .25; s.flags.edited = true; },
    },
   ],
  },

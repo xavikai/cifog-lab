@@ -1,5 +1,5 @@
 import * as THREE from '../../vendor/three.module.js';
-import {COORDINATES,coordinateRoute} from './graph.js';
+import {COORDINATES,coordinateRoute} from './graph.js?v=5';
 
 // Same transform order as Blender: Point = Scale, Rotate (XYZ), Translate.
 export function mappingMatrix(type,location,rotation,scale){

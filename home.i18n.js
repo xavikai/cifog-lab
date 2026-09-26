@@ -91,4 +91,6 @@ export default {
   "CHECKER · PX/M · SET TD": { ca: "QUADRES · PX/M · SET TD", es: "CUADROS · PX/M · SET TD" },
   "16 / TEXTURING": { ca: "16 / TEXTURITZAT", es: "16 / TEXTURIZADO" },
   "4 labs": { ca: "4 labs", es: "4 labs" },
+  "Build PBR materials in a Blender-style Shader Editor with the full Principled BSDF: roughness, metal, colour spaces and masks, bump and real displacement, emission and Glare, glass in EEVEE and Cycles, coat, sheen, subsurface, thin film and brushed metal. Seven stages and a free Studio with presets.": { ca: "Construeix materials PBR en un Shader Editor com el de Blender amb tot el Principled BSDF: roughness, metall, espais de color i màscares, bump i displacement real, emissió i Glare, vidre a EEVEE i Cycles, coat, sheen, subsurface, thin film i metall raspallat. Set etapes i un Estudi lliure amb presets.", es: "Construye materiales PBR en un Shader Editor como el de Blender con todo el Principled BSDF: roughness, metal, espacios de color y máscaras, bump y displacement real, emisión y Glare, vidrio en EEVEE y Cycles, coat, sheen, subsurface, thin film y metal cepillado. Siete etapas y un Estudio libre con presets." },
+  "Principled BSDF · EEVEE and Cycles · displacement": { ca: "Principled BSDF · EEVEE i Cycles · displacement", es: "Principled BSDF · EEVEE y Cycles · displacement" },
 };

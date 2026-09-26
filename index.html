@@ -7,7 +7,7 @@
   <meta name="description" content="CIFOG Lab: hands-on browser experiments for learning 3D modeling, materials, lighting, rigging, animation and programming.">
   <title>CIFOG Lab · Learn by experimenting</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./home.css?v=16">
+  <link rel="stylesheet" href="./home.css?v=17">
 </head>
 <body>
   <header class="site-header">
@@ -56,7 +56,7 @@
         <div class="lab-grid">
         <article class="lab-card">
           <div class="card-visual" aria-hidden="true"><div class="card-sphere"></div><span class="card-wire wire-one"></span><span class="card-wire wire-two"></span><span class="card-node node-one">UV</span><span class="card-node node-two">Mapping</span><span class="card-node node-three">Material</span></div>
-          <div class="card-content"><div class="card-topline"><span class="lab-number">01 / 3D MATERIALS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Material Lab</h3><p>Build PBR materials in a Blender-style Shader Editor: roughness, metal or not, sRGB and Non-Color, masks and gloss maps, bump and displacement, emission, glass, coat and alpha cut-outs. Five stages, checked step by step.</p><div class="card-bottom"><span>Principled BSDF · colour spaces · displacement</span><a href="./labs/materials/" aria-label="Open Material Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">01 / 3D MATERIALS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Material Lab</h3><p>Build PBR materials in a Blender-style Shader Editor with the full Principled BSDF: roughness, metal, colour spaces and masks, bump and real displacement, emission and Glare, glass in EEVEE and Cycles, coat, sheen, subsurface, thin film and brushed metal. Seven stages and a free Studio with presets.</p><div class="card-bottom"><span>Principled BSDF · EEVEE and Cycles · displacement</span><a href="./labs/materials/" aria-label="Open Material Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
         </article>
         <article class="lab-card bake-card">
           <div class="card-visual bake-visual" aria-hidden="true"><svg viewBox="0 0 320 200"><g class="bk-cube"><path d="M40 70 90 45 140 70 90 95Z"/><path d="M40 70 90 95V155L40 130Z"/><path d="M140 70 90 95V155L140 130Z"/><circle cx="103" cy="112" r="4"/><circle cx="127" cy="100" r="4"/><circle cx="103" cy="140" r="4"/><circle cx="127" cy="128" r="4"/></g><g class="bk-rays"><path d="M150 100h26"/><path d="M150 88l26-8"/><path d="M150 112l26 8"/></g><rect class="bk-map" x="186" y="50" width="100" height="100" rx="3"/><rect class="bk-isl" x="196" y="60" width="80" height="80"/><circle class="bk-bolt" cx="212" cy="76" r="6"/><circle class="bk-bolt" cx="260" cy="76" r="6"/><circle class="bk-bolt" cx="212" cy="124" r="6"/><circle class="bk-bolt" cx="260" cy="124" r="6"/><rect class="bk-groove" x="222" y="86" width="28" height="28"/></svg><span class="uv-decor">NORMAL · AO · COLOR</span></div>
@@ -152,6 +152,6 @@
     <section class="method" aria-label="How to use the labs"><span class="method-label">A SIMPLE LOOP</span><div><b>01</b> Open a lab</div><span class="method-arrow" aria-hidden="true">→</span><div><b>02</b> Change something</div><span class="method-arrow" aria-hidden="true">→</span><div><b>03</b> Observe the result</div></section>
   </main>
   <footer><span>cifog <strong>LAB</strong></span><span>Interactive studies for the classroom</span><a href="#labs">Back to labs ↑</a></footer>
-  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js?v=16'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
+  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js?v=17'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
 </body>
 </html>
