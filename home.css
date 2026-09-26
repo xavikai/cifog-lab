@@ -39,3 +39,4 @@
 /* A more compact home page on computers: everything a bit smaller, and up to three labs per row. */
 @media(min-width:761px){html{zoom:.8}.labs-section{max-width:1760px}.lab-grid{grid-template-columns:repeat(auto-fill,minmax(400px,1fr))}.hero{min-height:470px}.hero-visual{min-height:450px}}
 @media(min-width:761px) and (max-width:1100px){html{zoom:.9}}
+.lx-visual{background:radial-gradient(circle at 50% 30%,#2a2830,#141418 70%)}.lx-visual svg{position:absolute;inset:4% 4% 10%;width:92%;height:86%}.lx-bar{stroke:#777;stroke-width:3}.lx-fix rect{fill:#2a2b30;stroke:#888}.lx-b1{fill:#ffc98f33}.lx-b2{fill:#2a4dff40}.lx-b3{fill:#ff8a1a38}.lx-floor{stroke:#5b4633;stroke-width:4}.lx-dmx rect{fill:#3a2e12;stroke:#ffb020}

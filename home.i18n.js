@@ -81,4 +81,9 @@ export default {
   "HSL · contrast · CMYK · type scale · tokens": { ca: "HSL · contrast · CMYK · escala tipogràfica · tokens", es: "HSL · contraste · CMYK · escala tipográfica · tokens" },
   "HSL · WCAG · CMYK · TYPE": { ca: "HSL · WCAG · CMYK · TIPOGRAFIA", es: "HSL · WCAG · CMYK · TIPOGRAFÍA" },
   "14 / GRAPHIC DESIGN": { ca: "14 / DISSENY GRÀFIC", es: "14 / DISEÑO GRÁFICO" },
+  "A small stage and a lighting rig driven like Lightkey: profiles, Fresnels, PCs, LED PARs and a moving head, DMX channels and values, patch and DIP switches, a face lit in lux with key, fill and backlight, colour mixing, pan and tilt, and a cue list with fades and GO.": { ca: "Un escenari petit i una instal·lació de llums controlada com Lightkey: retalls, Fresnels, PC, PAR LED i un capçal mòbil, canals i valors DMX, patch i interruptors DIP, una cara il·luminada en lux amb llum principal, farciment i contrallum, mescla de colors, pan i tilt, i una llista de memòries amb foses i GO.", es: "Un escenario pequeño y una instalación de luces controlada como Lightkey: recortes, Fresnels, PC, PAR LED y una cabeza móvil, canales y valores DMX, patch e interruptores DIP, una cara iluminada en lux con luz principal, relleno y contraluz, mezcla de colores, pan y tilt, y una lista de memorias con fundidos y GO." },
+  "Fixtures · DMX · patch · lux · cues": { ca: "Projectors · DMX · patch · lux · memòries", es: "Proyectores · DMX · patch · lux · memorias" },
+  "DMX · PATCH · CUES": { ca: "DMX · PATCH · MEMÒRIES", es: "DMX · PATCH · MEMORIAS" },
+  "15 / STAGE LIGHTING": { ca: "15 / IL·LUMINACIÓ ESCÈNICA", es: "15 / ILUMINACIÓN ESCÉNICA" },
+  "2 labs": { ca: "2 labs", es: "2 labs" },
 };
