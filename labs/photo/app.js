@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import * as O from './optics.js?v=1';
 import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, WINDMILL, IMAGE_H } from './stages.js?v=3';
-import { buildScene, PhotoCamera } from './photo.js?v=4';
+import { buildScene, PhotoCamera } from './photo.js?v=5';
 import { buildDslr, shotTimeline } from './dslr.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
 import dictionary from './i18n.js?v=4';
