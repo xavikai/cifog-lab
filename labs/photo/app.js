@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import * as O from './optics.js?v=1';
-import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, CYCLIST, IMAGE_H } from './stages.js?v=2';
-import { buildScene, PhotoCamera } from './photo.js?v=3';
+import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, WINDMILL, IMAGE_H } from './stages.js?v=3';
+import { buildScene, PhotoCamera } from './photo.js?v=4';
 import { buildDslr, shotTimeline } from './dslr.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=2';
+import dictionary from './i18n.js?v=3';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -56,10 +56,9 @@ function photoParams(d) {
 function renderPhoto(samples) {
   const d = S.d, W = d.width, H = IMAGE_H;
   world.setLook(step().scene?.light || 'shade');
-  world.cyclist.visible = !!step().scene?.cyclist;
   photoRenderer.setSize(W, H, false);
   photoCanvas.style.aspectRatio = `${W} / ${H}`;
-  pcam.render(world, photoParams(d), { samples, width: W, height: H, cyclistSpeed: CYCLIST.speed, seed });
+  pcam.render(world, photoParams(d), { samples, width: W, height: H, spin: WINDMILL.omega, seed });
   drawHistogram(); drawMotion();
 }
 let hqTimer, pending = false;
@@ -87,8 +86,8 @@ function drawHistogram() {
 }
 $('#o-hist').onchange = () => drawHistogram();
 
-// Motion overlay: where the cyclist was when the shutter opened and when it closed, and how far the
-// camera turned (shake). The blur in the photo is exactly the distance between the two outlines.
+// Motion overlay: where a sail of the windmill was when the shutter opened and when it closed, and how far
+// the camera turned (shake). The blur at the tips is exactly the arc between the two positions.
 const motionCanvas = $('#motion'), motionCtx = motionCanvas.getContext('2d');
 function projectBox(box, cam, w, h) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; const v = new THREE.Vector3();
@@ -114,7 +113,7 @@ function arrow(g, x0, y0, x1, y1, color) {
 function drawMotion() {
   const d = S.d, sc = step().scene || {};
   const showShake = !step().blender && !d.tripod && d.shakePx >= 0.5;
-  const relevant = !!sc.cyclist || showShake;
+  const relevant = !!step().motion || showShake;
   $('#motion-toggle').hidden = !relevant;
   const on = relevant && $('#o-motion').checked;
   motionCanvas.hidden = !on;
@@ -126,40 +125,44 @@ function drawMotion() {
   const g = motionCtx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
   const k = w / d.width; // display pixels per photo pixel
   const time = O.shutterLabel(d.t || 0);
-  if (sc.cyclist) {
+  if (step().motion) {
     const cam = pcam.baseCamera(photoParams(d), d.width / IMAGE_H);
-    const box = new THREE.Box3().setFromObject(world.cyclist), half = CYCLIST.speed * (d.t || 0) / 2;
-    const at = dx => projectBox(box.clone().translate(new THREE.Vector3(dx, 0, 0)), cam, w, h);
-    const a = at(-half), b = at(half), metres = 2 * half;
+    const hubW = new THREE.Vector3(WINDMILL.x, WINDMILL.hub, -WINDMILL.behind + 0.42);
+    const toScr = v => { const p = v.clone().project(cam); return [(p.x + 1) / 2 * w, (1 - p.y) / 2 * h]; };
+    const [hx, hy] = toScr(hubW), [rx] = toScr(hubW.clone().add(new THREE.Vector3(WINDMILL.r, 0, 0))), R = Math.abs(rx - hx);
+    const sweep = WINDMILL.omega * (d.t || 0), deg = sweep * 180 / Math.PI;
+    const metres = WINDMILL.omega * WINDMILL.r * (d.t || 0);
     const dist = metres >= 1 ? `${metres.toFixed(1)} m` : `${(metres * 100).toFixed(metres < 0.1 ? 1 : 0)} cm`;
-    const px = d.motionPx.toFixed(d.motionPx < 10 ? 1 : 0);
-    g.lineWidth = 1.5;
+    const px = d.motionPx.toFixed(d.motionPx < 10 ? 1 : 0), angle = deg >= 10 ? `${Math.round(deg)}°` : `${deg.toFixed(1)}°`;
+    // the top sail, seen from the camera: it turns clockwise
+    const mid = -Math.PI / 2 - world.phase, a0 = mid - Math.min(sweep, 2 * Math.PI) / 2, a1 = mid + Math.min(sweep, 2 * Math.PI) / 2;
+    const ray = (a, color) => { g.strokeStyle = color; g.lineWidth = 2; g.setLineDash([]); g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx + R * Math.cos(a), hy + R * Math.sin(a)); g.stroke(); };
+    const labelY = Math.max(14, hy - R - 16);
     if (!d.t) {
-      g.strokeStyle = '#56d364'; g.setLineDash([5, 4]); g.strokeRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
-      tag(g, t('Motion Blur off: the render is a single instant'), (a.x0 + a.x1) / 2, Math.max(12, a.y0 - 12), '#56d364');
+      ray(mid, '#56d364');
+      tag(g, t('Motion Blur off: the render is a single instant'), hx, labelY, '#56d364');
     } else if (d.motionPx < 3) {
-      g.strokeStyle = '#56d364'; g.setLineDash([5, 4]); g.strokeRect(a.x0, a.y0, b.x1 - a.x0, b.y1 - a.y0);
-      tag(g, tr('Frozen: in {t} s the bike moves {d} → {px} px', { t: time, d: dist, px }), (a.x0 + b.x1) / 2, Math.max(12, a.y0 - 12), '#56d364');
+      ray(mid, '#56d364');
+      tag(g, tr('Frozen: in {t} s the sails turn {a}, the tips move {d} → {px} px', { t: time, a: angle, d: dist, px }), hx, labelY, '#56d364', 'left');
     } else {
-      g.setLineDash([5, 4]);
-      g.strokeStyle = '#4aa3ff'; g.strokeRect(a.x0, a.y0, a.x1 - a.x0, a.y1 - a.y0);
-      g.strokeStyle = '#ffd24a'; g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-      const y = Math.max(a.y0, 30) - 22;
-      tag(g, t('Shutter opens'), a.x0, a.y1 + 12, '#4aa3ff', 'left');
-      tag(g, t('Shutter closes'), b.x1, b.y1 + 28, '#ffd24a', 'right');
-      const cy = (a.y0 + a.y1) / 2;
-      arrow(g, (a.x0 + a.x1) / 2, cy, (b.x0 + b.x1) / 2, cy, '#ffffff');
-      tag(g, tr('Shutter open {t} s: the bike moves {d} → a {px} px streak', { t: time, d: dist, px }), ((a.x0 + a.x1) / 2 + (b.x0 + b.x1) / 2) / 2, Math.max(12, y), '#ffffff');
+      g.fillStyle = 'rgba(255,210,74,.18)'; g.beginPath(); g.moveTo(hx, hy); g.arc(hx, hy, R, a0, a1); g.closePath(); g.fill();
+      ray(a0, '#4aa3ff'); ray(a1, '#ffd24a');
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.arc(hx, hy, R + 5, a0, a1); g.stroke();
+      const e = [hx + (R + 5) * Math.cos(a1), hy + (R + 5) * Math.sin(a1)];
+      arrow(g, e[0] - 6 * Math.cos(a1 + Math.PI / 2), e[1] - 6 * Math.sin(a1 + Math.PI / 2), e[0], e[1], '#ffffff');
+      tag(g, t('Shutter opens'), hx + R + 12, hy - 11, '#4aa3ff', 'left');
+      tag(g, t('Shutter closes'), hx + R + 12, hy + 11, '#ffd24a', 'left');
+      tag(g, tr('Shutter open {t} s: the sails turn {a}, the tips move {d} → {px} px of blur', { t: time, a: angle, d: dist, px }), Math.max(6, hx - R), Math.min(h - 14, hy + R + 22), '#ffffff', 'left');
     }
   }
   if (showShake) {
     // The whole image slides this much while the shutter is open.
-    const dir = pcam.lastShakeDir ?? 0, L = Math.min(d.shakePx * k, h * 0.4), cx = 22, cy = 44;
+    const dir = pcam.lastShakeDir ?? 0, L = Math.min(d.shakePx * k, h * 0.4), cx = 22, cy = h - 42;
     const ex = cx + Math.cos(dir) * Math.max(L, 2), ey = cy + Math.sin(dir) * Math.max(L, 2);
     g.strokeStyle = '#ff7b72'; g.lineWidth = 1.5; g.setLineDash([]);
     g.beginPath(); g.arc(cx, cy, 5, 0, Math.PI * 2); g.moveTo(cx - 9, cy); g.lineTo(cx + 9, cy); g.moveTo(cx, cy - 9); g.lineTo(cx, cy + 9); g.stroke();
     if (L > 3) arrow(g, cx, cy, ex, ey, '#ff7b72');
-    tag(g, tr('Camera shake in {t} s: the whole photo slides {px} px', { t: time, px: d.shakePx.toFixed(1) }), 10, 18, d.shakePx <= 2 ? '#56d364' : '#ff7b72', 'left');
+    tag(g, tr('Camera shake in {t} s: the whole photo slides {px} px', { t: time, px: d.shakePx.toFixed(1) }), 10, h - 16, d.shakePx <= 2 ? '#56d364' : '#ff7b72', 'left');
   }
 }
 $('#o-motion').onchange = () => drawMotion();
@@ -302,7 +305,7 @@ function readoutHtml() {
   h += row('Depth of field', isFinite(d.N) ? `${d.dof.near.toFixed(2)} – ${isFinite(d.dof.far) ? d.dof.far.toFixed(1) : '∞'} m` : t('all sharp'));
   h += row('The person', t(d.inFocus ? 'in focus' : 'out of focus'), d.inFocus);
   h += row('Background blur', `${d.bgBlurPx.toFixed(1)} px`);
-  if (sc.cyclist) h += row('Motion blur', `${d.motionPx.toFixed(1)} px`);
+  h += row('Motion blur (sail tips)', `${d.motionPx.toFixed(1)} px`);
   if (!bl) h += row('Camera shake', `${d.shakePx.toFixed(1)} px`, d.shakePx <= 2);
   if (!bl && !d.tripod) h += row('Hand-held limit', O.shutterLabel(O.handheldLimit(d.f, d.sensor)));
   h += row('The person fills', `${Math.round(d.coverage * 100)}%`);
@@ -423,9 +426,9 @@ function renderReference() {
   const box = $('#reference');
   if (!step().blender) { box.hidden = true; return; }
   const ts = targetSettings(step()), d = derive(ts, step()), c = $('#ref');
-  world.setLook(step().scene?.light || 'shade'); world.cyclist.visible = !!step().scene?.cyclist;
+  world.setLook(step().scene?.light || 'shade');
   photoRenderer.setSize(d.width, IMAGE_H, false);
-  pcam.render(world, photoParams(d), { samples: 40, width: d.width, height: IMAGE_H, cyclistSpeed: CYCLIST.speed, seed: 3 });
+  pcam.render(world, photoParams(d), { samples: 40, width: d.width, height: IMAGE_H, spin: WINDMILL.omega, seed: 3 });
   c.width = 240; c.height = Math.round(240 * IMAGE_H / d.width);
   c.getContext('2d').drawImage(photoCanvas, 0, 0, c.width, c.height);
   box.hidden = false;

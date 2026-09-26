@@ -3,7 +3,7 @@
 // (each one from a different point of the aperture and a different instant of the exposure),
 // the way an accumulation buffer or a path tracer does. Exposure and ISO noise are applied at the end.
 import * as THREE from 'three';
-import { SUBJECT_H, BACKGROUND, CYCLIST } from './stages.js';
+import { SUBJECT_H, BACKGROUND, WINDMILL } from './stages.js';
 import { SHAKE_RATE } from './optics.js';
 
 const canvasTexture = (w, h, draw, repeat) => {
@@ -71,19 +71,25 @@ export function buildScene() {
   for (const [x, z, s] of [[-7, -16, 1.2], [6, -18, 1.4], [-2.5, -22, 1.5], [10, -26, 1.6], [-12, -28, 1.7], [2, -34, 1.9]]) tree(x, z, s);
   const windows = canvasTexture(256, 256, (g, w, h) => { g.fillStyle = '#b9b2a4'; g.fillRect(0, 0, w, h); g.fillStyle = '#4c5866'; for (let i = 0; i < 6; i++) for (let j = 0; j < 8; j++) g.fillRect(16 + i * 40, 12 + j * 30, 24, 18); });
   for (const [x, w, h] of [[-14, 10, 12], [0, 12, 16], [14, 10, 10]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 6), new THREE.MeshStandardMaterial({ map: windows, roughness: 0.9 })); b.position.set(x, h / 2, -48); scene.add(b); }
-  // Cyclist, CYCLIST.behind m behind the person, riding along X
-  const cyclist = new THREE.Group();
-  const frameM = std(0x2f8fd6, 0.4), tyre = std(0x1a1a1a, 0.9);
-  for (const x of [-0.55, 0.55]) { const w = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 8, 24), tyre); w.position.set(x, 0.36, 0); cyclist.add(w); for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.012, 0.012), std(0xcccccc, 0.3)); sp.position.copy(w.position); sp.rotation.z = k * Math.PI / 4; cyclist.add(sp); } }
-  const bar = (a, b) => { const v = new THREE.Vector3().subVectors(b, a), m = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, v.length(), 6), frameM); m.position.copy(a).addScaledVector(v, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.normalize()); cyclist.add(m); };
-  const P = (x, y) => new THREE.Vector3(x, y, 0);
-  bar(P(-0.55, 0.36), P(-0.05, 0.36)); bar(P(-0.05, 0.36), P(0.35, 0.85)); bar(P(-0.55, 0.36), P(-0.2, 0.85)); bar(P(-0.2, 0.85), P(0.35, 0.85)); bar(P(0.35, 0.85), P(0.55, 0.36)); bar(P(-0.05, 0.36), P(-0.2, 0.85));
-  const rider = std(0xf2c230, 0.6);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.45, 6, 12), rider); body.position.set(0, 1.2, 0); body.rotation.z = -0.6; cyclist.add(body);
-  const rhead = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), std(0xeeeeee, 0.3)); rhead.position.set(0.32, 1.52, 0); cyclist.add(rhead);
-  const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.55, 6, 12), std(0x222222)); leg.position.set(-0.08, 0.72, 0.08); leg.rotation.z = 0.3; cyclist.add(leg);
-  cyclist.position.set(CYCLIST.x, 0, -CYCLIST.behind);
-  scene.add(cyclist);
+  // A small windmill, WINDMILL.behind m behind the person: its four sails always turn.
+  const windmill = new THREE.Group();
+  const stone = std(0xd9cdb4, 0.85), roofM = std(0x7a3b2a, 0.7), wood = std(0x5a4232, 0.8);
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.4, WINDMILL.hub + 0.1, 16), stone); tower.position.y = (WINDMILL.hub + 0.1) / 2; windmill.add(tower);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.45, 16), roofM); roof.position.y = WINDMILL.hub + 0.3; windmill.add(roof);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.5, 0.05), wood); door.position.set(0, 0.25, 0.38); windmill.add(door);
+  const blades = new THREE.Group(); blades.position.set(0, WINDMILL.hub, 0.42);
+  const sailW = std(0xf4f1ea, 0.6), sailR = std(0xc8372d, 0.6);
+  for (let k = 0; k < 4; k++) {
+    const arm = new THREE.Group(); arm.rotation.z = k * Math.PI / 2;
+    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.05, WINDMILL.r, 0.04), wood); spar.position.y = WINDMILL.r / 2; arm.add(spar);
+    const sail = new THREE.Mesh(new THREE.BoxGeometry(0.2, WINDMILL.r * 0.78, 0.02), k % 2 ? sailR : sailW); sail.position.set(0.11, WINDMILL.r * 0.58, 0); arm.add(sail);
+    blades.add(arm);
+  }
+  const hubM = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.12, 12), wood); hubM.rotation.x = Math.PI / 2; blades.add(hubM);
+  windmill.add(blades);
+  windmill.position.set(WINDMILL.x, 0, -WINDMILL.behind);
+  scene.add(windmill);
+  const PHASE = 0.35; blades.rotation.z = PHASE;
 
   function setLook(kind) {
     const L = LIGHT_LOOKS[kind] || LIGHT_LOOKS.shade;
@@ -93,7 +99,7 @@ export function buildScene() {
     lampMat.color.setRGB(1.0 * L.lamps, 0.78 * L.lamps, 0.45 * L.lamps);
   }
   setLook('shade');
-  return { scene, person, cyclist, setLook, pickables: [person, ground, ...posters, lamps, cyclist] };
+  return { scene, person, windmill, blades, phase: PHASE, setLook, pickables: [person, ground, ...posters, lamps, windmill] };
 }
 
 // ─── The physical camera ─────────────────────────────────────────────────────
@@ -135,7 +141,7 @@ export class PhotoCamera {
     this.acc = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: false });
   }
   // p: { f (mm), sensor {w, h}, N (Infinity = pinhole), focus (m), t (s), tripod, gain, iso, dist (m) }
-  render(world, p, { samples = 32, width, height, target = null, cyclistSpeed = 0, seed = 0 } = {}) {
+  render(world, p, { samples = 32, width, height, target = null, spin = 0, seed = 0 } = {}) {
     const r = this.r, cam = this.cam;
     this.ensureTargets(width, height);
     const prevTarget = r.getRenderTarget(), prevAuto = r.autoClear;
@@ -144,7 +150,6 @@ export class PhotoCamera {
     const halfW = near * p.sensor.w / (2 * p.f), halfH = near * p.sensor.h / (2 * p.f);
     const R = isFinite(p.N) ? (p.f / p.N) / 2000 : 0; // aperture radius in metres
     const s = Math.max(0.1, p.focus);
-    const base = world.cyclist.position.x;
     const rnd = mulberry(seed * 7919 + 1);
     const shakeDir = rnd() * Math.PI * 2, shake = p.tripod ? 0 : SHAKE_RATE;
     this.lastShakeDir = shakeDir;
@@ -154,7 +159,7 @@ export class PhotoCamera {
       const ox = rr * Math.cos(th), oy = rr * Math.sin(th);
       // instant of the exposure (stratified, in a different order than the lens samples)
       const tau = p.t ? (((k * 7) % samples) + rnd()) / samples * p.t - p.t / 2 : 0;
-      world.cyclist.position.x = base + cyclistSpeed * tau;
+      world.blades.rotation.z = world.phase - spin * tau; // the sails turn clockwise
       // camera shake: the camera turns slowly while the shutter is open
       const ang = shake * (tau + p.t / 2);
       cam.position.set(eye.x + ox, eye.y + oy, eye.z);
@@ -169,7 +174,7 @@ export class PhotoCamera {
       this.accMat.uniforms.t.value = this.sample.texture; this.accMat.uniforms.w.value = 1 / samples;
       this.quad.material = this.accMat; r.autoClear = false; r.setRenderTarget(this.acc); r.render(this.quadScene, this.ortho); r.autoClear = prevAuto;
     }
-    world.cyclist.position.x = base;
+    world.blades.rotation.z = world.phase;
     this.finalMat.uniforms.t.value = this.acc.texture;
     this.finalMat.uniforms.gain.value = p.gain;
     this.finalMat.uniforms.noise.value = p.iso ? 0.011 * Math.sqrt(p.iso / 100) - 0.006 : 0;

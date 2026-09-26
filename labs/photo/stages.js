@@ -4,7 +4,9 @@ import * as O from './optics.js';
 export const SUBJECT_H = 1.75;     // the person, in metres
 export const BACKGROUND = 10;      // the string of lights behind the person (m)
 export const FACE = 0.15;          // the face is this much closer to the camera than the person's feet
-export const CYCLIST = { behind: 3, speed: 6, x: -1.6 }; // x: where it is halfway through the exposure
+// A small windmill 3 m behind the person, on the left: its sails always turn (omega in rad/s, r = sail length).
+export const WINDMILL = { behind: 3, x: -1.75, hub: 1.55, r: 0.75, omega: 16 / 3 }; // tips at 4 m/s
+export const tipSpeed = () => WINDMILL.omega * WINDMILL.r; // m/s at the tips of the sails
 export const IMAGE_H = 512;
 export const imageWidth = sensor => Math.round(IMAGE_H * sensor.w / sensor.h);
 
@@ -33,7 +35,7 @@ function finish(d, scene) {
   d.subjectBlurPx = isFinite(d.N) ? px(O.blurDisc(d.f, d.N, d.focus, d.dist - FACE)) : 0;
   d.inFocus = d.subjectBlurPx <= px(O.acceptableCoC(d.sensor)) * 2;
   d.bgBlurPx = isFinite(d.N) ? px(O.blurDisc(d.f, d.N, d.focus, d.dist + BACKGROUND)) : 0;
-  d.motionPx = scene.cyclist ? px(O.motionBlur(CYCLIST.speed, d.t, d.dist + CYCLIST.behind, d.f)) : 0;
+  d.motionPx = px(O.motionBlur(tipSpeed(), d.t, d.dist + WINDMILL.behind, d.f)); // at the tips of the sails
   d.shakePx = px(O.shakeBlur(d.t, d.f, d.tripod));
   d.coverage = O.coverage(SUBJECT_H, d.dist, d.f, d.sensor);
   d.equivalent = O.equivalentFocal(d.f, d.sensor);
@@ -67,21 +69,21 @@ export const STAGES = [
         check: d => d.N <= 2.8 && d.inFocus && d.bgBlurPx >= 12 && okExposure(d),
       },
       {
-        id: 'e3', title: 'Freeze the motion',
-        text: 'A cyclist rides past at 6 m/s. With a slow shutter the bike becomes a streak. Use shutter priority (Tv): you choose the speed, the camera opens the aperture to compensate. Freeze the wheels: the streak must be under 1.5 pixels.',
-        how: ['The mode is <b>Tv</b>: choose a faster <b>shutter speed</b>.', 'Watch the <b>Motion</b> outlines on the photo: they show where the bike was when the shutter opened and when it closed.', 'If the camera runs out of aperture (the meter goes negative), raise the ISO.'],
+        id: 'e3', motion: true, title: 'Freeze the motion',
+        text: 'The windmill behind the person turns fast: the tips of its sails move at 4 m/s. With a slow shutter the sails become a blurred disc. Use shutter priority (Tv): you choose the speed, the camera opens the aperture to compensate. Freeze the sails: the blur at the tips must be under 1.5 pixels.',
+        how: ['The mode is <b>Tv</b>: choose a faster <b>shutter speed</b>.', 'Watch the <b>Motion</b> overlay on the photo: it shows how far a sail turns while the shutter is open.', 'If the camera runs out of aperture (the meter goes negative), raise the ISO.'],
         why: 'Sport and wildlife photography need fast shutter speeds; the aperture and ISO pay for them.',
-        scene: { light: 'shade', cyclist: true },
+        scene: { light: 'shade' },
         start: { mode: 'Tv', N: 8, t: 1 / 60, iso: 100, f: 50, focus: 6, dist: 4 },
         lock: ['mode', 'sensor', 'dist'],
         check: d => d.t <= 1 / 1000 && d.motionPx <= 1.5 && okExposure(d),
       },
       {
-        id: 'e4', title: 'Show the movement',
-        text: 'Now the opposite: a long exposure on a tripod, so the cyclist becomes a streak and everything else stays sharp. In Manual, use 1/15 s or slower and still get a correct exposure.',
+        id: 'e4', motion: true, title: 'Show the movement',
+        text: 'Now the opposite: a long exposure on a tripod, so the sails of the windmill blur into a disc and everything else stays sharp. In Manual, use 1/15 s or slower and still get a correct exposure.',
         how: ['Turn on <b>Tripod</b>.', 'Set the shutter to 1/15 or slower.', 'Close the aperture (f/8, f/11…) and use ISO 100 so the photo is not too bright.'],
         why: 'Motion blur tells the viewer that something moves. Slow shutters need a tripod, and in daylight a small aperture.',
-        scene: { light: 'dusk', cyclist: true },
+        scene: { light: 'dusk' },
         start: { mode: 'M', N: 4, t: 1 / 250, iso: 400, f: 50, focus: 6, dist: 4, tripod: false },
         lock: ['mode', 'sensor', 'dist'],
         check: d => d.t >= 1 / 15 && d.tripod && d.motionPx >= 20 && okExposure(d),
@@ -156,11 +158,11 @@ export const STAGES = [
         check: (d, f, s) => s.blender.dof && near(s.blender.focusDist, 4, 0.3) && near(s.blender.fstop, 2, 0.25),
       },
       {
-        id: 'b3', title: 'Motion blur in frames',
-        text: 'Blender measures the shutter in frames, not seconds: seconds = Shutter ÷ frame rate. The reference photo of the cyclist was shot at 1/100 s, and the scene runs at 25 fps. Set the Shutter that gives the same blur.',
+        id: 'b3', motion: true, title: 'Motion blur in frames',
+        text: 'Blender measures the shutter in frames, not seconds: seconds = Shutter ÷ frame rate. The reference photo of the windmill was shot at 1/100 s, and the scene runs at 25 fps. Set the Shutter that gives the same blur.',
         how: ['In <b>Output Properties</b>, set <b>Frame Rate</b> to 25 fps.', 'In <b>Render Properties › Motion Blur</b>, turn it on.', 'Shutter = 1/100 × 25 = <b>0.25</b> frames.'],
         why: 'The default 0.5 frames is the "180° shutter" of film cameras: 1/48 s at 24 fps.',
-        blender: true, scene: { light: 'shade', cyclist: true },
+        blender: true, scene: { light: 'shade' },
         start: { dist: 4 }, target: { mblur: true, shutter: 0.25, fps: 25 },
         check: (d, f, s) => s.blender.mblur && s.blender.fps === 25 && near(s.blender.shutter, 0.25, 0.02),
       },
