@@ -55,3 +55,10 @@ Each step shows a reference render to match.
 - Only full stops, no 1/3 stops; no exposure compensation, metering modes or white balance.
 - Diffraction, lens distortion and rolling shutter are not simulated.
 - The aperture is circular in the photo (7 blades only in the 3D model).
+
+## Stage "Colour and filters" (white balance and ND)
+
+- Every scene light has a colour temperature: full sun 5500 K, shade 7000 K, overcast 6500 K, dusk 4500 K, indoors 3000 K, night street 2700 K.
+- **White balance** (Auto, Tungsten 3200, Fluorescent 4000, Daylight 5500, Cloudy 6500, Shade 7500, or Kelvin 2500–10000): the photo gets a colour cast = colour of the light ÷ colour of the white balance (Tanner Helland's fit of the Planck curve, in linear RGB, same brightness). Auto matches the light, so there is no cast.
+- **ND filters** (ND8, ND64, ND1000 = 3, 6, 10 stops) lower the scene EV used by the meter and by the exposure.
+- Steps: w1 set the white balance by hand indoors (within 400 K of the light); w2 warm the photo on purpose in the sun (6800–10000 K); n1 1/8 s at f/22 in full sun with an ND8 on a tripod (the sails blur); n2 f/2 at noon in Av, where 1/4000 s is not enough without an ND.

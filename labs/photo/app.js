@@ -1,12 +1,12 @@
 // Photo Lab: a DSLR cut in half, the photo it takes, and Blender's camera.
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import * as O from './optics.js?v=1';
-import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, WINDMILL, IMAGE_H } from './stages.js?v=3';
+import * as O from './optics.js?v=2';
+import { STAGES, derive, startSettings, targetSettings, SOLUTIONS, WINDMILL, IMAGE_H } from './stages.js?v=4';
 import { buildScene, PhotoCamera } from './photo.js?v=6';
 import { buildDslr, shotTimeline } from './dslr.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=4';
+import dictionary from './i18n.js?v=5';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -51,7 +51,7 @@ const world = buildScene();
 const pcam = new PhotoCamera(photoRenderer);
 let seed = 1;
 function photoParams(d) {
-  return { f: d.f, sensor: d.sensor, N: d.N, focus: d.focus, t: d.t, tripod: d.tripod, gain: d.gain, iso: step().blender ? 0 : d.iso, dist: d.dist };
+  return { f: d.f, sensor: d.sensor, N: d.N, focus: d.focus, t: d.t, tripod: d.tripod, gain: d.gain, tint: d.tint, iso: step().blender ? 0 : d.iso, dist: d.dist };
 }
 // The photo pane is a live view: the windmill keeps turning, so the photo is rendered again and again with
 // the time of each frame (as the screen of a mirrorless camera). Shoot keeps one frame in full quality.
@@ -306,10 +306,14 @@ function renderProps() {
   let h = `<div class="panel"><h4>${esc(t('Mode'))}</h4><div class="seg" role="group">${['M', 'Av', 'Tv'].map(m => `<button type="button" data-mode="${m}" aria-pressed="${s.mode === m}"${locked('mode') && s.mode !== m ? ` disabled title="${esc(t(LOCK_TITLE))}"` : ''}>${m}</button>`).join('')}</div>
     <p class="sb-empty">${esc(t(s.mode === 'M' ? 'Manual: you choose aperture, shutter and ISO.' : s.mode === 'Av' ? 'Aperture priority: you choose the aperture, the camera the shutter speed.' : 'Shutter priority: you choose the shutter speed, the camera the aperture.'))}</p></div>`;
   h += `<div class="panel"><h4>${esc(t('Exposure'))}<small>${esc(tr('Light: {l} · EV {e}', { l: t(O.LIGHTS[step().scene?.light || 'shade'].name), e: d.ev }))}</small></h4>
-    ${stepper('N', 'Aperture', `f/${d.N}`, s.mode === 'Tv', s.mode === 'Tv' ? 'auto' : '')}
-    ${stepper('t', 'Shutter', O.shutterLabel(d.t), s.mode === 'Av', s.mode === 'Av' ? 'auto' : '')}
-    ${stepper('iso', 'ISO', d.iso, false)}
+    ${stepper('N', 'Aperture', `f/${d.N}`, s.mode === 'Tv' || locked('N'), s.mode === 'Tv' ? 'auto' : '')}
+    ${stepper('t', 'Shutter', O.shutterLabel(d.t), s.mode === 'Av' || locked('t'), s.mode === 'Av' ? 'auto' : '')}
+    ${stepper('iso', 'ISO', d.iso, locked('iso'))}
     <label class="live-toggle tripod${locked('tripod') ? ' disabled' : ''}"><input type="checkbox" data-set="tripod"${s.tripod ? ' checked' : ''}${locked('tripod') ? ' disabled' : ''}><span class="switch" aria-hidden="true"></span>${esc(t('Tripod'))}</label></div>`;
+  h += `<div class="panel"><h4>${esc(t('Colour & filter'))}<small>${esc(tr('Light: {k} K', { k: d.cct }))}</small></h4>
+    <label class="sel-row"><span>${esc(t('White balance'))}</span><select data-set="wb">${Object.entries(O.WB_PRESETS).map(([k, v]) => `<option value="${k}"${(s.wb || 'auto') === k ? ' selected' : ''}>${esc(t(v.name))}${v.k ? ` (${v.k} K)` : ''}</option>`).join('')}</select></label>
+    <label class="sl-row${s.wb === 'custom' ? '' : ' disabled'}"><span>${esc(t('Kelvin'))}</span><input type="range" min="2500" max="10000" step="100" data-set="kelvin" value="${s.kelvin || 5500}"${s.wb === 'custom' ? '' : ' disabled'}><output>${s.wb === 'custom' ? s.kelvin : d.wbK} K</output></label>
+    <label class="sel-row"><span>${esc(t('ND filter'))}</span><select data-set="nd">${Object.entries(O.ND_FILTERS).map(([k, v]) => `<option value="${k}"${(s.nd || 'none') === k ? ' selected' : ''}>${esc(t(v.name))}</option>`).join('')}</select></label></div>`;
   h += `<div class="panel"><h4>${esc(t('Lens & sensor'))}</h4>
     <label class="sl-row"><span>${esc(t('Focal length'))}</span><input type="range" min="16" max="200" step="1" data-set="f" value="${s.f}"${locked('f') ? ' disabled' : ''}><output>${s.f} mm</output></label>
     <label class="sl-row"><span>${esc(t('Focus'))}</span><input type="range" min="0" max="1" step="0.001" data-set="focus" value="${logSlider.toPos(Math.min(50, s.focus)).toFixed(3)}"${locked('focus') ? ' disabled' : ''}><output>${s.focus >= 49.9 ? '∞' : s.focus.toFixed(2) + ' m'}</output></label>
@@ -327,6 +331,8 @@ function readoutHtml() {
   h += row('The person', t(d.inFocus ? 'in focus' : 'out of focus'), d.inFocus);
   h += row('Background blur', `${d.bgBlurPx.toFixed(1)} px`);
   h += row('Motion blur (sail tips)', `${d.motionPx.toFixed(1)} px`);
+  if (!bl) h += row('White balance', `${d.wbK} K · ${t('light')} ${d.cct} K`, step().colour && step().id === 'w1' ? Math.abs(d.wbK - d.cct) <= 400 : null);
+  if (!bl && d.nd) h += row('ND filter', `−${d.nd} ${t('stops')}`);
   if (!bl) h += row('Camera shake', `${d.shakePx.toFixed(1)} px`, d.shakePx <= 2);
   if (!bl && !d.tripod) h += row('Hand-held limit', O.shutterLabel(O.handheldLimit(d.f, d.sensor)));
   h += row('The person fills', `${Math.round(d.coverage * 100)}%`);
@@ -359,6 +365,7 @@ function renderBlenderProps() {
 }
 const LISTS = { N: O.APERTURES, t: O.SHUTTERS, iso: O.ISOS };
 function stepSetting(k, dir) {
+  if (locked(k)) return msg('Fixed in this step.');
   const list = LISTS[k], cur = S.s[k];
   let i = list.findIndex(v => Math.abs(Math.log2(v / cur)) < 0.01); if (i < 0) i = 0;
   // aperture: + = smaller opening (bigger f-number); shutter: + = faster; ISO: + = higher
@@ -378,7 +385,7 @@ $('#props').addEventListener('input', e => {
   if (k === 'focus') S.s.focus = Math.round(logSlider.toVal(v) * 100) / 100;
   else S.s[k] = v;
   if (k === 'dist' && stage().id === 'lens') S.s.focus = v; // continuous autofocus keeps the person sharp
-  e.target.nextElementSibling.textContent = k === 'f' ? `${v} mm` : k === 'focus' ? (S.s.focus >= 49.9 ? '∞' : S.s.focus.toFixed(2) + ' m') : `${v.toFixed(1)} m`;
+  e.target.nextElementSibling.textContent = k === 'kelvin' ? `${v} K` : k === 'f' ? `${v} mm` : k === 'focus' ? (S.s.focus >= 49.9 ? '∞' : S.s.focus.toFixed(2) + ' m') : `${v.toFixed(1)} m`;
   changed(false);
 });
 $('#props').addEventListener('change', e => {
@@ -489,8 +496,4 @@ document.addEventListener('keydown', e => {
 new ResizeObserver(resize).observe(dslrHost);
 onLangChange(() => renderAll());
 enterStep(); resize(); translateTitles();
-world.ready.then(() => {
-  if (step().blender) renderReference();
-  if (!$('#o-live').checked) renderPhoto(40);
-});
 window.__photo = { S, O, STAGES, derive, shoot, renderPhoto, dslr, renderDslr }; // for tests and curious students

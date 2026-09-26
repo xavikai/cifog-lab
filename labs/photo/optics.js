@@ -17,13 +17,48 @@ for (const s of Object.values(SENSORS)) s.crop = Math.round(FF_DIAG / Math.hypot
 
 // Scene light, as an exposure value at ISO 100 (the "sunny 16" rule: EV 15 in full sun).
 export const LIGHTS = {
-  sunny: { name: 'Full sun', ev: 15 },
-  shade: { name: 'Bright shade', ev: 13 },
-  cloudy: { name: 'Overcast', ev: 12 },
-  dusk: { name: 'Dusk', ev: 10 },
-  indoor: { name: 'Indoors', ev: 7 },
-  night: { name: 'Night street', ev: 4 },
+  sunny: { name: 'Full sun', ev: 15, cct: 5500 },
+  shade: { name: 'Bright shade', ev: 13, cct: 7000 },
+  cloudy: { name: 'Overcast', ev: 12, cct: 6500 },
+  dusk: { name: 'Dusk', ev: 10, cct: 4500 },
+  indoor: { name: 'Indoors', ev: 7, cct: 3000 },
+  night: { name: 'Night street', ev: 4, cct: 2700 },
 };
+
+// Neutral density filters: grey glass that takes away light without changing the colour.
+export const ND_FILTERS = {
+  none: { name: 'No filter', stops: 0 },
+  nd8: { name: 'ND8 (3 stops)', stops: 3 },
+  nd64: { name: 'ND64 (6 stops)', stops: 6 },
+  nd1000: { name: 'ND1000 (10 stops)', stops: 10 },
+};
+export const ndStops = id => (ND_FILTERS[id] || ND_FILTERS.none).stops;
+
+// White balance: the colour temperature (kelvin) the camera treats as white.
+export const WB_PRESETS = {
+  auto: { name: 'Auto', k: null },
+  tungsten: { name: 'Tungsten', k: 3200 },
+  fluorescent: { name: 'Fluorescent', k: 4000 },
+  daylight: { name: 'Daylight', k: 5500 },
+  cloudy: { name: 'Cloudy', k: 6500 },
+  shade: { name: 'Shade', k: 7500 },
+  custom: { name: 'Kelvin', k: null },
+};
+// Colour of a light source of temperature k (sRGB 0–1), after Tanner Helland's fit of the Planck curve.
+export function kelvinRGB(k) {
+  const t = k / 100; let r, g, b;
+  if (t <= 66) { r = 255; g = 99.4708025861 * Math.log(t) - 161.1195681661; b = t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307; }
+  else { r = 329.698727446 * Math.pow(t - 60, -0.1332047592); g = 288.1221695283 * Math.pow(t - 60, -0.0755148492); b = 255; }
+  return [r, g, b].map(v => Math.min(255, Math.max(0, v)) / 255);
+}
+const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+// The colour cast of a photo of light `sceneK` taken with white balance `wbK`: a multiplier per channel
+// (linear RGB, same brightness). Equal temperatures give no cast; a lower white balance makes it bluer.
+export function wbTint(sceneK, wbK) {
+  const a = kelvinRGB(sceneK).map(lin), b = kelvinRGB(wbK).map(lin);
+  const m = a.map((v, i) => v / b[i]), Y = 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2];
+  return m.map(v => v / Y);
+}
 
 export const shutterLabel = t => t >= 1 ? `${Math.round(t * 10) / 10}"` : `1/${Math.round(1 / t)}`;
 export const apertureLabel = N => `f/${N}`;

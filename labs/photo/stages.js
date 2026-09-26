@@ -1,5 +1,5 @@
 // Stages of the Photo Lab. Every step loads its own camera settings and scene.
-import * as O from './optics.js';
+import * as O from './optics.js?v=2';
 
 export const SUBJECT_H = 1.75;     // the person, in metres
 export const BACKGROUND = 10;      // the string of lights behind the person (m)
@@ -10,9 +10,11 @@ export const tipSpeed = () => WINDMILL.omega * WINDMILL.r; // m/s at the tips of
 export const IMAGE_H = 512;
 export const imageWidth = sensor => Math.round(IMAGE_H * sensor.w / sensor.h);
 
-export const DEFAULTS = { mode: 'M', N: 5.6, t: 1 / 125, iso: 100, f: 50, focus: 4, sensor: 'ff', tripod: false, dist: 4 };
+export const DEFAULTS = { mode: 'M', N: 5.6, t: 1 / 125, iso: 100, f: 50, focus: 4, sensor: 'ff', tripod: false, dist: 4, wb: 'auto', kelvin: 5500, nd: 'none' };
 export const BLENDER_DEFAULTS = { focal: 50, fit: 'Auto', size: 36, dof: false, focusDist: 10, fstop: 2.8, blades: 0, mblur: false, shutter: 0.5, fps: 24 };
 
+// The white balance in kelvin: Auto measures the light, the presets have fixed values, Kelvin is typed.
+export function wbKelvin(s, light) { const p = O.WB_PRESETS[s.wb || 'auto']; return s.wb === 'custom' ? s.kelvin : p?.k || light.cct; }
 // Everything the lab measures about a shot.
 export function derive(s, step) {
   const scene = step.scene || {};
@@ -21,12 +23,14 @@ export function derive(s, step) {
     const b = s.blender, sensor = O.blenderSensor(b.size, b.fit, 1.5);
     sensor.crop = Math.hypot(36, 24) / Math.hypot(sensor.w, sensor.h);
     const N = b.dof ? b.fstop : Infinity, t = b.mblur ? O.blenderShutterSeconds(b.shutter, b.fps) : 0;
-    return finish({ f: b.focal, N, t, iso: 100, focus: b.dof ? b.focusDist : 1e6, tripod: true, dist: s.dist, sensor, err: 0, gain: 1, ev: light.ev, auto: null }, scene);
+    return finish({ f: b.focal, N, t, iso: 100, focus: b.dof ? b.focusDist : 1e6, tripod: true, dist: s.dist, sensor, err: 0, gain: 1, ev: light.ev, nd: 0, cct: light.cct, wbK: light.cct, tint: [1, 1, 1], auto: null }, scene);
   }
   const sensor = O.SENSORS[s.sensor];
-  const u = O.resolve(s.mode, s, light.ev);
-  const err = O.exposureError(light.ev, u.N, u.t, u.iso);
-  return finish({ f: s.f, N: u.N, t: u.t, iso: u.iso, focus: s.focus, tripod: s.tripod, dist: s.dist, sensor, err, gain: Math.pow(2, err), ev: light.ev, auto: s.mode === 'Av' ? 't' : s.mode === 'Tv' ? 'N' : null }, scene);
+  const nd = O.ndStops(s.nd), ev = light.ev - nd;          // an ND filter takes away whole stops of light
+  const u = O.resolve(s.mode, s, ev);
+  const err = O.exposureError(ev, u.N, u.t, u.iso);
+  const wbK = wbKelvin(s, light), tint = O.wbTint(light.cct, wbK);
+  return finish({ f: s.f, N: u.N, t: u.t, iso: u.iso, focus: s.focus, tripod: s.tripod, dist: s.dist, sensor, err, gain: Math.pow(2, err), ev: light.ev, nd, cct: light.cct, wbK, tint, auto: s.mode === 'Av' ? 't' : s.mode === 'Tv' ? 'N' : null }, scene);
 }
 function finish(d, scene) {
   const W = imageWidth(d.sensor), px = mm => O.toPixels(mm, d.sensor, W);
@@ -137,6 +141,51 @@ export const STAGES = [
     ],
   },
   {
+    id: 'light', name: 'Colour and filters', sub: 'White balance · ND',
+    steps: [
+      {
+        id: 'w1', title: 'White balance indoors',
+        text: 'Indoors, the light of the lamps is warm (about 3000 K), but the camera is set to Daylight (5500 K): the photo comes out orange. Our eyes adapt to the light; the camera needs to be told. Set the white balance for this light by hand.',
+        how: ['In <b>Colour & filter</b>, change <b>White balance</b> from Daylight to <b>Tungsten</b>.', 'Or choose <b>Kelvin</b> and set about 3000 K.', 'Watch the orange cast disappear from the wall and the skin.'],
+        why: 'White balance tells the camera which colour of light is white. Auto often works, but it is fooled by scenes with one dominant colour; in video and in a series of photos it is set by hand so it does not change between shots.',
+        colour: true, scene: { light: 'indoor' },
+        start: { mode: 'M', N: 2.8, t: 1 / 15, iso: 100, f: 50, focus: 4, dist: 4, tripod: true, wb: 'daylight' },
+        lock: ['mode', 'sensor', 'dist', 'N', 't', 'iso', 'tripod'],
+        check: (d, f, s) => s.wb !== 'auto' && Math.abs(d.wbK - d.cct) <= 400,
+      },
+      {
+        id: 'w2', title: 'Warmer on purpose',
+        text: 'The white balance is also a creative tool. In full sun (5500 K), make the photo feel like a warm late afternoon without touching the light: tell the camera the light is bluer than it is.',
+        how: ['Set <b>White balance</b> to <b>Shade</b> or <b>Cloudy</b>, or choose <b>Kelvin</b>.', 'The number is the light you tell the camera: a higher number than the real light warms the photo, a lower one cools it.', 'Aim for 6800–10000 K.'],
+        why: 'The camera compensates for the light it has been told about. Told that the light is blue, it adds orange; told that it is orange, it adds blue. In Blender the same idea is Color Management with a white balance (temperature) setting.',
+        colour: true, scene: { light: 'sunny' },
+        start: { mode: 'Av', N: 8, iso: 100, f: 50, focus: 4, dist: 4, wb: 'daylight' },
+        lock: ['mode', 'sensor', 'dist'],
+        check: d => d.wbK >= 6800 && d.wbK <= 10000,
+      },
+      {
+        id: 'n1', title: 'Long exposure in full sun',
+        text: 'You want the sails of the windmill to blur in full sun, on a tripod: at least 1/8 s. But even at f/22 and ISO 100 there is too much light. An ND filter is a dark grey glass in front of the lens: it takes away whole stops without changing the colour.',
+        how: ['Turn on <b>Tripod</b> and set the shutter to 1/8 s or slower, f/22, ISO 100: the photo is white.', 'In <b>Colour & filter</b>, add an <b>ND filter</b>: ND8 takes away 3 stops, ND64 6, ND1000 10.', 'Find the filter that gives a correct exposure.'],
+        why: 'Each stop halves the light: ND8 lets through 1/8 of it (3 stops). Photographers use ND filters for silky water, for car light trails in daylight and for video, where the shutter must stay near 1/50 s.',
+        colour: true, motion: true, scene: { light: 'sunny' },
+        start: { mode: 'M', N: 16, t: 1 / 125, iso: 100, f: 50, focus: 4, dist: 4, tripod: false },
+        lock: ['mode', 'sensor', 'dist'],
+        check: d => d.t >= 1 / 8 - 1e-9 && d.tripod && d.nd > 0 && okExposure(d) && d.motionPx >= 20,
+      },
+      {
+        id: 'n2', title: 'Shallow focus at noon',
+        text: 'A portrait at noon with a blurred background: f/2 or wider. In Av the camera picks the shutter speed, but its fastest is 1/4000 s and it is not enough: the photo is overexposed. Fix it without closing the aperture.',
+        how: ['The mode is <b>Av</b>: open the aperture to f/2 or f/1.4 and look at the meter.', 'Add an <b>ND filter</b> so the camera can choose a shutter speed it has.', 'Keep the person in focus.'],
+        why: 'ND filters let you choose the aperture for the look (depth of field) and the shutter for the movement, whatever the light.',
+        colour: true, scene: { light: 'sunny' },
+        start: { mode: 'Av', N: 5.6, iso: 100, f: 85, focus: 3, dist: 3 },
+        lock: ['mode', 'sensor', 'dist'],
+        check: d => d.N <= 2 && d.nd > 0 && okExposure(d) && d.inFocus,
+      },
+    ],
+  },
+  {
     id: 'blender', name: 'Blender camera', sub: 'Same ideas, other names',
     steps: [
       {
@@ -200,6 +249,10 @@ export const SOLUTIONS = {
   s1: s => { s.f = 65; },
   s2: (s, flags) => { flags.wide = true; flags.tele = true; s.f = 135; s.dist = 15; s.focus = 15; },
   s3: s => { s.sensor = 'apsc'; s.f = 50; },
+  w1: s => { s.wb = 'tungsten'; },
+  w2: s => { s.wb = 'shade'; },
+  n1: s => { s.tripod = true; s.N = 22; s.t = 1 / 8; s.iso = 100; s.nd = 'nd8'; },
+  n2: s => { s.N = 2; s.nd = 'nd8'; s.focus = 2.85; },
   b1: s => { s.blender.focal = 85; },
   b2: s => { Object.assign(s.blender, { dof: true, focusDist: 4, fstop: 2 }); },
   b3: s => { Object.assign(s.blender, { mblur: true, shutter: 0.25, fps: 25 }); },
