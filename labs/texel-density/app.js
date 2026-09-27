@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { RES, CHECKER, OBJECTS, MARGIN, TARGETS, SCREEN, islandFaces, objectFaces, bbox, cloneUV, translate, scale as scaleUV, rotate as rotateUV,
-  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture, ruler } from './td.js?v=3';
+  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, GAMES, camDensity, screenOf, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture, ruler } from './td.js?v=4';
 import { STAGES, MEASURE, SEE_QUIZ, RULES, HERO, HERO_WHY, BUDGET_MB, startState, meshOf, densityOf, islandDensityOf, islandsOf, isInside, overlapsOf,
-  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, sceneStats, memoryFor, wasted } from './stages.js?v=3';
+  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, camFor, sceneStats, memoryFor, wasted } from './stages.js?v=4';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=3';
+import dictionary from './i18n.js?v=4';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -23,7 +23,7 @@ const stage = () => STAGES[S.stageIndex], step = () => stage().steps[S.step];
 const sid = () => step().id;
 const EDIT = new Set(['m2', 'a1', 'a2', 'a3', 'e1']);
 const canEdit = () => EDIT.has(sid());
-const isLoupe = () => sid() === 'c1';
+const isLoupe = () => sid() === 'c1' || sid() === 'g1';
 let msgTimer;
 function msg(text, warning = false) {
   const el = $('#status-msg'); el.textContent = t(text); el.classList.toggle('warning', warning);
@@ -197,7 +197,7 @@ const extraMats = { wall: new THREE.MeshLambertMaterial({ color: 0x6b5a50 }), ba
 const CAMS = { crate: [[1.2, 1.0, 1.5], [0, 0.25, 0]], cabinet: [[1.6, 1.4, 2.4], [0, 0.4, 0]], vending: [[1.9, 1.9, 3.4], [0, 0.95, 0]], wall: [[1.2, 1.6, 5.2], [0, 1.0, 0]], trio: [[0.4, 2.8, 7.4], [0, 0.6, 0]], shop: [[0.2, 3.1, 8.2], [0, 0.8, 0]] };
 function frame() {
   const st = S.st;
-  if (isLoupe()) { const d = CAMERAS[st.cam].d; camera.fov = SCREEN.fov; camera.position.set(0, 1.2, 0.125 + d); controls.target.set(0, 1.2, 0.125); }
+  if (isLoupe()) { const c = camFor(st), d = c.d; camera.fov = screenOf(c).fov; camera.position.set(0, 1.2, 0.125 + d); controls.target.set(0, 1.2, 0.125); }
   else {
     // Look from the preset direction and back off until every prop fits the view.
     const [p, tg] = CAMS[st.scene] || CAMS.trio, m = meshOf(st), box = new THREE.Box3();
@@ -441,7 +441,7 @@ const off = document.createElement('canvas'), offCtx = off.getContext('2d');
 function loupeImage(nx, fn) { off.width = off.height = nx; const img = offCtx.createImageData(nx, nx); for (let j = 0; j < nx; j++) for (let i = 0; i < nx; i++) { const c = fn(i, j), k = (j * nx + i) * 4; img.data[k] = c[0] * 255; img.data[k + 1] = c[1] * 255; img.data[k + 2] = c[2] * 255; img.data[k + 3] = 255; } offCtx.putImageData(img, 0, 0); return off; }
 const PIX = 20;   // screen pixels shown across the loupe
 function drawLoupe(w, h) {
-  const st = S.st, sd = screenDensity(CAMERAS[st.cam].d), td = st.camTarget, L = PIX / sd, s0 = 1.02, t0 = 1.03;
+  const st = S.st, sd = camDensity(camFor(st)), td = st.camTarget, L = PIX / sd, s0 = 1.02, t0 = 1.03;
   const side = Math.max(90, Math.min((w - 36) / 2, h - 90)), y = 30, xa = (w - 2 * side - 16) / 2, xb = xa + side + 16;
   const lin = c => c.map(x => x ** 2.2), srgb = c => c.map(x => Math.min(1, Math.max(0, x)) ** (1 / 2.2));
   // Left: the texels of the texture on this piece of wall.
@@ -703,6 +703,20 @@ function cameraPanel() {
     ${statRow('Texels per screen pixel', ratio.toFixed(2), ratio >= 0.97 && ratio < 2 ? 'good' : 'bad')}
     <p class="td-note">${esc(t('Choose the smallest target with at least one texel per screen pixel.'))}</p></div>`;
 }
+const num = v => String(+(+v).toFixed(2));
+function gamePanel() {
+  const st = S.st, c = camFor(st), sc = screenOf(c), sd = camDensity(c), ratio = st.camTarget / sd, cu = st.custom || { h: 1080, fov: 70, d: 2 };
+  const btn = (k, v) => `<button type="button" data-cam="${k}" aria-pressed="${k === st.cam}" class="${st.flags['cam_' + k] ? 'done' : ''}"><span>${esc(t(v.name))}</span><small data-no-i18n>${v.h} px · ${v.fov}° · ${v.d} m</small></button>`;
+  const field = (k, label, step) => `<label class="bl-row two"><span data-no-i18n>${label}</span><input type="number" data-custom="${k}" value="${cu[k]}" min="${step}" step="${step}"${st.cam === 'custom' ? '' : ' disabled'}></label>`;
+  return `<div class="panel"><h4>${esc(t('Game type'))}<small>${esc(t('example numbers'))}</small></h4>
+    <div class="cam-grid game-grid">${Object.entries(GAMES).map(([k, v]) => btn(k, v)).join('')}<button type="button" data-cam="custom" aria-pressed="${st.cam === 'custom'}"><span>${esc(t('Your game'))}</span></button></div>
+    ${field('h', 'H (px)', 1)}${field('fov', 'FOV (°)', 1)}${field('d', 'd (m)', 0.05)}</div>
+    <div class="panel"><h4>${esc(t('The calculation'))}</h4>
+    <p class="formula" data-no-i18n>H ÷ (2 × d × tan(FOV ÷ 2))<br>= ${sc.h} ÷ (2 × ${num(c.d)} × tan ${num(sc.fov / 2)}°)<br>= <b>${Math.round(sd)} px</b> ${esc(t('for 1 m on screen'))}</p>
+    <label class="bl-row two"><span>${esc(t('Target'))}</span><select id="cam-target">${TARGETS.map(v => `<option value="${v}"${v === st.camTarget ? ' selected' : ''}>${v} px/m</option>`).join('')}</select></label>
+    ${statRow('Texels per screen pixel', ratio.toFixed(2), ratio >= 0.97 && ratio < 2 ? 'good' : 'bad')}
+    <p class="td-note">${esc(t('Choose the smallest target with at least one texel per screen pixel.'))}</p></div>`;
+}
 function budgetPanel() {
   const st = S.st, s = sceneStats(st, 512);
   const rows = objectsOf(st.scene).map(o => { const p = s.per[o]; return `<label class="bl-row budget${o === st.active ? ' focus' : ''}"><span>${esc(objName(o))}</span>${resSelect(`data-bres="${o}"`, st.res[o])}<em class="${p.low ? 'bad' : p.waste ? 'bad' : 'good'}" data-no-i18n>${Math.round(p.d)}</em></label>`; }).join('');
@@ -734,6 +748,7 @@ function renderProps() {
   else if (id === 'a2') h += tdPanel() + islandsPanel() + uvToolsPanel(true);
   else if (id === 'a3') h += tdPanel({ resEdit: true, set: true }) + objectsPanel();
   else if (id === 'c1') h += cameraPanel();
+  else if (id === 'g1') h += gamePanel();
   else if (id === 'c2') h += budgetPanel() + objectsPanel();
   else if (id === 'e1') h += islandsPanel() + tdPanel() + uvToolsPanel(false);
   else if (id === 'e2') h += quizPanel(RULES, true) + (multi ? objectsPanel() : '');
@@ -772,6 +787,7 @@ $('#props').addEventListener('change', e => {
   else if (el.id === 'k-res') { pushUndo(); st.res.crate = +el.value; changed(); }
   else if (el.id === 'k-scale') { pushUndo(); st.scale.crate = +el.value; changed(); }
   else if (el.id === 'cam-target') { pushUndo(); st.camTarget = +el.value; changed(); }
+  else if (el.dataset.custom) { const v = parseFloat(el.value), lim = { h: [100, 8000], fov: [10, 150], d: [0.1, 100] }[el.dataset.custom]; if (!Number.isFinite(v)) return; pushUndo(); st.custom = { ...(st.custom || { h: 1080, fov: 70, d: 2 }), [el.dataset.custom]: Math.min(lim[1], Math.max(lim[0], v)) }; frame(); changed(); }
   else if (el.dataset.bres) { pushUndo(); st.res[el.dataset.bres] = +el.value; st.active = el.dataset.bres; changed(); }
 });
 

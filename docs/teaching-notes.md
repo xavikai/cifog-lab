@@ -87,3 +87,7 @@ Texture Coordinate includes Generated, Normal, UV, Object, Camera, Window and Re
 The Image Texture nodes use Flat projection and Repeat extension: X and Y of the transformed vector sample the image. UV has Z = 0, so Scale Z or Location Z alone does not change a flat image. Object uses the preview mesh. The preview uses its own Y-up object axes.
 
 For scalar maps the browser renderer samples a single channel; the lab's roughness, metallic, height and alpha images are grayscale. Arbitrary coloured-image-to-value conversions may differ from Blender.
+
+## Parameter cards
+- Every value, panel header and Properties setting has a card (`params.js`, 62 entries): rest the pointer on it (or focus it with Tab). The card says what it does, typical values with real-material examples (chips), the usual mistake and, when it matters, the EEVEE/Cycles difference.
+- Use them as a reference during free work in the Studio stage: ask students to predict a value from the card, then check it on the preview.

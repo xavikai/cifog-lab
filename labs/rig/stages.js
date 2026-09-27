@@ -44,12 +44,25 @@ export function restJump(st) {
 }
 // Angle between the pole (seen from the hip-to-ankle line) and the direction the knee is modelled in.
 export function poleOffPlane(st) {
-  const rig = legRig(st), { W } = solve(rig, { ...st, ik: null });
+  const rig = legRig(st), a = cloneState(st);
+  for (const [n, q] of Object.entries(a.pose)) if (n !== 'Knee_Pole') { q.rot = [0, 0, 0]; q.loc = [0, 0, 0]; }
+  const { W } = solve(rig, { ...a, ik: null });
   const A = posOf(rig, W, 'Thigh'), C = posOf(rig, W, 'Shin', 't'), u = C.clone().sub(A).normalize();
   const perp = v => v.addScaledVector(u, -v.dot(u));
   const pole = perp(posOf(rig, W, 'Knee_Pole').sub(A)), bend = perp(restBend(rig, rig.index.Thigh, rig.index.Shin));
   if (pole.length() < 1e-6 || bend.length() < 1e-6) return 180;
   return pole.angleTo(bend) * 180 / Math.PI;
+}
+// The circle the knee can take around the hip–ankle line (posed leg): where the IK puts the knee,
+// where the knee was modelled to bend, and the angle between them around the circle (°).
+export function ringInfo(st) {
+  const rig = legRig(st), { W } = solve(rig, st);
+  const A = posOf(rig, W, 'Thigh'), C = posOf(rig, W, 'Shin', 't'), K = posOf(rig, W, 'Shin');
+  const u = C.clone().sub(A).normalize(), center = A.clone().addScaledVector(u, K.clone().sub(A).dot(u));
+  const radius = Math.max(0.05, K.distanceTo(center));
+  const bend = restBend(rig, rig.index.Thigh, rig.index.Shin); bend.addScaledVector(u, -bend.dot(u)).normalize();
+  const kd = K.clone().sub(center); const angle = kd.length() < 1e-6 ? 0 : kd.normalize().angleTo(bend) * 180 / Math.PI;
+  return { center, u, radius, bend, knee: center.clone().addScaledVector(kd.length() < 1e-6 ? bend : kd, radius), modelled: center.clone().addScaledVector(bend, radius), angle };
 }
 // The jump of the knee when a posed leg switches from IK (Influence 1) to its FK rotations (Influence 0).
 export function switchPop(st) {
@@ -70,11 +83,19 @@ export function planePole(st, dist = 1.5) {
   const rig = legRig(st), bend = restBend(rig, rig.index.Thigh, rig.index.Shin).normalize(), knee = rig.bones[rig.index.Shin].headV;
   return knee.clone().addScaledVector(bend, dist);
 }
+// The crooked leg, crouched (hips 0.5 m down) so the knee bends clearly and its circle is big.
 function crookedLeg(extra = {}) {
   const st = defaultState(makeRig('leg'));
   Object.assign(st, { knee: CROOKED.knee, kneeSide: CROOKED.side, roll: 0, ...extra });
   st.ik = IK({ pole: 'Knee_Pole', poleAngle: -90 });
+  st.pose.Hips.loc = [0, -0.5, 0];
   return st;
+}
+// A pole to the side of the leg: 90° around the hip–ankle line from the plane of the knee.
+function sidePole(st, dist = 1.5) {
+  const rig = legRig(st), A = rig.bones[rig.index.Thigh].headV, C = rig.bones[rig.index.Shin].tailV, u = C.clone().sub(A).normalize();
+  const bend = restBend(rig, rig.index.Thigh, rig.index.Shin); bend.addScaledVector(u, -bend.dot(u)).normalize();
+  return rig.bones[rig.index.Shin].headV.clone().addScaledVector(u.clone().cross(bend).normalize(), dist);
 }
 function movePoleTo(st, target) { const rig = legRig(st), { W } = solve(rig, st); addWorldLocation(rig, st, W, 'Knee_Pole', target.clone().sub(posOf(rig, W, 'Knee_Pole'))); return st; }
 
@@ -167,21 +188,31 @@ export const STAGES = [
     id: 'pole', name: 'Pole without jumps', sub: 'Crooked leg · roll · IK/FK', rig: 'leg',
     steps: [
       {
-        id: 'p1', title: 'The pole in the plane of the leg',
-        text: 'This leg was modelled like many characters: the knee is not straight ahead, it is bent 30° outwards. The pole is straight in front, so turning the IK on already moves the knee, before anyone animates: that is the jump. The hip, the knee and the ankle make a plane; the pole must be in that plane, in front of the knee. Move the Knee_Pole until the knee does not move.',
-        how: ['Look at the <b>Readout</b>: <b>Knee jump when IK turns on</b> must go below 1 cm and <b>Pole off the leg plane</b> below 3°.', 'Select <b>Knee_Pole</b> and move it sideways with <kbd>G</kbd> <kbd>X</kbd>: the dashed line from the knee shows where the plane points.', 'In Blender: in Edit Mode, snap the 3D cursor to the knee joint and place the pole along the knee direction, not along the world axis.'],
-        why: 'The IK always puts the knee in the plane that contains the pole. If that plane is not the one the leg was modelled in, the knee swings to it the moment the constraint is on.',
-        lines: true,
+        id: 'p0', title: 'Why the knee moves: a circle',
+        text: 'With IK you only place two points: the hip and the foot. Between them the knee is free, like the hinge of a compass whose two tips are pinned to the paper: it can swing around the hip–ankle line and draws a circle (the white ring). The IK does not know which point of that circle is right; the pole target chooses it: the knee always turns towards the pole. Move the Knee_Pole to the side of the leg and watch the knee travel around the ring.',
+        how: ['Select <b>Knee_Pole</b> (the small ball in front of the leg) and move it to one side with <kbd>G</kbd> <kbd>X</kbd>.', 'The <b>orange dot</b> is where the IK puts the knee. The <b>green dot</b> is where the knee was modelled to bend. Watch the orange dot go around the ring.', 'Take it at least 80° away from the green dot: <b>Knee off its modelled direction</b>, in the Readout.'],
+        why: 'This is the whole job of the pole: it does not pull the knee, it only chooses the point of the circle. If that point is not the one the leg was modelled for, the knee is already wrong before you animate anything.',
+        lines: true, ring: true,
+        start: () => crookedLeg(),
+        check: st => ringInfo(st).angle > 80,
+        solve: st => movePoleTo(st, sidePole(st)),
+      },
+      {
+        id: 'p1', title: 'Put the pole where the knee points',
+        text: 'This leg was modelled like many characters: the knee is not straight ahead, it is bent 30° outwards. The pole is straight in front, so the IK turns the knee 30° away from where it was modelled: the orange dot is not on the green one. In the rest pose this is the jump: the knee moves sideways the moment the IK is switched on, and the skin around it deforms. The hip, the knee and the ankle make a plane; the green dashed line shows that plane in front of the knee. Put the pole on that line: the two dots meet and the knee stays where it was modelled.',
+        how: ['Select <b>Knee_Pole</b> and move it sideways with <kbd>G</kbd> <kbd>X</kbd> onto the <b>green dashed line</b>.', 'The orange dot lands on the green one. In the <b>Readout</b>, <b>Pole off the leg plane</b> goes below 3° and <b>Knee jump when IK turns on</b> below 1 cm.', 'In Blender: in Edit Mode select the knee joint, <kbd>Shift</kbd><kbd>S</kbd> › Cursor to Selected, and place the pole along the direction the knee points, not along the world Y axis. Add-ons such as Rigify do this for you.'],
+        why: 'The IK always puts the knee in the plane that contains the pole. If that plane is the one the leg was modelled in, switching the IK on changes nothing: the knee is fixed where it belongs.',
+        lines: true, ring: true,
         start: () => crookedLeg(),
         check: st => restJump(st).knee < 0.01 && poleOffPlane(st) < 3,
         solve: st => movePoleTo(st, planePole(st)),
       },
       {
         id: 'p2', title: 'Roll the bones with the knee',
-        text: 'The pole is in the plane now and the knee stays put, but the Thigh still twists 30° around itself when the IK turns on: a mesh skinned to it would twist too. The IK uses the X axis of the bones: it wants X at a right angle to the plane of the leg. These bones still have roll 0, made for a knee that points straight ahead. Give the Thigh and the Shin the roll of this crooked knee.',
+        text: 'The knee is in the right place now, but look at the orange kneecaps: the Thigh still spins 30° around itself when the IK turns on, and the skin would twist with it. Why? Every bone has its own X axis, like the axle of a hinge. The IK bends the knee around that axle, and Pole Angle −90° expects the axle at a right angle to the plane of the leg. These bones have Roll 0, made for a knee that points straight ahead, so the IK spins them 30° to line the axle up. Roll the Thigh and the Shin 30° in Edit Mode: then the axle already matches the crooked knee and nothing spins.',
         how: ['Press <kbd>Tab</kbd> for <b>Edit Mode</b>. In the Edit Mode panel, change <b>Roll</b> (it rolls the Thigh and the Shin).', 'Watch <b>Leg twist when IK turns on</b> in the Readout: it must go below 3° (try −30°: the knee turns outwards, the X axis turns with it). Turn on <b>Axes</b> to see the X axes.', 'In Blender: Edit Mode › <b>Armature › Bone Roll › Recalculate Roll</b> (<kbd>Shift</kbd><kbd>N</kbd>) or type the Roll in the Bone properties; then check the Pole Angle again.'],
         why: 'Pole Angle −90° only works when the bone roll matches the knee. A wrong roll makes the leg twist, and fixing it with the Pole Angle moves the knee instead: fix the roll.',
-        lines: true, roll: true,
+        lines: true, ring: true, roll: true,
         start: () => { const st = crookedLeg(); return movePoleTo(st, planePole(st)); },
         check: st => restJump(st).twist < 3 && restJump(st).knee < 0.01 && Math.abs((st.ik?.poleAngle ?? -90) + 90) < 0.5,
         solve: st => { st.roll = -30; movePoleTo(st, planePole(st)); },

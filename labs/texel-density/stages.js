@@ -1,6 +1,6 @@
 // Texel Density Lab: stages, steps and checks. Pure JS (tested with node).
 import { buildScene, objectsOf, packedUV, placeIsland, islandFaces, objectFaces, objectDensity, islandDensity, density, areas, inside, overlaps,
-  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, setMB, bbox, translate, scale } from './td.js?v=3';
+  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, GAMES, camOf, targetFor, setMB, bbox, translate, scale } from './td.js?v=4';
 
 const meshCache = new Map();
 export function meshOf(st) {
@@ -9,7 +9,7 @@ export function meshOf(st) {
   return meshCache.get(key);
 }
 export function defaultState() {
-  return { scene: 'trio', uv: null, res: {}, scale: {}, view: 'texture', uvImage: 'checker', ruler: false, target: null, flags: {}, cam: 'strategy', camTarget: 512, active: null };
+  return { scene: 'trio', uv: null, res: {}, scale: {}, view: 'texture', uvImage: 'checker', ruler: false, target: null, flags: {}, cam: 'strategy', camTarget: 512, custom: { h: 1080, fov: 70, d: 2 }, active: null };
 }
 const clone = o => JSON.parse(JSON.stringify(o));
 export function startState(step) {
@@ -111,7 +111,8 @@ export function answerQuiz(st, list, a) {
   return { ok, item: list[i] };
 }
 // Step c1: the camera and the target chosen together.
-export function camAnswer(st) { const ok = st.camTarget === rightTarget(CAMERAS[st.cam].d); if (ok) st.flags['cam_' + st.cam] = true; return ok; }
+export const camFor = st => st.cam === 'custom' ? { name: 'Your game', ...(st.custom || { h: 1080, fov: 70, d: 2 }) } : camOf(st.cam);
+export function camAnswer(st) { const ok = st.camTarget === targetFor(camFor(st)); if (ok && st.cam !== 'custom') st.flags['cam_' + st.cam] = true; return ok; }
 
 // ─── Stages ──────────────────────────────────────────────────────────────────
 export const STAGES = [
@@ -237,6 +238,15 @@ export const STAGES = [
         solve: s => { Object.assign(s.flags, { cam_strategy: true, cam_third: true, cam_first: true }); s.cam = 'first'; s.camTarget = 1024; },
       },
       {
+        id: 'g1', title: 'Your game, your number',
+        text: 'There is no single right density: each type of game gets its own, and they all come from the same calculation. Take three facts of your game: the screen height in pixels (H), the vertical field of view (FOV) and the closest distance the camera usually gets to a surface (d), not the rare moment the player presses their nose against a wall. One metre of surface then covers H ÷ (2 × d × tan(FOV ÷ 2)) pixels of the screen. The target is the power of two just above that number. Work it out for four games.',
+        how: ['In the <b>Game type</b> panel, choose a game: the calculation fills in with its screen, FOV and distance.', 'Choose the <b>Target</b>: the smallest one at or above the pixels that 1 m covers on screen. The Pixel loupe shows the result.', 'Then choose <b>Your game</b> and type the numbers of your own project.'],
+        why: 'Typical results: strategy and mobile 128–256 px/m, third person about 512, first person 1024, first-person weapons, VR and 4K more. Then the memory budget has the last word: many teams choose one step lower for the whole level and raise only the hero assets.',
+        start: { scene: 'wall', view: 'texture', cam: 'mobile', camTarget: 512 },
+        check: s => ['mobile', 'first4k', 'vr', 'weapon'].every(k => s.flags['cam_' + k]),
+        solve: s => { for (const k of ['mobile', 'first4k', 'vr', 'weapon']) s.flags['cam_' + k] = true; s.cam = 'weapon'; s.camTarget = 4096; },
+      },
+      {
         id: 'c2', title: 'Texture size and memory',
         text: 'The level uses 512 px/m and has a texture budget of 40 MB. Each prop needs a texture big enough to reach the target: the big wall and the tall vending machine need more pixels than the small crate. Choose the smallest size for each prop. Then look at the table: doubling the density multiplies the memory by four.',
         how: ['In the <b>Budget</b> panel, choose the <b>Texture size</b> of each prop.', 'Every prop must reach 512 px/m, with no texture bigger than needed.', 'Compare the totals for 256, 512 and 1024 px/m.'],
@@ -278,4 +288,4 @@ export const STAGES = [
     ],
   },
 ];
-export { onTarget, rightTarget, CAMERAS, setMB, minRes, objectsOf, bbox, translate, scale, density };
+export { onTarget, rightTarget, CAMERAS, GAMES, camOf, targetFor, setMB, minRes, objectsOf, bbox, translate, scale, density };

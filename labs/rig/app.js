@@ -2,9 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import * as RG from './rig.js?v=3';
-import { STAGES, rigFor, ghostPoints, cupPoint, withPose, GHOST_POSE, kneeForward, restJump, poleOffPlane, switchPop, applyVisual, planePole } from './stages.js?v=3';
+import { STAGES, rigFor, ghostPoints, cupPoint, withPose, GHOST_POSE, kneeForward, restJump, poleOffPlane, switchPop, applyVisual, planePole, ringInfo } from './stages.js?v=4';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=2';
+import dictionary from './i18n.js?v=3';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -141,7 +141,11 @@ function buildScene() {
   // Ghost pose and cup
   const extras = new THREE.Group(); root.add(extras);
   scene.add(root);
-  objs = { root, bones, ikLine, poleLine, planeLine, parentLines, extras, joints };
+  // Stage 3: the circle of the knee around the hip–ankle line, the IK knee (orange) and the modelled knee (green).
+  const ring = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xdedede, depthTest: false, transparent: true, opacity: 0.8 })); ring.renderOrder = 14; root.add(ring);
+  const dot = color => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true })); m.renderOrder = 17; root.add(m); return m; };
+  const kneeDot = dot(0xffa629), modelDot = dot(0x5fd08a);
+  objs = { root, bones, ikLine, poleLine, planeLine, parentLines, extras, joints, ring, kneeDot, modelDot };
   buildExtras();
 }
 function buildExtras() {
@@ -202,6 +206,13 @@ function updateScene() {
   // Stage 3: the direction the knee is modelled in (the plane of the leg), where the pole belongs.
   objs.planeLine.visible = !!step().lines && S.rig.kind === 'leg';
   if (objs.planeLine.visible) { const k = S.rig.bones[S.rig.index.Shin].headV; objs.planeLine.geometry.setFromPoints([k, planePole(S.st, 1.9)]); objs.planeLine.computeLineDistances(); }
+  const showRing = !!step().ring && S.rig.kind === 'leg' && !!S.st.ik && !edit;
+  objs.ring.visible = objs.kneeDot.visible = objs.modelDot.visible = showRing;
+  if (showRing) {
+    const r = ringInfo(S.st), v2 = r.u.clone().cross(r.bend).normalize(), pts = [];
+    for (let i = 0; i < 64; i++) { const a = i / 64 * Math.PI * 2; pts.push(r.center.clone().addScaledVector(r.bend, Math.cos(a) * r.radius).addScaledVector(v2, Math.sin(a) * r.radius)); }
+    objs.ring.geometry.setFromPoints(pts); objs.kneeDot.position.copy(r.knee); objs.modelDot.position.copy(r.modelled);
+  }
   requestRender();
 }
 let renderQueued = false;
@@ -563,7 +574,8 @@ function readoutHtml() {
   } else {
     if (stage().id === 'pole' && S.st.ik) {
       const j = restJump(S.st), off = poleOffPlane(S.st);
-      if (step().id !== 'p3') {
+      if (step().ring) { const a = ringInfo(S.st).angle; h += row('Knee off its modelled direction', a.toFixed(0) + '°', step().id === 'p0' ? a > 80 : a < 3); }
+      if (step().id !== 'p3' && step().id !== 'p0') {
         h += row('Pole off the leg plane', off.toFixed(1) + '°', off < 3);
         h += row('Knee jump when IK turns on', (j.knee * 100).toFixed(1) + ' cm', j.knee < 0.01);
         h += row('Leg twist when IK turns on', j.twist.toFixed(1) + '°', j.twist < 3);
@@ -716,4 +728,4 @@ document.addEventListener('keydown', e => {
 new ResizeObserver(resize).observe(host);
 onLangChange(() => renderAll());
 enterStep(true); resize(); translateTitles();
-window.__rig = { S, RG, STAGES, select, startModal, frameAll, camera, changed }; // for tests and curious students
+window.__rig = { S, RG, STAGES, select, startModal, frameAll, camera, changed, go: (a, b) => { saveData(); S.stageIndex = a; S.step = b; enterStep(true); }, solve: () => document.getElementById('show-solution')?.click() }; // for tests and curious students

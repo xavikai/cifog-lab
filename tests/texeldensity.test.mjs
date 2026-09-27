@@ -53,6 +53,12 @@ test('camera targets: 128, 512 and 1024 px/m', () => {
   assert.equal(Math.round(screenDensity(2.5)), 499);
   assert.deepEqual(Object.values(CAMERAS).map(c => rightTarget(c.d)), [128, 512, 1024]);
 });
+test('game types: the same formula gives each game its own target', async () => {
+  const { GAMES, targetFor, camDensity } = await import('../labs/texel-density/td.js');
+  assert.deepEqual(Object.fromEntries(Object.entries(GAMES).map(([k, c]) => [k, targetFor(c)])), { mobile: 256, first4k: 2048, vr: 1024, weapon: 4096 });
+  assert.equal(Math.round(camDensity(GAMES.weapon)), 2494);
+  const g1 = steps.find(x => x.id === 'g1'), s = startState(g1); assert.equal(g1.check(s), false); g1.solve(s); assert.ok(g1.check(s));
+});
 test('each knob of step m2 is ticked only when it alone reaches 512 px/m', () => {
   const s = startState(steps.find(x => x.id === 'm2'));
   assert.equal(Math.round(densityOf(s, 'crate')), 256);

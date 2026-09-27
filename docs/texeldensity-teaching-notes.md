@@ -11,7 +11,7 @@ Texel density = texture pixels per metre of surface = texture size × √(UV are
 | 1 · See it | s0 A ruler of one metre · s1 The checker map · s2 Blurry next to sharp | Click props: a yellow 1 m ruler lies on the face and on the texture in the UV Editor; its length in pixels of the image is the density (the 0.5 m crate: × 2). Then switch Texture/Checker, read px/m of a crate, a wall and a barrel (all 1K). Then pick the blurriest and the sharpest prop from the squares alone. |
 | 2 · Measure it | m0 Islands on the image · m1 Pixels ÷ metres · m2 Three knobs | Click faces of the crate and see their island on the image (size in px) and the face (size in m); switch the UV Editor to Image › Texture to see the planks painted inside each island; zoom until the pixel grid appears. Then type the density of the crate for three cases (512, 1024, 256 px/m). Reach 512 px/m three ways: bigger texture, bigger islands (A, S 2), smaller object (Scale 0.5). |
 | 3 · Match it | a1 Same squares by hand · a2 Average and pack · a3 One density for the scene | Scale the cabinet islands to 512 px/m with S; use Average Islands Scale + Pack Islands; choose the smallest texture for each prop and press Set TD. |
-| 4 · Choose it | c1 The target comes from the camera · c2 Texture size and memory | Pixel loupe: texels vs screen pixels at 10 m / 2.5 m / 1.25 m (answers 128, 512, 1024 px/m). Fit four props in a 40 MB budget at 512 px/m and see ×4 memory at 1024. |
+| 4 · Choose it | c1 The target comes from the camera · g1 Your game, your number · c2 Texture size and memory | Pixel loupe: texels vs screen pixels at 10 m / 2.5 m / 1.25 m (answers 128, 512, 1024 px/m). Then the formula with four game types (mobile, first person on 4K, VR, first-person weapon) and a "Your game" row with editable H, FOV and d. Fit four props in a 40 MB budget at 512 px/m and see ×4 memory at 1024. |
 | 5 · Break the rule | e1 More for the hero, less for the hidden · e2 When to break it | Vending machine: front 1024, sides 512, top 256, back 128 px/m. Quiz of six cases: higher / same / lower. |
 
 ## Numbers used (so you can check them on the board)
@@ -19,6 +19,8 @@ Texel density = texture pixels per metre of surface = texture size × √(UV are
 - Packed layouts (margin 0.01): crate 0.5 m → 655 px/m on 1K; wall 3 × 2 m → 335 px/m on 1K; barrel Ø0.6 × 0.9 m → 534 px/m on 1K; vending machine → 286 px/m on 1K.
 - Smallest textures for 512 px/m: crate 1K, barrel 1K, wall 2K, vending machine 2K, cabinet 2K.
 - Screen 2560 × 1440, vertical FOV 60°: 1 m covers 1247 ÷ distance px → 125 px at 10 m, 499 px at 2.5 m, 998 px at 1.25 m.
+- The general formula (step g1): 1 m covers H ÷ (2 × d × tan(FOV ÷ 2)) screen pixels; the target is the power of two at or just above it. Examples: mobile top-down (1080 px, 60°, 4 m) → 234 → 256 px/m; first person on 4K (2160 px, 60°, 1.25 m) → 1497 → 2048; VR per eye (2200 px, 96°, 1 m) → 990 → 1024; first-person weapon (1440 px, 60°, 0.5 m) → 2494 → 4096.
+- d is the closest *usual* distance, not the worst case. Published targets are conventions (older FPS 256–512 px/m, current AAA around 1024 px/m); the budget often lowers the result by one step, with exceptions for hero assets.
 - Memory of a texture set (colour + normal + roughness, 1 byte/px block-compressed, + ⅓ mipmaps): 1K = 4 MB, 2K = 16 MB, 4K = 64 MB. Shop scene: 10 / 40 / 160 MB at 256 / 512 / 1024 px/m.
 
 ## Talking points

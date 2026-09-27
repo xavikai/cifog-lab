@@ -236,9 +236,21 @@ export const CAMERAS = {
   third:    { name: 'Third person', d: 2.5 },
   first:    { name: 'First person', d: 1.25 },
 };
-export const TARGETS = [64, 128, 256, 512, 1024, 2048];
+// Other game types: each one brings its own screen height, vertical FOV and closest usual distance (example numbers).
+export const GAMES = {
+  mobile:  { name: 'Mobile, top-down camera', h: 1080, fov: 60, d: 4 },
+  first4k: { name: 'First person on a 4K screen', h: 2160, fov: 60, d: 1.25 },
+  vr:      { name: 'VR headset (per eye)', h: 2200, fov: 96, d: 1 },
+  weapon:  { name: 'First-person weapon', h: 1440, fov: 60, d: 0.5 },
+};
+export const camOf = k => CAMERAS[k] || GAMES[k];
+export const screenOf = c => ({ w: SCREEN.w, h: c.h ?? SCREEN.h, fov: c.fov ?? SCREEN.fov });
+// Screen pixels covered by one metre of surface for a camera { d, h?, fov? }.
+export const camDensity = c => screenDensity(c.d, screenOf(c));
+export const TARGETS = [64, 128, 256, 512, 1024, 2048, 4096];
 // The right target for a camera: the smallest power of two that gives at least one texel per screen pixel.
-export const rightTarget = d => TARGETS.find(t => t >= screenDensity(d) * 0.97) ?? TARGETS[TARGETS.length - 1];
+export const rightTarget = (d, s = SCREEN) => TARGETS.find(t => t >= screenDensity(d, s) * 0.97) ?? TARGETS[TARGETS.length - 1];
+export const targetFor = c => rightTarget(c.d, screenOf(c));
 // Texture set in memory: colour, normal and roughness, block-compressed at 1 byte per pixel, with mipmaps (+⅓).
 export const setMB = res => 3 * res * res * (4 / 3) / (1024 * 1024);
 

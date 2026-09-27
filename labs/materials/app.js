@@ -6,6 +6,7 @@ import { OUTPUTS, TEXTURES, canConnect, connect, resolveGraph, sourceFor } from 
 import { installCoordinates } from './mapping.js?v=5';
 import { STAGES, NODE_SETS, PRESETS, startState, applyPreset, displacementMode, effectiveLevel, refractsScene, emissionLights, glareVisible } from './stages.js?v=5';
 import { textureSet, invertImage } from './textures.js?v=5';
+import { PARAMS } from './params.js?v=1';
 import { makeHdri } from '../lighting/light.js?v=1';
 import { t, tr, onLangChange } from '../../i18n.js';
 
@@ -59,6 +60,48 @@ node('bsdf', 'Principled BSDF', 'principled', `${row('bsdf:bsdf', 'output', 'sha
 node('output', 'Material Output', 'output', `${row('output:surface', 'input', 'shader', 'Surface')}${row('output:displacement', 'input', 'vector', 'Displacement')}<p class="node-caption">All render engines</p>`, WIDTH.output);
 // Blender labels, sockets and values stay in English.
 $$('.socket-label, .bs-label, .linked-label, .node-caption:not(.coordinate-note), .mapping-type, .axis-fields span, .static-bar, .image-strip button, .color-row span, .vec-label').forEach(el => el.setAttribute('data-no-i18n', ''));
+
+// ─── Parameter cards: an extended Blender-style tooltip on every value ─────────
+const tip = document.createElement('div'); tip.className = 'param-tip'; tip.hidden = true; tip.setAttribute('role', 'tooltip'); document.body.append(tip);
+function anchorsOf(at) {
+ const [kind, ...rest] = at.split(':'), key = rest.join(':');
+ const up = (el, sel) => el ? (el.closest(sel) || el) : null;
+ if (kind === 'field') return [...document.querySelectorAll(`#nodes [data-field="${key}"]`)];
+ if (kind === 'socket') return [up(document.querySelector(`.socket[data-dir="input"][data-key="${key}"]`), '.socket-row')];
+ if (kind === 'id') return [up(document.getElementById(key), '.color-row, .pslider, .prow, label')];
+ if (kind === 'panel') return [document.querySelector(`[data-panel-toggle="${key}"]`)];
+ if (kind === 'setting') return [up(document.querySelector(`[data-setting="${key}"]`), '.prow, .pcheck, .pslider')];
+ if (kind === 'css') return [...document.querySelectorAll(key)];
+ return [];
+}
+const isHex = v => /^#[0-9a-f]{6}$/i.test(v);
+function tipHtml(p) {
+ const ex = p.examples.map(([l, v]) => `<span class="pt-chip">${isHex(v) ? `<i style="background:${v}"></i>` : ''}<b>${esc(t(l))}</b> <em data-no-i18n>${esc(isHex(v) ? v.toUpperCase() : t(v))}</em></span>`).join('');
+ return `<div class="pt-name" data-no-i18n>${esc(p.name)}</div><p>${esc(t(p.what))}</p>
+  <div class="pt-h">${esc(t('Typical values'))}</div><p class="pt-range">${esc(t(p.range))}</p><div class="pt-ex">${ex}</div>
+  <div class="pt-warn"><b>${esc(t('Watch out'))}</b> ${esc(t(p.mistake))}</div>${p.engine ? `<div class="pt-engine"><b data-no-i18n>EEVEE · Cycles</b> ${esc(t(p.engine))}</div>` : ''}`;
+}
+let tipTimer = null, tipFor = null;
+function showTip(el, id) {
+ const p = PARAMS[id]; if (!p || pending || drag || S.modalBusy) return;
+ tip.innerHTML = tipHtml(p); tip.hidden = false; tipFor = el;
+ const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight, vw = innerWidth, vh = innerHeight;
+ let x = r.right + 12; if (x + w > vw - 8) x = r.left - w - 12; if (x < 8) x = Math.min(vw - w - 8, Math.max(8, r.left));
+ let y = Math.min(vh - h - 8, Math.max(8, r.top - 8)); if (x === r.left || (x < r.right && x + w > r.left)) y = r.bottom + 8 + h > vh ? Math.max(8, r.top - h - 8) : r.bottom + 8;
+ tip.style.left = `${x}px`; tip.style.top = `${y}px`;
+}
+function hideTip() { clearTimeout(tipTimer); tip.hidden = true; tipFor = null; }
+for (const [id, p] of Object.entries(PARAMS)) for (const el of anchorsOf(p.at)) {
+ if (!el || el.dataset.param) continue;
+ el.dataset.param = id; el.classList.add('has-param');
+ el.addEventListener('pointerenter', () => { clearTimeout(tipTimer); tipTimer = setTimeout(() => showTip(el, id), 550); });
+ el.addEventListener('pointerleave', hideTip);
+ el.addEventListener('focusin', () => showTip(el, id));
+ el.addEventListener('focusout', hideTip);
+}
+window.addEventListener('pointerdown', e => { if (!tip.contains(e.target)) hideTip(); }, true);
+window.addEventListener('wheel', hideTip, { passive: true });
+window.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
 
 // Place the visible nodes in columns, from coordinates on the left to the output on the right.
 function layout() {

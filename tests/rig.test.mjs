@@ -90,9 +90,16 @@ test('a slight bend in Edit Mode decides which way the IK bends without a pole',
   st.ik = { owner: 'Shin', target: 'IK_Foot', pole: null, poleAngle: 0, chain: 2, influence: 1 };
   assert.equal(R.solve(straight, st).info.straight, true);
 });
-import { restJump, poleOffPlane, switchPop, applyVisual } from '../labs/rig/stages.js';
+import { restJump, poleOffPlane, switchPop, applyVisual, ringInfo } from '../labs/rig/stages.js';
+const poleStep = id => STAGES.find(s => s.id === 'pole').steps.find(x => x.id === id);
+test('the knee circle: the pole chooses where on it the knee goes', () => {
+  const p0 = poleStep('p0'), a = p0.start(), r = ringInfo(a);
+  assert.ok(r.radius > 0.2, 'crouched: a big circle'); assert.ok(r.angle > 20 && r.angle < 40, `crooked 30°: ${r.angle}`); assert.equal(p0.check(a), false);
+  p0.solve(a); assert.ok(ringInfo(a).angle > 80); assert.ok(p0.check(a));
+  const p1 = poleStep('p1'), b = p1.start(); p1.solve(b); assert.ok(ringInfo(b).angle < 5, `in the plane: ${ringInfo(b).angle}`);
+});
 test('a crooked leg: the pole must be in the leg plane and the roll must match the knee', () => {
-  const [p1, p2] = STAGES.find(s => s.id === 'pole').steps;
+  const p1 = poleStep('p1'), p2 = poleStep('p2');
   const a = p1.start(); assert.ok(restJump(a).knee > 0.02); assert.ok(poleOffPlane(a) > 25);
   p1.solve(a); assert.ok(restJump(a).knee < 0.005); assert.ok(poleOffPlane(a) < 1); assert.ok(restJump(a).twist > 25, 'still twisted with roll 0');
   a.roll = -30; assert.ok(restJump(a).twist < 1 && restJump(a).knee < 0.005);
@@ -103,6 +110,6 @@ test('a straight-ish leg with roll 0 and Pole Angle −90 does not move when the
   const j = restJump(st); assert.ok(j.knee < 0.002 && j.twist < 0.5);
 });
 test('Visual Transform before switching removes the IK/FK pop', () => {
-  const p3 = STAGES.find(s => s.id === 'pole').steps[2], st = p3.start();
+  const p3 = poleStep('p3'), st = p3.start();
   assert.ok(switchPop(st) > 0.1); applyVisual(st, ['Thigh', 'Shin']); assert.ok(switchPop(st) < 0.005);
 });
