@@ -21,6 +21,7 @@ A home for small interactive activities that support CIFOG classroom presentatio
 - Texel Density Lab: https://xavikai.github.io/cifog-lab/labs/texel-density/
 - LOD & Mipmaps Lab: https://xavikai.github.io/cifog-lab/labs/lod/
 - Color Grading Lab: https://xavikai.github.io/cifog-lab/labs/grading/
+- Lightmap Lab: https://xavikai.github.io/cifog-lab/labs/lightmaps/
 
 ## Available labs
 
@@ -74,6 +75,8 @@ Each step is checked automatically, can show a solution and can be undone.
 
 **Color Grading Lab** (`labs/grading/`) teaches colour grading for video in a DaVinci Resolve-style Color page: a viewer (Bypass, Split with a Gallery still, Highlight), a Node Editor with serial nodes, palettes (Color Wheels with Lift / Gamma / Gain / Offset pucks and master dials, Temp, Tint, Contrast, Pivot, Sat, Hue; a Custom curve; an HSL Qualifier with picker; a Circle Power Window; LUTs) and scopes (Waveform, Parade, Vectorscope with skin tone line, Histogram). `shots.js` paints three shots (interview A camera, interview B close-up, exterior) as a flat log-like camera would record them, with region masks; `grade.js` holds the grade maths and the measurements. Five stages: **Read the scopes**; **Primary correction** (blacks and whites, a neutral grey card, saturation); **Nodes and the look** (a LUT on a serial node, an S curve); **Secondaries** (qualify the sky, light the face with a window); **Shot matching** (B camera against a still of the A camera, colourist decisions).
 
+**Lightmap Lab** (`labs/lightmaps/`) teaches lightmapping for Unity 6 (URP) with Blender. `lightmap.js` holds a small room made of rectangles and boxes (window, pillar, crate, vase, door), a shelf-packed lightmap atlas (Lightmap Resolution × Scale In Lightmap, padding, Max Lightmap Size), a progressive path tracer run in slices (sun, sky with Environment Samples, bounces with Indirect Samples, Gaussian or denoiser filtering of the indirect light, dilation into the padding, Baked vs Mixed · Baked Indirect), light probes (L0 irradiance, blended nearest probes, Adaptive Probe Volumes as a grid) and the Blender FBX / Unity import checks. The scene view draws lightmaps with a shader that adds the real-time sun with analytic shadows (boxes and the character), a Baked Lightmap and a UV Charts mode; a metal ball uses a captured cube map with box projection. Four stages: **UV2 and export** (UV0 overlaps, Lightmap Pack margin in texels, FBX and Model import settings); **Bake in Unity** (resolution, Scale In Lightmap, bounces, samples and denoiser); **Light modes** (Baked vs Mixed with a walking character, static flags and Receive GI, Lighting Mode quiz); **Probes** (Light Probe Group placement on a top view, APV spacing, Reflection Probe with Box Projection).
+
 The Blender labs follow Blender conventions where it helps transfer: Material Lab links are made by dragging from an output to an input (compatible inputs light up), removed or moved by dragging a connected input away, and cut with Ctrl + right-drag; the mouse wheel zooms, the middle button pans and Home fits all nodes; values use Blender-style slider bars.
 
 **Languages.** Every page has an EN / CA / ES switch in the header. The explanations, instructions, feedback and hints are translated into Catalan and Spanish; the interface names and technical terms (Blender's Mark Seam, UV Editor, Principled BSDF…, C# keywords and code) stay in English so they match the real software, and real C# compiler messages (with their CS codes) stay in English with a translated hint. The choice is saved in the browser; the first visit follows the browser language. The shared engine is `i18n.js`; each page has its own dictionary (`home.i18n.js`, `labs/<name>/i18n.js`) whose keys are the English texts, with `{placeholders}` for changing values.
@@ -110,6 +113,7 @@ The tests cover material graph connections, Mapping transformations, valid or co
 - `labs/stage-lighting/`: Stage Lighting Lab. `rig.js` (fixtures, photometry, DMX, patch, cues), `stages.js`, `app.js`.
 - `labs/texel-density/`: Texel Density Lab. `td.js` (props, density, pack, Set TD, camera, memory), `stages.js`, `app.js`.
 - `labs/lod/`: LOD & Mipmaps Lab. `lod.js` (rock LODs, screen error, LOD Group, mips, field budget), `stages.js`, `app.js`.
+- `labs/lightmaps/`: Lightmap Lab. `lightmap.js` (room, atlas packing, path-traced bake, probes, FBX checks), `stages.js`, `app.js`.
 - `labs/grading/`: Color Grading Lab. `grade.js` (nodes, wheels, curves, LUTs, keys, scopes maths), `shots.js` (painted shots and masks), `stages.js`, `app.js`.
 - `labs/color-type/`: Color & Type Lab. `color.js` (colour maths, contrast, CVD, print model), `type.js` (fonts and text rules), `doc.js` (the page, styles and tokens), `stages.js`, `app.js`, `fonts/` (OFL fonts; `tools/font-metrics.cjs` measures them).
 - `labs/stage/`: Stage House Lab. `stage.js` (the model, sightlines, loads and interlocks), `stages.js` (steps and the parts of the building), `app.js`.
