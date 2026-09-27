@@ -1,11 +1,12 @@
 // Texel Density Lab: stages, steps and checks. Pure JS (tested with node).
 import { buildScene, objectsOf, packedUV, placeIsland, islandFaces, objectFaces, objectDensity, islandDensity, density, areas, inside, overlaps,
-  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, GAMES, camOf, targetFor, setMB, bbox, translate, scale } from './td.js?v=4';
+  averageIslandsScale, pack, setTD, minRes, onTarget, rightTarget, CAMERAS, GAMES, camOf, targetFor, setMB, bbox, translate, scale, cutUV, stripsOf, stripReport, SHEET } from './td.js?v=5';
 
 const meshCache = new Map();
 export function meshOf(st) {
-  const key = `${st.scene}|${JSON.stringify(st.scale || {})}`;
-  if (!meshCache.has(key)) { if (meshCache.size > 24) meshCache.clear(); meshCache.set(key, buildScene(st.scene, st.scale)); }
+  const opts = st.scene === 'cutwall' ? { cuts: st.cuts || [], zones: st.zones || [] } : {};
+  const key = `${st.scene}|${JSON.stringify(st.scale || {})}|${JSON.stringify(opts)}`;
+  if (!meshCache.has(key)) { if (meshCache.size > 24) meshCache.clear(); meshCache.set(key, buildScene(st.scene, st.scale, opts)); }
   return meshCache.get(key);
 }
 export function defaultState() {
@@ -16,9 +17,30 @@ export function startState(step) {
   const s = Object.assign(defaultState(), clone(step.start || {}));
   for (const o of objectsOf(s.scene)) { s.res[o] ??= 1024; s.scale[o] ??= 1; }
   s.active ??= objectsOf(s.scene)[0];
-  if (!s.uv) s.uv = packedUV(meshOf(s));
+  if (s.scene === 'cutwall') s.uv = cutUV(meshOf(s));
+  else if (!s.uv) s.uv = packedUV(meshOf(s));
   if (step.setup) step.setup(s);
   return s;
+}
+// ─── Loop cuts on the corridor wall (step a4) ────────────────────────────────
+// Keep st.uv in step with the cuts and the zones (the UVs follow from them).
+export function syncCuts(st) {
+  if (st.scene !== 'cutwall') return st;
+  const n = stripsOf(st.cuts).length; st.zones = Array.from({ length: n }, (_, i) => (st.zones || [])[i] || 'bricks');
+  st.uv = cutUV(meshOf(st)); return st;
+}
+export function addCut(st) {
+  const s = stripsOf(st.cuts), [y0, y1] = s.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+  const y = Math.round((y0 + y1) / 2 * 100) / 100, i = s.findIndex(p => p[0] === y0);
+  st.cuts = [...(st.cuts || []), y].sort((a, b) => a - b);
+  const z = [...(st.zones || [])]; z.splice(i + 1, 0, z[i] || 'bricks'); st.zones = z;
+  return syncCuts(st);
+}
+export function cutReport(st) {
+  const res = st.res.cutwall || 1024, strips = stripReport(meshOf(st), res), tg = 512;
+  const rows = strips.map(r => ({ ...r, ok: Math.abs(r.du - tg) <= tg * 0.1 && Math.abs(r.dv - tg) <= tg * 0.1 }));
+  const zones = rows.map(r => r.zone);
+  return { rows, cuts: rows.length - 1, base: zones[0] === 'baseboard', cornice: zones[zones.length - 1] === 'cornice', ok: rows.every(r => r.ok) };
 }
 export const densityOf = (st, obj) => objectDensity(meshOf(st), st.uv, obj, st.res[obj]);
 export const islandDensityOf = (st, id) => { const m = meshOf(st); return islandDensity(m, st.uv, id, st.res[m.islands[id].obj]); };
@@ -223,6 +245,15 @@ export const STAGES = [
         check: s => objectsOf(s.scene).every(o => onTarget(densityOf(s, o), 512, 0.05) && isInside(s, o) && !wasted(s, o, 512)),
         solve: s => { const m = meshOf(s); for (const o of objectsOf(s.scene)) { s.res[o] = minRes(o, 512); } s.uv = packedUV(m); for (const o of objectsOf(s.scene)) setTD(m, s.uv, o, s.res[o], 512); },
       },
+      {
+        id: 'a4', title: 'Loop cuts for the texture zones',
+        text: 'Game corridors are often textured with a trim sheet: one texture shared by many walls, with horizontal zones (baseboard, cornice, bricks) that repeat from left to right. This wall is a single quad. One face can only sit on one zone of the sheet, so it gets bricks from the floor to the ceiling, and stretched: the brick zone is 1.5 m high and the wall is 2 m. Turn on Wireframe to see the faces. Add loop cuts where the texture changes and send each strip to its zone: every strip must keep 512 px/m across and up.',
+        how: ['In the 3D header, turn on <b>Wireframe</b>: the white lines are the edges of the faces. Now there is only one face.', 'In the <b>Loop cuts</b> panel press <b>Loop Cut</b> (<kbd>Ctrl</kbd> <kbd>R</kbd>) twice and type the heights: the baseboard is 0.25 m high and the cornice takes the top 0.25 m.', 'Choose the <b>Zone</b> of each strip. A strip taller or shorter than its zone is stretched: its px/m up changes.'],
+        why: 'Density can only be kept where each part of the surface has its own faces to map. A plane without divisions can only repeat or stretch one piece of texture. Cut where the texture changes, not everywhere: the brick strip needs no more cuts.',
+        start: { scene: 'cutwall', view: 'texture', uvImage: 'texture', target: 512, res: { cutwall: 1024 }, cuts: [], zones: ['bricks'] },
+        check: s => { const r = cutReport(s); return r.base && r.cornice && r.ok; },
+        solve: s => { s.cuts = [0.25, 1.75]; s.zones = ['baseboard', 'bricks', 'cornice']; syncCuts(s); },
+      },
     ],
   },
   {
@@ -288,4 +319,4 @@ export const STAGES = [
     ],
   },
 ];
-export { onTarget, rightTarget, CAMERAS, GAMES, camOf, targetFor, setMB, minRes, objectsOf, bbox, translate, scale, density };
+export { onTarget, rightTarget, CAMERAS, GAMES, camOf, targetFor, setMB, minRes, objectsOf, bbox, translate, scale, density, SHEET, stripsOf };

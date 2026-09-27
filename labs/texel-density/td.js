@@ -19,9 +19,24 @@ export const OBJECTS = {
   barrel:  { name: 'Barrel', size: 'Ø 0.6 × 0.9 m' },
   cabinet: { name: 'Cabinet', size: '1.2 × 0.8 × 0.5 m' },
   vending: { name: 'Vending machine', size: '0.9 × 1.9 × 0.8 m' },
+  cutwall: { name: 'Corridor wall', size: '3 × 2 m' },
 };
 // Pattern ids used by the texture shader (and by the pixel loupe).
-export const PAT = { planks: 0, bricks: 1, staves: 2, cabinet: 3, vendFront: 4, vendSide: 5 };
+export const PAT = { planks: 0, bricks: 1, staves: 2, cabinet: 3, vendFront: 4, vendSide: 5, trim: 6 };
+// A trim sheet: one 2 × 2 m texture (1K = 512 px/m) with horizontal zones that repeat from left to right.
+// v0 and h are metres on the sheet, from the bottom.
+export const SHEET = { m: 2, zones: {
+  baseboard: { name: 'Baseboard', v0: 0, h: 0.25 },
+  cornice:   { name: 'Cornice', v0: 0.25, h: 0.25 },
+  bricks:    { name: 'Bricks', v0: 0.5, h: 1.5 },
+} };
+export const CUTWALL = { w: 3, h: 2 };
+// The horizontal strips between the loop cuts of the corridor wall: [[y0, y1], …] from the bottom.
+export function stripsOf(cuts = []) {
+  const ys = [0, ...[...cuts].filter(y => y > 0.02 && y < CUTWALL.h - 0.02).sort((a, b) => a - b), CUTWALL.h];
+  const out = []; for (let i = 1; i < ys.length; i++) if (ys[i] - ys[i - 1] > 1e-6) out.push([ys[i - 1], ys[i]]);
+  return out;
+}
 
 function newMesh() { return { pos: [], faces: [], islands: {}, objects: {}, extras: [], keys: new Map() }; }
 function vid(m, p) {
@@ -68,20 +83,45 @@ export function barrel(m, o = [0, 0, 0], k = 1) {
   m.extras.push({ kind: 'disk', obj: 'barrel', center: [o[0], o[1] + H, o[2]], r: R });
 }
 export function cabinet(m, o = [0, 0, 0], k = 1) { box(m, 'cabinet', o, k, 1.2, 0.8, 0.5, ['front', 'back', 'top', 'left', 'right'], { all: PAT.cabinet }); }
+// A wall of 3 × 2 m made of horizontal strips (one quad each). Each strip is mapped to one zone of the trim sheet:
+// across, 1 m of wall = 0.5 of the sheet (512 px/m on 1K); up, the whole strip fills the height of its zone.
+export function cutwall(m, o = [0, 0, 0], k = 1, opts = {}) {
+  m.objects.cutwall = { islands: [], origin: o };
+  const zones = opts.zones || [];
+  stripsOf(opts.cuts).forEach(([y0, y1], i) => {
+    const zk = SHEET.zones[zones[i]] ? zones[i] : 'bricks', z = SHEET.zones[zk], h = y1 - y0, id = `cutwall.s${i}`;
+    const isl = m.islands[id] = { name: `Strip ${i + 1}`, obj: 'cutwall', pat: PAT.trim, faces: [], zone: zk };
+    m.objects.cutwall.islands.push(id);
+    const c = [[0, 0], [CUTWALL.w, 0], [CUTWALL.w, h], [0, h]];
+    isl.faces.push(m.faces.length);
+    m.faces.push({ v: c.map(([s, t]) => vid(m, [o[0] - CUTWALL.w / 2 + s, o[1] + y0 + t, o[2]])), loc: c.map(([s, t]) => [s, z.v0 + t / h * z.h]), real: c, island: id });
+  });
+  m.extras.push({ kind: 'quad', obj: 'wall', pts: [[1.5, 0, -0.02], [-1.5, 0, -0.02], [-1.5, 2, -0.02], [1.5, 2, -0.02]].map(p => [o[0] + p[0], o[1] + p[1], o[2] + p[2]]) });
+}
+// UVs of the corridor wall: the sheet coordinates in metres ÷ 2 (u goes past 1: the strips repeat across).
+export const cutUV = m => m.faces.map(f => f.loc.map(([s, t]) => [s / SHEET.m, t / SHEET.m]));
+// Density of each strip across (u) and up (v), in px/m.
+export function stripReport(m, res) {
+  return m.objects.cutwall.islands.map(id => {
+    const isl = m.islands[id], f = m.faces[isl.faces[0]], z = SHEET.zones[isl.zone], h = f.real[2][1];
+    return { id, zone: isl.zone, h, du: res / SHEET.m, dv: res * (z.h / SHEET.m) / h };
+  });
+}
 export function vending(m, o = [0, 0, 0], k = 1) { box(m, 'vending', o, k, 0.9, 1.9, 0.8, ['front', 'left', 'right', 'top', 'back'], { all: PAT.vendSide, front: PAT.vendFront }); }
 
-const BUILD = { crate, wall, barrel, cabinet, vending };
+const BUILD = { crate, wall, barrel, cabinet, vending, cutwall };
 export const SCENES = {
   crate:   [['crate', [0, 0, 0]]],
   wall:    [['wall', [0, 0, 0]]],
   cabinet: [['cabinet', [0, 0, 0]]],
   vending: [['vending', [0, 0, 0]]],
+  cutwall: [['cutwall', [0, 0, 0]]],
   trio:    [['crate', [-2.1, 0, 0.7]], ['wall', [0, 0, -0.7]], ['barrel', [2.0, 0, 0.5]]],
   shop:    [['crate', [-2.3, 0, 0.8]], ['wall', [-0.6, 0, -0.8]], ['barrel', [0.95, 0, 0.6]], ['vending', [2.35, 0, -0.35]]],
 };
-export function buildScene(name, scale = {}) {
+export function buildScene(name, scale = {}, opts = {}) {
   const m = newMesh();
-  for (const [obj, o] of SCENES[name]) BUILD[obj](m, o, scale[obj] ?? 1);
+  for (const [obj, o] of SCENES[name]) BUILD[obj](m, o, scale[obj] ?? 1, opts);
   delete m.keys;
   return m;
 }
@@ -115,7 +155,7 @@ export const objectDensity = (m, uv, obj, res) => density(m, uv, objectFaces(m, 
 // Size of a face (or island) in metres: the extent of its flat layout.
 export function realSize(m, faces) {
   let s0 = Infinity, s1 = -Infinity, t0 = Infinity, t1 = -Infinity;
-  for (const f of faces) for (const [s, t] of m.faces[f].loc) { s0 = Math.min(s0, s); s1 = Math.max(s1, s); t0 = Math.min(t0, t); t1 = Math.max(t1, t); }
+  for (const f of faces) for (const [s, t] of (m.faces[f].real || m.faces[f].loc)) { s0 = Math.min(s0, s); s1 = Math.max(s1, s); t0 = Math.min(t0, t); t1 = Math.max(t1, t); }
   return { w: s1 - s0, h: t1 - t0 };
 }
 export const onTarget = (d, target, tol = TOL) => Math.abs(d / target - 1) <= tol;
@@ -331,7 +371,36 @@ function patVendSide(s, t) {
   if (inBox(s, t, 0.3, 0.3, 0.52, 0.44)) { c = [0.98, 0.86, 0.2]; for (let i = 0; i < 6; i++) c = mixc(c, [0.05, 0.05, 0.05], text(s, t, 0.31, 0.415 - i * 0.018, 0.0065, 30)); }
   return c;
 }
-const PATTERNS = [patPlanks, brickColor, patStaves, patCabinet, patVendFront, patVendSide];
+// The trim sheet (s, t in metres on the sheet, 2 × 2 m): baseboard, cornice and a band of bricks, all repeating every 2 m across.
+function patTrim(s, t) {
+  s = ((s % 2) + 2) % 2;
+  if (t < 0.25) {
+    let c = mul([0.36, 0.22, 0.12], 0.9 + 0.15 * hash(Math.floor(s / 0.5), 1));
+    if (fract(s * 23 + 0.3 * Math.sin(t * 40)) <= 0.3) c = mul(c, 0.88);
+    if (t > 0.19) c = mul([0.48, 0.31, 0.17], t > 0.225 ? 1.15 : 0.85);
+    return t < 0.015 ? mul(c, 0.55) : c;
+  }
+  if (t < 0.5) {
+    const y = t - 0.25;
+    let c = mul([0.87, 0.84, 0.77], y < 0.03 ? 0.7 : y < 0.07 ? 1.05 : y < 0.1 ? 0.82 : y < 0.16 ? 1 : y < 0.19 ? 0.78 : y < 0.22 ? 1.08 : 0.92);
+    if (fract(s / 0.1) < 0.5 && y >= 0.1 && y <= 0.16) c = mul(c, 0.82);
+    return c.map(x => Math.min(1, x));
+  }
+  const q = t - 0.5, row = Math.floor(q / 0.075), x = s / 0.25 + (((row % 2) + 2) % 2) * 0.5, col = Math.floor(x);
+  if (fract(q / 0.075) > 0.8667 || fract(x) > 0.96) return [0.72, 0.70, 0.66];
+  const c = mixc([0.62, 0.25, 0.17], [0.48, 0.18, 0.13], hash(((col % 8) + 8) % 8, row));
+  return hash(Math.floor(s / 0.012), Math.floor(q / 0.012)) > 0.86 ? mul(c, 0.75) : c;
+}
+const PATTERNS = [patPlanks, brickColor, patStaves, patCabinet, patVendFront, patVendSide, patTrim];
+// The whole trim sheet as an image of size × size pixels.
+export function paintSheet(size) {
+  const data = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const c = patTrim((x + 0.5) / size * SHEET.m, (1 - (y + 0.5) / size) * SHEET.m), k = (y * size + x) * 4;
+    data[k] = c[0] * 255; data[k + 1] = c[1] * 255; data[k + 2] = c[2] * 255; data[k + 3] = 255;
+  }
+  return data;
+}
 // The colour (sRGB 0–1) of pattern `k` at (s, t) metres: the same pictures the 3D view paints.
 export const patternColor = (k, s, t) => PATTERNS[k](s, t);
 // Paint the texture image of an object from its UVs: every pixel inside an island gets the colour of the

@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { RES, CHECKER, OBJECTS, MARGIN, TARGETS, SCREEN, islandFaces, objectFaces, bbox, cloneUV, translate, scale as scaleUV, rotate as rotateUV,
-  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, GAMES, camDensity, screenOf, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture, ruler } from './td.js?v=4';
+  averageIslandsScale, pack, setTD, realSize, onTarget, screenDensity, rightTarget, CAMERAS, GAMES, camDensity, screenOf, setMB, packedDensity1, minRes, brickColor, objectsOf, areas, paintTexture, ruler, SHEET, paintSheet } from './td.js?v=5';
 import { STAGES, MEASURE, SEE_QUIZ, RULES, HERO, HERO_WHY, BUDGET_MB, startState, meshOf, densityOf, islandDensityOf, islandsOf, isInside, overlapsOf,
-  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, camFor, sceneStats, memoryFor, wasted } from './stages.js?v=4';
+  answerMeasure, answerQuiz, knobs, updateKnobs, resetKnobs, camAnswer, camFor, sceneStats, memoryFor, wasted, syncCuts, addCut, cutReport } from './stages.js?v=5';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=4';
+import dictionary from './i18n.js?v=5';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -17,7 +17,7 @@ const store = {
 };
 const S = {
   stageIndex: Math.min(Math.max(0, store.get('stage', 0) | 0), STAGES.length - 1), step: 0, st: null, undo: [], redo: [],
-  done: store.get('done', {}), sel: new Set(), hover: false, pivot: 'bbox', modal: null, feedback: null,
+  done: store.get('done', {}), sel: new Set(), hover: false, pivot: 'bbox', modal: null, feedback: null, wire: !!store.get('wire', false),
 };
 const stage = () => STAGES[S.stageIndex], step = () => stage().steps[S.step];
 const sid = () => step().id;
@@ -143,11 +143,32 @@ vec3 vendSide(vec2 p) {
   }
   return c;
 }
+vec3 trimSheet(vec2 p) {
+  p.x = mod(p.x, 2.);
+  if (p.y < .25) {
+    vec3 c = vec3(.36, .22, .12) * (.9 + .15 * h21(vec2(floor(p.x / .5), 1.)));
+    c *= 1. - .12 * step(fract(p.x * 23. + .3 * sin(p.y * 40.)), .3);
+    if (p.y > .19) c = vec3(.48, .31, .17) * (p.y > .225 ? 1.15 : .85);
+    return p.y < .015 ? c * .55 : c;
+  }
+  if (p.y < .5) {
+    float y = p.y - .25;
+    vec3 c = vec3(.87, .84, .77) * (y < .03 ? .7 : y < .07 ? 1.05 : y < .1 ? .82 : y < .16 ? 1. : y < .19 ? .78 : y < .22 ? 1.08 : .92);
+    c *= 1. - .18 * step(fract(p.x / .1), .5) * step(.1, y) * step(y, .16);
+    return min(c, vec3(1.));
+  }
+  vec2 q = p - vec2(0., .5);
+  float row = floor(q.y / .075), x = q.x / .25 + mod(row, 2.) * .5, col = floor(x);
+  if (fract(q.y / .075) > .8667 || fract(x) > .96) return vec3(.72, .70, .66);
+  vec3 c = mix(vec3(.62, .25, .17), vec3(.48, .18, .13), h21(vec2(mod(col, 8.), row)));
+  return h21(floor(q / .012)) > .86 ? c * .75 : c;
+}
 vec3 pattern(vec2 p, float k) {
-  vec3 c = k < .5 ? planks(p) : k < 1.5 ? bricks(p) : k < 2.5 ? staves(p) : k < 3.5 ? cabinet(p) : k < 4.5 ? vendFront(p) : vendSide(p);
+  vec3 c = k < .5 ? planks(p) : k < 1.5 ? bricks(p) : k < 2.5 ? staves(p) : k < 3.5 ? cabinet(p) : k < 4.5 ? vendFront(p) : k < 5.5 ? vendSide(p) : trimSheet(p);
   return pow(c, vec3(2.2));
 }`;
 const material = new THREE.ShaderMaterial({
+  polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   uniforms: { uChecker: { value: 1 }, uLight: { value: new THREE.Vector3(-0.35, 0.75, 0.55).normalize() } },
   vertexShader: /* glsl */`
     attribute vec2 loc; attribute float pat; attribute float tres;
@@ -193,8 +214,10 @@ const material = new THREE.ShaderMaterial({
 });
 const overlayMat = new THREE.MeshBasicMaterial({ color: 0xffa629, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide });
 const edgeMat = new THREE.LineBasicMaterial({ color: 0xffa629, depthTest: false, transparent: true });
+const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+const wirePts = new THREE.PointsMaterial({ color: 0xffffff, size: 5, sizeAttenuation: false });
 const extraMats = { wall: new THREE.MeshLambertMaterial({ color: 0x6b5a50 }), barrel: new THREE.MeshLambertMaterial({ color: 0x7a5230 }) };
-const CAMS = { crate: [[1.2, 1.0, 1.5], [0, 0.25, 0]], cabinet: [[1.6, 1.4, 2.4], [0, 0.4, 0]], vending: [[1.9, 1.9, 3.4], [0, 0.95, 0]], wall: [[1.2, 1.6, 5.2], [0, 1.0, 0]], trio: [[0.4, 2.8, 7.4], [0, 0.6, 0]], shop: [[0.2, 3.1, 8.2], [0, 0.8, 0]] };
+const CAMS = { crate: [[1.2, 1.0, 1.5], [0, 0.25, 0]], cabinet: [[1.6, 1.4, 2.4], [0, 0.4, 0]], vending: [[1.9, 1.9, 3.4], [0, 0.95, 0]], wall: [[1.2, 1.6, 5.2], [0, 1.0, 0]], trio: [[0.4, 2.8, 7.4], [0, 0.6, 0]], cutwall: [[0.9, 1.3, 4.6], [0, 1.0, 0]], shop: [[0.2, 3.1, 8.2], [0, 0.8, 0]] };
 function frame() {
   const st = S.st;
   if (isLoupe()) { const c = camFor(st), d = c.d; camera.fov = screenOf(c).fov; camera.position.set(0, 1.2, 0.125 + d); controls.target.set(0, 1.2, 0.125); }
@@ -204,7 +227,7 @@ function frame() {
     for (const q of m.pos) box.expandByPoint(new THREE.Vector3(...q));
     const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
     camera.fov = 35; camera.aspect = (host.clientWidth || 1) / (host.clientHeight || 1);
-    const fv = camera.fov * Math.PI / 180, fh = 2 * Math.atan(Math.tan(fv / 2) * camera.aspect), dist = r / Math.sin(Math.min(fv, fh) / 2) * (objectsOf(st.scene).length > 1 ? 1.08 : 1.3);
+    const fv = camera.fov * Math.PI / 180, fh = 2 * Math.atan(Math.tan(fv / 2) * camera.aspect), dist = r / Math.sin(Math.min(fv, fh) / 2) * (st.scene === 'cutwall' ? 1.02 : objectsOf(st.scene).length > 1 ? 1.08 : 1.3);
     const dir = new THREE.Vector3(p[0] - tg[0], p[1] - tg[1], p[2] - tg[2]).normalize();
     camera.position.copy(c).addScaledVector(dir, dist); controls.target.copy(c);
   }
@@ -233,6 +256,18 @@ function build3D() {
   g.setAttribute('pat', new THREE.Float32BufferAttribute(pat, 1)); g.setAttribute('tres', new THREE.Float32BufferAttribute(res, 1));
   material.uniforms.uChecker.value = st.view === 'checker' && !isLoupe() ? 1 : 0;
   meshObj = new THREE.Mesh(g, material); world.add(meshObj);
+  // Wireframe overlay: every edge of the quads, drawn once.
+  if (S.wire) {
+    const seen = new Set(), wp = [];
+    for (const face of m.faces) for (let k = 0; k < 4; k++) {
+      const a = face.v[k], b = face.v[(k + 1) % 4], key = a < b ? a + '|' + b : b + '|' + a;
+      if (!seen.has(key)) { seen.add(key); wp.push(...m.pos[a], ...m.pos[b]); }
+    }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+    world.add(new THREE.LineSegments(wg, wireMat));
+    const vg = new THREE.BufferGeometry(); vg.setAttribute('position', new THREE.Float32BufferAttribute(m.pos.flat(), 3));
+    world.add(new THREE.Points(vg, wirePts));
+  }
   for (const e of m.extras) {
     let eg;
     if (e.kind === 'disk') { eg = new THREE.CircleGeometry(e.r, 24); eg.rotateX(-Math.PI / 2); eg.translate(...e.center); }
@@ -349,7 +384,11 @@ function drawUV() {
   ctx.fillStyle = '#232323'; ctx.fillRect(0, 0, w, h);
   if (isLoupe()) { drawLoupe(w, h); uvDirty = false; return; }
   const obj = st.active, res = st.res[obj], n = res / CHECKER, [x0, y0] = toScr(0, 1), cell = V.sc / n, texel = V.sc / res;
-  if (st.uvImage === 'texture' && !S.modal) {
+  if (st.scene === 'cutwall' && st.uvImage === 'texture') {
+    ctx.imageSmoothingEnabled = texel < 1; ctx.drawImage(sheetImage(Math.min(2048, res)), x0, y0, V.sc, V.sc); ctx.imageSmoothingEnabled = true;
+    ctx.font = '10.5px Inter, Segoe UI, sans-serif'; ctx.textBaseline = 'middle';
+    for (const z of Object.values(SHEET.zones)) { const [, zy] = toScr(0, (z.v0 + z.h) / SHEET.m); const lab = `${t(z.name)} · ${z.h} m`, lw = ctx.measureText(lab).width; ctx.fillStyle = 'rgba(15,15,15,.85)'; ctx.fillRect(x0 + 4, zy + 3, lw + 8, 15); ctx.fillStyle = '#ffd88a'; ctx.fillText(lab, x0 + 8, zy + 11); ctx.strokeStyle = 'rgba(255,216,138,.8)'; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x0 - 6, zy + 0.5); ctx.lineTo(x0 + V.sc, zy + 0.5); ctx.stroke(); ctx.setLineDash([]); }
+  } else if (st.uvImage === 'texture' && !S.modal) {
     // The texture image itself, painted from the UVs: its pixels are the texels.
     ctx.imageSmoothingEnabled = texel < 1; ctx.drawImage(textureImage(obj), x0, y0, V.sc, V.sc); ctx.imageSmoothingEnabled = true;
   } else {
@@ -371,7 +410,7 @@ function drawUV() {
   ctx.fillText(`${res} px`, x0 + V.sc - ctx.measureText(`${res} px`).width, y0 - 9); ctx.fillText('0', x0 - 10, y0 + V.sc + 8); ctx.fillText('1', x0 + V.sc + 3, y0 + V.sc + 8);
   const m = meshOf(st), hide = sid() === 's2';
   const ids = islandsOf(st, obj).map(id => { const b = bbox(st.uv, islandFaces(m, id)); return [id, b.w * b.h]; }).sort((a, b) => b[1] - a[1]).map(a => a[0]);
-  const bad = new Set(overlapsOf(st, obj).flat());
+  const bad = new Set(st.scene === 'cutwall' ? [] : overlapsOf(st, obj).flat());
   for (const pass of [0, 1]) for (const id of ids) {
     const sel = S.sel.has(id); if ((pass === 1) !== sel) continue;
     const d = islandDensityOf(st, id), tg = targetOf(id), ok = tg ? onTarget(d, tg) : null;
@@ -389,7 +428,8 @@ function drawUV() {
   ctx.lineWidth = 1;
   if (S.sel.size === 1 && !hide) drawDimensions(m, [...S.sel][0], res);
   if (rulerIsland()) drawRulerUV(m, rulerIsland(), res);
-  if (!isInside(st, obj)) { ctx.fillStyle = '#ff8a65'; ctx.fillText(t('Some islands are outside the square: they repeat the texture.'), 8, h - 12); }
+  if (st.scene === 'cutwall') { ctx.fillStyle = '#9fd3ff'; ctx.fillText(t('The strips go past the right edge: the sheet repeats from left to right.'), 8, h - 12); }
+  else if (!isInside(st, obj)) { ctx.fillStyle = '#ff8a65'; ctx.fillText(t('Some islands are outside the square: they repeat the texture.'), 8, h - 12); }
   uvDirty = false;
 }
 // The 1 m ruler on the texture: its length in pixels of the image is the texel density.
@@ -422,6 +462,11 @@ function drawDimensions(m, id, res) {
   ctx.lineWidth = 1;
 }
 // The painted texture of an object, cached until its UVs or its size change.
+const sheetCache = new Map();
+function sheetImage(size) {
+  if (!sheetCache.has(size)) { const c = document.createElement('canvas'); c.width = c.height = size; c.getContext('2d').putImageData(new ImageData(paintSheet(size), size, size), 0, 0); sheetCache.set(size, c); }
+  return sheetCache.get(size);
+}
 const texCache = new Map();
 function textureImage(obj) {
   const st = S.st, m = meshOf(st), size = Math.min(2048, st.res[obj]);
@@ -736,6 +781,19 @@ function quizPanel(list, answers) {
     ${answers && !done ? `<div class="rule-grid">${[['higher', 'Higher'], ['same', 'Same'], ['lower', 'Lower']].map(([k, n]) => `<button type="button" data-rule="${k}">${esc(t(n))}</button>`).join('')}</div>` : ''}
     ${S.feedback ? `<p class="td-note ${S.feedback.ok ? 'good' : 'bad'}">${esc(S.feedback.text)}</p>` : ''}</div>`;
 }
+function cutsPanel() {
+  const st = S.st, r = cutReport(st), rows = r.rows.map((x, i) => ({ ...x, i })).reverse();
+  const zoneSel = (i, z) => `<select data-zone="${i}">${Object.entries(SHEET.zones).map(([k, v]) => `<option value="${k}"${k === z ? ' selected' : ''}>${esc(t(v.name))}</option>`).join('')}</select>`;
+  const cuts = (st.cuts || []).map((y, i) => `<label class="bl-row cut-row"><span>${esc(tr('Cut {n}', { n: i + 1 }))}</span><input type="number" data-cut="${i}" value="${y}" step="0.05" min="0.05" max="1.95"><em data-no-i18n>m</em><button type="button" class="cut-del" data-op="delcut" data-i="${i}" aria-label="${esc(t('Remove'))}">×</button></label>`).join('');
+  const notes = [!S.wire ? 'Turn on Wireframe in the 3D header to see the faces.' : '', !r.base ? 'The bottom strip must go to the Baseboard zone.' : '', !r.cornice ? 'The top strip must go to the Cornice zone.' : '', r.rows.some(x => !x.ok) ? 'Red strips are stretched: their height does not match the height of their zone.' : ''].filter(Boolean);
+  return `<div class="panel"><h4>${esc(t('Loop cuts'))}<small data-no-i18n>${r.cuts}</small></h4>
+    <button type="button" class="td-set" data-op="addcut"><span data-no-i18n>Loop Cut</span> <kbd>Ctrl R</kbd></button>${cuts}
+    <p class="td-note">${esc(t('Heights from the floor, in metres. The wall is 2 m high.'))}</p></div>
+    <div class="panel"><h4>${esc(t('Strips'))}<small>${esc(t('top to bottom'))}</small></h4>
+    ${rows.map(x => `<div class="strip-row ${x.ok ? 'good' : 'bad'}"><span><b>${esc(t('Strip ' + (x.i + 1)))}</b><small data-no-i18n>${x.h.toFixed(2)} m</small></span>${zoneSel(x.i, x.zone)}<em data-no-i18n>${Math.round(x.du)} × ${Math.round(x.dv)}</em></div>`).join('')}
+    <p class="td-note">${esc(t('px/m across × up, on the 1K trim sheet. Target: 512 × 512.'))}</p>
+    ${notes.map(n => `<p class="td-note bad">${esc(t(n))}</p>`).join('')}</div>`;
+}
 function renderProps() {
   const st = S.st, id = sid(); let h = '';
   const multi = objectsOf(st.scene).length > 1;
@@ -747,6 +805,7 @@ function renderProps() {
   else if (id === 'a1') h += tdPanel() + islandsPanel() + uvToolsPanel(false);
   else if (id === 'a2') h += tdPanel() + islandsPanel() + uvToolsPanel(true);
   else if (id === 'a3') h += tdPanel({ resEdit: true, set: true }) + objectsPanel();
+  else if (id === 'a4') h += cutsPanel();
   else if (id === 'c1') h += cameraPanel();
   else if (id === 'g1') h += gamePanel();
   else if (id === 'c2') h += budgetPanel() + objectsPanel();
@@ -757,7 +816,9 @@ function renderProps() {
 $('#props').addEventListener('click', e => {
   const b = e.target.closest('button, li[data-isl], li[data-obj]'); if (!b) return;
   const d = b.dataset, st = S.st;
-  if (d.op === 'average') opAverage();
+  if (d.op === 'addcut') { pushUndo(); addCut(st); changed(); msg('Loop cut added: type its height, then choose the zone of each strip.'); }
+  else if (d.op === 'delcut') { pushUndo(); const i = +d.i; st.cuts.splice(i, 1); st.zones.splice(i + 1, 1); syncCuts(st); changed(); }
+  else if (d.op === 'average') opAverage();
   else if (d.op === 'pack') opPack();
   else if (d.op === 'all') selectAll(true);
   else if (d.isl) pick(d.isl, e.shiftKey);
@@ -787,6 +848,8 @@ $('#props').addEventListener('change', e => {
   else if (el.id === 'k-res') { pushUndo(); st.res.crate = +el.value; changed(); }
   else if (el.id === 'k-scale') { pushUndo(); st.scale.crate = +el.value; changed(); }
   else if (el.id === 'cam-target') { pushUndo(); st.camTarget = +el.value; changed(); }
+  else if (el.dataset.cut != null) { const v = parseFloat(el.value); if (!Number.isFinite(v)) return; pushUndo(); st.cuts[+el.dataset.cut] = Math.min(1.95, Math.max(0.05, Math.round(v * 1000) / 1000)); st.cuts.sort((a, b) => a - b); syncCuts(st); changed(); }
+  else if (el.dataset.zone != null) { pushUndo(); st.zones[+el.dataset.zone] = el.value; syncCuts(st); changed(); }
   else if (el.dataset.custom) { const v = parseFloat(el.value), lim = { h: [100, 8000], fov: [10, 150], d: [0.1, 100] }[el.dataset.custom]; if (!Number.isFinite(v)) return; pushUndo(); st.custom = { ...(st.custom || { h: 1080, fov: 70, d: 2 }), [el.dataset.custom]: Math.min(lim[1], Math.max(lim[0], v)) }; frame(); changed(); }
   else if (el.dataset.bres) { pushUndo(); st.res[el.dataset.bres] = +el.value; st.active = el.dataset.bres; changed(); }
 });
@@ -797,6 +860,7 @@ $('#shading').addEventListener('click', e => {
   pushUndo(); S.st.view = b.dataset.view; if (S.st.view === 'checker') S.st.flags.seen_checker = true; changed();
 });
 $('#pivot').addEventListener('change', e => { S.pivot = e.target.value; });
+$('#wire-btn').addEventListener('click', () => { S.wire = !S.wire; store.set('wire', S.wire); build3D(); renderHeaders(); renderProps(); });
 $('#ruler-btn').addEventListener('click', () => { pushUndo(); S.st.ruler = !S.st.ruler; changed(); if (S.st.ruler && S.sel.size !== 1) msg('Click a face or an island to lay the ruler on it.'); });
 $('#uv-image').addEventListener('click', e => {
   const b = e.target.closest('[data-img]'); if (!b) return;
@@ -811,6 +875,7 @@ function renderHeaders() {
   $('#uv-image').hidden = loupe;
   $('#uv-image').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.img === (st.uvImage || 'checker'))));
   $('#pivot').value = S.pivot;
+  $('#wire-btn').setAttribute('aria-pressed', String(S.wire));
   $('#uv-title').textContent = loupe ? 'Pixel loupe' : 'UV Editor';
   const badge = $('#obj-badge'); badge.hidden = loupe; badge.textContent = loupe ? '' : `${objName(st.active)} · ${resLabel(st.res[st.active])}`;
   $('#uv-hint').hidden = loupe;
@@ -825,7 +890,8 @@ function saveData() { store.set(dataKey(), S.st); }
 function loadData() {
   const saved = store.get(dataKey(), null), fresh = startState(step());
   const ok = saved && typeof saved === 'object' && saved.scene === fresh.scene && Array.isArray(saved.uv) && saved.uv.length === fresh.uv.length && saved.res && objectsOf(fresh.scene).every(o => saved.res[o]);
-  S.st = ok ? { ...fresh, ...saved, flags: { ...saved.flags } } : fresh;
+  const okCut = saved && fresh.scene === 'cutwall' && saved.scene === 'cutwall' && Array.isArray(saved.cuts);
+  S.st = ok || okCut ? syncCuts({ ...fresh, ...saved, flags: { ...saved.flags } }) : fresh;
 }
 function renderStageSwitch() {
   $('#stage-switch').innerHTML = `<span class="control-label">${esc(t('STAGE'))}</span>` + STAGES.map((s, i) => `<button type="button" class="model-button${i === S.stageIndex ? ' active' : ''}" data-stage="${i}" aria-pressed="${i === S.stageIndex}"><b>${i + 1}</b>${esc(t(s.name))}<small>${esc(t(s.sub))}</small></button>`).join('');
@@ -876,7 +942,7 @@ function changed(save = true) {
   const st = S.st;
   if (!objectsOf(st.scene).includes(st.active)) st.active = objectsOf(st.scene)[0];
   for (const id of [...S.sel]) if (!meshOf(st).islands[id] || meshOf(st).islands[id].obj !== st.active) S.sel.delete(id);
-  stepHooks();
+  syncCuts(st); stepHooks();
   if (save) saveData();
   build3D(); renderHeaders(); renderProps(); uvDirty = true; checkProgress();
 }
@@ -910,6 +976,7 @@ document.addEventListener('keydown', e => {
   if (ctrl && low === 'z') { e.shiftKey ? redo() : undo(); e.preventDefault(); }
   else if (ctrl && low === 'y') { redo(); e.preventDefault(); }
   else if (ctrl && low === 'a') { opAverage(); e.preventDefault(); }
+  else if (ctrl && low === 'r' && sid() === 'a4') { pushUndo(); addCut(S.st); changed(); e.preventDefault(); }
   else if (ctrl) return;
   else if (low === 'g') { startModal('G'); e.preventDefault(); }
   else if (low === 's') { startModal('S'); e.preventDefault(); }

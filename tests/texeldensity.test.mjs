@@ -79,3 +79,14 @@ test('the budget of step c2 flags blurry and oversized textures', () => {
   const s = startState(steps.find(x => x.id === 'c2')), st = sceneStats(s, 512);
   assert.equal(st.per.crate.waste, true); assert.equal(st.per.wall.low, true); assert.ok(st.mb > 40);
 });
+test('loop cuts: a single quad cannot keep 512 px/m; cuts at 0.25 and 1.75 m with the right zones can', async () => {
+  const { cutReport, addCut, syncCuts } = await import('../labs/texel-density/stages.js');
+  const a4 = steps.find(x => x.id === 'a4'), s = startState(a4);
+  let r = cutReport(s); assert.equal(r.rows.length, 1); assert.equal(Math.round(r.rows[0].dv), 384); assert.equal(a4.check(s), false);
+  addCut(s); addCut(s); assert.equal(s.cuts.length, 2); assert.equal(s.zones.length, 3);
+  s.cuts = [0.25, 1.75]; s.zones = ['baseboard', 'bricks', 'cornice']; syncCuts(s);
+  r = cutReport(s); assert.ok(r.rows.every(x => Math.round(x.du) === 512 && Math.round(x.dv) === 512)); assert.ok(a4.check(s));
+  s.zones = ['cornice', 'bricks', 'baseboard']; syncCuts(s); assert.equal(a4.check(s), false, 'the zones must match the wall');
+  s.cuts = [0.5, 1.75]; s.zones = ['baseboard', 'bricks', 'cornice']; syncCuts(s); assert.equal(cutReport(s).rows[0].dv, 256, 'a 0.5 m baseboard strip is stretched');
+  const b = startState(a4); a4.solve(b); assert.ok(a4.check(b));
+});
