@@ -527,3 +527,10 @@ table.meter td:nth-child(2),table.meter td:nth-child(3){text-align:right;color:#
 .model-tools{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .model-tools .mini-link[aria-pressed="true"]{border-color:var(--yellow);color:#fff}
 .model-name{color:#e6e6e6;font-weight:600}
+/* Shaping and atmosphere: engine badges, the light's node chain, sub-settings */
+.bl .eng{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;font-size:9.5px;font-weight:600;letter-spacing:.04em;vertical-align:1px}
+.bl .eng-cycles{background:#2c4a6e;color:#bcd7ff}
+.bl .eng-eevee{background:#3e3462;color:#d5c9ff}
+.bl .node-chain{margin:0 0 5px;font-size:10.5px;color:#9fd18f;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.35}
+.bl .bl-row.sub span{padding-left:10px;color:var(--b-dim)}
+.bl .bl-note + .bl-row{margin-top:2px}
