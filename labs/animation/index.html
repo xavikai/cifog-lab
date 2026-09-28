@@ -30,12 +30,13 @@
           <div class="editor-header">
             <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14 5v6l-6 3.5L2 11V5z M2 5l6 3.5L14 5 M8 8.5v6" fill="none" stroke="currentColor"/></svg>3D Viewport</span><span class="mode-pill" title="In Blender: select the rig and press Ctrl Tab">Pose Mode</span>
             <div class="view-toggles">
+              <label class="live-toggle" title="In Blender: Overlays › Bones (or hide the bone collection of the controls)"><input type="checkbox" id="t-ctrls" checked><span class="switch" aria-hidden="true"></span>Controls</label>
               <label class="live-toggle" title="In Blender: Object › Motion Paths"><input type="checkbox" id="t-path" checked><span class="switch" aria-hidden="true"></span>Motion Path</label>
               <label class="live-toggle" title="Lab view: the ball at every other frame"><input type="checkbox" id="t-ghosts"><span class="switch" aria-hidden="true"></span>Ghosts</label>
               <label class="live-toggle" id="ref-toggle" title="A real ball simulated with physics"><input type="checkbox" id="t-ref"><span class="switch" aria-hidden="true"></span>Reference</label>
             </div>
           </div>
-          <div class="view-host" id="view-host"><canvas id="view" aria-label="The rigged ball in 3D"></canvas><div class="view-overlay" id="view-overlay"></div><div class="op-readout" id="view-readout" hidden></div><span class="graph-hint">LMB select control · G move · I key · MMB orbit</span></div>
+          <div class="view-host" id="view-host"><canvas id="view" aria-label="The rigged ball in 3D"></canvas><div class="view-overlay" id="view-overlay"></div><div class="op-readout" id="view-readout" hidden></div><span class="graph-hint">LMB select control · G move · R rotate · I key · MMB orbit</span></div>
         </section>
 
         <section class="editor" aria-label="Graph Editor">
@@ -107,7 +108,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>The same bounce in Blender</h2><p>This lab shows a simplified Blender: one object, a side camera and a few channels. The curves, handles and keys behave like Blender's F-curves.</p></div><ol><li>Append the ball rig: a <strong>Root</strong> control at the base and two squash & stretch controls, <strong>SS_Top</strong> and <strong>SS_Bottom</strong>. Select it and switch to <strong>Pose Mode</strong>.</li><li>Open the <strong>Animation</strong> workspace. Pose the Root at frame 1 with <strong>G</strong> and key it with <strong>I</strong>; key the contacts and the tops. Move keys in time in the <strong>Timeline</strong> or the <strong>Dope Sheet</strong>.</li><li>In the <strong>Graph Editor</strong>, select all and press <strong>T</strong> › Bezier; select the contacts and press <strong>V</strong> › Vector.</li><li>Make every bounce lower and shorter. Turn on <strong>Motion Paths</strong> (Object properties) to see the spacing.</li><li>Use the rig's squash & stretch controls: the top one at the contacts (pivot at the base), the bottom one to stretch towards the floor. The rig keeps the volume.</li><li>Shape weight with the handles: long at the top for light objects, short and sharp for heavy ones.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Animation Lab</span><a href="https://docs.blender.org/manual/en/latest/editors/graph_editor/fcurves/introduction.html" target="_blank" rel="noopener">Blender: F-Curves ↗</a><span>Teaching model · simplified Graph Editor.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=3"></script>
+  <script type="module" src="./app.js?v=4"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>

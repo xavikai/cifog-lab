@@ -51,3 +51,15 @@ test('every step starts unsolved and its solution solves it', () => {
     assert.equal(step.check(d), true, `${st.id} ${step.id} solution`);
   });
 });
+
+test('rotation stage: the ball rolls with its travel', async () => {
+  const { STAGES, startData, rollReport, rollAngle } = await import('../labs/animation/stages.js');
+  const st = STAGES.find(s => s.id === 'rotation');
+  assert.ok(Math.abs(rollAngle(Math.PI) - 360) < 1e-9);
+  st.steps.forEach((s, i) => {
+    const d = startData(st, i);
+    assert.equal(!!s.check(d), false, `${s.id} starts solved`);
+    s.solve(d); assert.equal(!!s.check(d), true, `${s.id} solution fails`);
+  });
+  const back = startData(st, 0); assert.equal(rollReport(back).backwards, true);
+});

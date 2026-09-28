@@ -8,14 +8,17 @@ export const RANGE = [1, 72];
 // SS_Bottom moves the bottom of the ball (pivot at the top: to stretch down towards the floor).
 // The rig keeps the volume: the ball gets wider when it gets shorter.
 export const BALL = 1; // diameter in metres
-export const BONES = ['Root', 'SS_Top', 'SS_Bottom'];
+export const BONES = ['Root', 'SS_Top', 'SS_Bottom', 'Rotation'];
 export const CHANNELS = {
   locX: { name: 'X Location', bone: 'Root', color: '#ff6464', axis: 'X' },
   locZ: { name: 'Z Location', bone: 'Root', color: '#4aa3ff', axis: 'Z' },
   topZ: { name: 'Z Location', bone: 'SS_Top', color: '#7ee07e', axis: 'Z' },
   botZ: { name: 'Z Location', bone: 'SS_Bottom', color: '#e07ee0', axis: 'Z' },
+  rotY: { name: 'Y Euler Rotation', bone: 'Rotation', color: '#ffb347', axis: 'Y', rot: true },
 };
-export const channelOf = bone => ({ Root: 'locZ', SS_Top: 'topZ', SS_Bottom: 'botZ' })[bone];
+export const channelOf = bone => ({ Root: 'locZ', SS_Top: 'topZ', SS_Bottom: 'botZ', Rotation: 'rotY' })[bone];
+// A ball that rolls without sliding turns once every π·diameter metres (positive Y rotation = rolling forwards, +X).
+export const rollAngle = dx => dx / (Math.PI * BALL) * 360;
 
 const V = 'VECTOR', AC = 'AUTO_CLAMPED';
 // [frame, value, handle?] → keys
@@ -179,7 +182,53 @@ export const STAGES = [
       },
     ],
   },
+  {
+    id: 'rotation', name: 'Rotation', sub: 'Roll as it travels',
+    channels: ['locX', 'locZ', 'rotY'], hide: ['locX', 'locZ'], active: 'rotY',
+    independent: true,
+    steps: [
+      {
+        id: 'r1', title: 'Roll the right way',
+        text: 'A ball that moves forwards also turns. The rig has a Rotation control (the orange circle arrow around the ball): it turns the ball but not its squash, which stays vertical. Right now the ball turns backwards and far too little. A ball rolls without sliding: it turns once for every π × diameter it travels (3.14 m for this 1 m ball). It travels 9 m, so at frame 72 it must have turned about 1031°, forwards.',
+        how: ['Click the orange <b>Rotation</b> control. In the viewport, <kbd>R</kbd> rotates it: drag clockwise, or type the degrees (<kbd>R</kbd> <kbd>1</kbd><kbd>0</kbd><kbd>3</kbd><kbd>1</kbd> <kbd>Enter</kbd>) and press <kbd>I</kbd> at frame 72.', 'Or select the key at frame 72 in the Graph Editor and type its Value in the sidebar.', 'Forwards is clockwise in this side view: positive Y rotation.'],
+        why: 'A ball that slides without turning, or turns the wrong way, looks as if it were on ice. The rotation sells the contact with the floor.',
+        start: () => ({ channels: { locX: travel(), locZ: curve(RUBBER), rotY: curve([[1, 0, AC], [72, -360, AC]], 'LINEAR') } }),
+        check: d => { const r = rollReport(d); return !r.backwards && r.endErr <= ROLL_TOL; },
+        solve: d => { const k = d.channels.rotY, e = k[k.length - 1]; e.value = ROLL; recalcHandles(k); },
+      },
+      {
+        id: 'r2', title: 'Roll at the speed it travels',
+        text: 'The amount is right now, but the rotation uses Bezier: it starts slowly and stops slowly, while the ball travels at a constant speed. At the start and at the end the ball slides; in the middle it spins too fast. The rotation must follow the travel at every frame.',
+        how: ['Hover the Graph Editor, select both keys of the Y Euler Rotation (<kbd>A</kbd>).', '<kbd>T</kbd> › <b>Linear</b>: the same interpolation as the X Location (click its eye to compare).', 'The sidebar shows the worst slide of the rotation against the travel.'],
+        why: 'Rotation and travel are two channels of the same movement: when their curves have the same shape, the ball rolls.',
+        start: () => ({ channels: { locX: travel(), locZ: curve(RUBBER), rotY: curve([[1, 0, AC], [72, ROLL, AC]]) } }),
+        check: d => rollReport(d).worst <= ROLL_TOL,
+        solve: d => { d.channels.rotY.forEach(k => { k.interp = 'LINEAR'; }); },
+      },
+      {
+        id: 'r3', title: 'Slow down together',
+        text: 'Now the ball slows down and stops at frame 60 (the X Location eases out). The rotation still goes on at a constant speed until frame 72, so the ball spins on the spot. Make the rotation stop with the travel.',
+        how: ['Show the X Location (its eye) to see where the travel stops.', 'Move the last rotation key to frame 60 (<kbd>G</kbd> <kbd>X</kbd>, or type its Frame in the sidebar).', 'Give the rotation the same interpolation as the travel: <kbd>T</kbd> › <b>Bezier</b>.'],
+        why: 'When an object slows down, every channel of its movement slows down with it. Copying the shape of one curve into another is daily work in the Graph Editor.',
+        start: () => ({ channels: { locX: curve([[1, 0, AC], [60, 9, AC]]), locZ: curve(RUBBER), rotY: curve([[1, 0, AC], [72, ROLL, AC]], 'LINEAR') } }),
+        check: d => rollReport(d).worst <= ROLL_TOL,
+        solve: d => { const k = d.channels.rotY; k[k.length - 1].frame = 60; k.forEach(q => { q.interp = 'BEZIER'; q.handle = 'AUTO_CLAMPED'; }); recalcHandles(k); },
+      },
+    ],
+  },
 ];
+
+// How well the Rotation follows the travel: the rotation the ball needs at each frame to roll without sliding.
+export function rollReport(d, from = RANGE[0], to = RANGE[1]) {
+  const x0 = chanAt(d, 'locX', from), r0 = chanAt(d, 'rotY', from);
+  const need = f => r0 + rollAngle(chanAt(d, 'locX', f) - x0), total = Math.max(1, Math.abs(need(to) - r0));
+  let worst = 0, worstF = from;
+  for (let f = from; f <= to; f += 0.5) { const e = Math.abs(chanAt(d, 'rotY', f) - need(f)); if (e > worst) { worst = e; worstF = f; } }
+  const end = chanAt(d, 'rotY', to) - r0, want = need(to) - r0;
+  return { end, want, endErr: Math.abs(end - want) / total, worst: worst / total, worstF: Math.round(worstF), backwards: want * end < 0 };
+}
+const ROLL_TOL = 0.05;
+const ROLL = +rollAngle(9).toFixed(1); // 9 m of travel
 
 export function startData(stage, stepIndex = 0) {
   const d = stage.independent ? stage.steps[stepIndex].start() : stage.start();

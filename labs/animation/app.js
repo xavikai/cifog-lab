@@ -2,9 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { recalcHandles, evaluate, moveKey, moveHandle, key, contacts, tops, intervals, hangTime, matchScore, INTERPOLATIONS, HANDLE_TYPES } from './fcurve.js';
-import { STAGES, CHANNELS, FPS, RANGE, REFERENCE, BALL, startData, cloneData, shape, channelOf, lowestPoint, firstBounce } from './stages.js?v=3';
+import { STAGES, CHANNELS, FPS, RANGE, REFERENCE, BALL, startData, cloneData, shape, channelOf, lowestPoint, firstBounce, rollReport, rollAngle } from './stages.js?v=4';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=2';
+import dictionary from './i18n.js?v=3';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -20,7 +20,7 @@ const INTERP_LABELS = { CONSTANT: 'Constant', LINEAR: 'Linear', BEZIER: 'Bezier'
 const S = {
   stageIndex: store.get('stage', 0), step: 0, data: null, frame: 1, start: RANGE[0], end: RANGE[1],
   playing: false, active: 'locZ', hidden: new Set(), activeKey: null,
-  undo: [], redo: [], done: store.get('done', {}), toggles: { path: true, ghosts: false, ref: false },
+  undo: [], redo: [], done: store.get('done', {}), toggles: { path: true, ghosts: false, ref: false, ctrls: store.get('ctrls', true) },
   view: null, drag: null, grab: null, hover: false,
   bone: 'Root', override: {}, vgrab: null, tlGrab: null, area: null, vpointer: null, bottom: store.get('bottom', 'timeline') === 'dopesheet' ? 'dopesheet' : 'timeline',
 };
@@ -97,15 +97,22 @@ const back3 = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshStand
 back3.position.set(4.5, 2, -1.2); scene3.add(back3); // a 1 m grid wall behind the ball, to read heights
 const ballTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d'); const cols = ['#f0a020', '#fff3d6', '#e0582a', '#fff3d6']; for (let i = 0; i < 8; i++) { g.fillStyle = cols[i % 4]; g.fillRect(i * 32, 0, 32, 128); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
 const ball3 = new THREE.Mesh(new THREE.SphereGeometry(0.5, 40, 24), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.45 }));
-scene3.add(ball3);
+const ballGroup = new THREE.Group(); ballGroup.add(ball3); scene3.add(ballGroup); // the group squashes (world vertical), the ball turns inside it
 const shadow3 = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
 shadow3.rotation.x = -Math.PI / 2; shadow3.position.y = 0.005; scene3.add(shadow3);
 // Rig controls (custom shapes drawn in front, as bone shapes in Blender)
-const CTRL_COLORS = { Root: 0x4aa3ff, SS_Top: 0x7ee07e, SS_Bottom: 0xe07ee0 };
+const CTRL_COLORS = { Root: 0x4aa3ff, SS_Top: 0x7ee07e, SS_Bottom: 0xe07ee0, Rotation: 0xffb347 };
 function ctrlShape(bone) {
   let g;
   if (bone === 'Root') { g = new THREE.EdgesGeometry(new THREE.RingGeometry(0.62, 0.7, 40)); }
-  else {
+  else if (bone === 'Rotation') {
+    // a circular arrow around the ball, in the side view plane
+    const P = [], r = 0.84, a0 = Math.PI * 0.62, a1 = Math.PI * 2.38, n = 48;
+    for (let i = 0; i < n; i++) { const a = a0 + (a1 - a0) * i / n, b = a0 + (a1 - a0) * (i + 1) / n; P.push(Math.cos(a) * r, Math.sin(a) * r, 0, Math.cos(b) * r, Math.sin(b) * r, 0); }
+    const e = [Math.cos(a0) * r, Math.sin(a0) * r]; // the arrow head points clockwise (rolling forwards)
+    P.push(...e, 0, e[0] - 0.02, e[1] + 0.2, 0, ...e, 0, e[0] + 0.19, e[1] + 0.06, 0);
+    g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  } else {
     const s = new THREE.Shape(), d = bone === 'SS_Top' ? 1 : -1;
     s.moveTo(-0.22, 0); s.lineTo(0.22, 0); s.lineTo(0, 0.22 * d); s.closePath();
     g = new THREE.EdgesGeometry(new THREE.ShapeGeometry(s));
@@ -113,11 +120,11 @@ function ctrlShape(bone) {
   const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: CTRL_COLORS[bone], depthTest: false, transparent: true }));
   m.renderOrder = 10;
   if (bone === 'Root') m.rotation.x = -Math.PI / 2;
-  const pick = new THREE.Mesh(bone === 'Root' ? new THREE.RingGeometry(0.5, 0.8, 24) : new THREE.CircleGeometry(0.22, 16), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
+  const pick = new THREE.Mesh(bone === 'Root' ? new THREE.RingGeometry(0.5, 0.8, 24) : bone === 'Rotation' ? new THREE.RingGeometry(0.76, 0.95, 40) : new THREE.CircleGeometry(0.22, 16), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
   pick.userData.bone = bone; m.add(pick);
   scene3.add(m); return m;
 }
-const ctrls3 = { Root: ctrlShape('Root'), SS_Top: ctrlShape('SS_Top'), SS_Bottom: ctrlShape('SS_Bottom') };
+const ctrls3 = { Root: ctrlShape('Root'), SS_Top: ctrlShape('SS_Top'), SS_Bottom: ctrlShape('SS_Bottom'), Rotation: ctrlShape('Rotation') };
 const pathDots = new THREE.Group(), ghosts = new THREE.Group(), refGroup = new THREE.Group(); scene3.add(pathDots, ghosts, refGroup);
 const dotGeo = new THREE.SphereGeometry(0.035, 8, 6), keyDotGeo = new THREE.SphereGeometry(0.06, 10, 8);
 const refBall = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(0.5, 16, 10)), new THREE.LineDashedMaterial({ color: 0xffbf00, dashSize: 0.06, gapSize: 0.04 }));
@@ -138,17 +145,21 @@ function resize3() {
   renderer3.setSize(r.width, r.height, false); cam3.aspect = r.width / r.height; cam3.updateProjectionMatrix();
   if (!framed3) { framed3 = true; frameView3(); } else render3();
 }
-const pose = f => { const over = Math.round(f) === Math.round(S.frame) && !S.playing ? S.override : {}; const sh = shape(S.data, f, over); return { x: over.locX ?? valueAt('locX', f), ...sh }; };
+const pose = f => { const over = Math.round(f) === Math.round(S.frame) && !S.playing ? S.override : {}; const sh = shape(S.data, f, over); return { x: over.locX ?? valueAt('locX', f), rot: over.rotY ?? valueAt('rotY', f), ...sh }; };
+// Blender's +Y points into the screen here, so a positive Y rotation turns the ball clockwise in the side view.
+const toRad = deg => -deg * Math.PI / 180;
 let lastPathKey = '';
 function drawView() {
   const p = pose(S.frame);
-  ball3.position.set(p.x, p.center, 0); ball3.scale.set(p.sx, p.sz, p.sx);
+  ballGroup.position.set(p.x, p.center, 0); ballGroup.scale.set(p.sx, p.sz, p.sx); ball3.rotation.set(0, 0, toRad(p.rot));
   const sh = Math.max(0.25, 1 - Math.max(0, p.bottom) / 6);
   shadow3.position.x = p.x; shadow3.scale.setScalar(p.sx * (0.6 + 0.4 * sh)); shadow3.material.opacity = 0.35 * sh;
   const anim = stage().channels;
   ctrls3.Root.position.set(p.x, Math.max(0, p.root) + 0.01, 0);
   ctrls3.SS_Top.position.set(p.x, p.top + 0.08, 0.02); ctrls3.SS_Bottom.position.set(p.x, p.bottom - 0.08, 0.02);
-  ctrls3.SS_Top.visible = anim.includes('topZ'); ctrls3.SS_Bottom.visible = anim.includes('botZ');
+  ctrls3.Rotation.position.set(p.x, p.center, 0.03); ctrls3.Rotation.rotation.z = toRad(p.rot);
+  const on = S.toggles.ctrls;
+  ctrls3.Root.visible = on; ctrls3.SS_Top.visible = on && anim.includes('topZ'); ctrls3.SS_Bottom.visible = on && anim.includes('botZ'); ctrls3.Rotation.visible = on && anim.includes('rotY');
   for (const [b, m] of Object.entries(ctrls3)) { const sel = S.bone === b; m.material.color.set(sel ? 0xffffff : CTRL_COLORS[b]); m.scale.setScalar(sel ? 1.15 : 1); }
   // motion path, ghosts and reference only need rebuilding when the animation changes
   const key = JSON.stringify([S.data.channels, S.start, S.end, S.toggles, Math.round(S.frame)]);
@@ -181,7 +192,7 @@ function drawView() {
   }
   if (refGroup.visible) refBall.position.set(valueAt('locX', S.frame), REFERENCE(S.frame) + BALL / 2, 0);
   const secs = ((S.frame - 1) / FPS).toFixed(2);
-  $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(${Math.round(S.frame)}) Armature : <b>${esc(S.bone)}</b></div><div>${secs} s · X ${p.x.toFixed(2)} m · ${esc(tr('Height {v} m', { v: Math.max(0, p.bottom).toFixed(2) }))} · ${esc(tr('Scale {x} × {z}', { x: p.sx.toFixed(2), z: p.sz.toFixed(2) }))}</div>${Object.keys(S.override).length ? `<div class="unkeyed">${esc(t('Unkeyed change: press I to keep it'))}</div>` : ''}`;
+  $('#view-overlay').innerHTML = `<div>${esc(t('User Perspective'))}</div><div data-no-i18n>(${Math.round(S.frame)}) Armature : <b>${esc(S.bone)}</b></div><div>${secs} s · X ${p.x.toFixed(2)} m · ${esc(tr('Height {v} m', { v: Math.max(0, p.bottom).toFixed(2) }))} · ${esc(tr('Scale {x} × {z}', { x: p.sx.toFixed(2), z: p.sz.toFixed(2) }))}</div>${stage().channels.includes('rotY') ? `<div>${esc(tr('Rotation {v}°', { v: p.rot.toFixed(0) }))}</div>` : ''}${Object.keys(S.override).length ? `<div class="unkeyed">${esc(t('Unkeyed change: press I to keep it'))}</div>` : ''}`;
   render3();
 }
 function render3() { renderer3.render(scene3, cam3); }
@@ -194,7 +205,7 @@ function pickCtrl(e) {
   const picks = Object.values(ctrls3).filter(m => m.visible).map(m => m.children[0]);
   const hit = ray3.intersectObjects(picks, false)[0];
   if (hit) return hit.object.userData.bone;
-  if (ray3.intersectObject(ball3, false).length) return 'Root';
+  if (ray3.intersectObject(ball3, false).length) return S.toggles.ctrls ? 'Root' : null;
   return null;
 }
 function selectBone(bone) {
@@ -206,6 +217,7 @@ function selectBone(bone) {
 viewCanvas.addEventListener('pointerdown', e => {
   closeMenu();
   if (S.vgrab) { e.preventDefault(); endVGrab(e.button === 0); return; }
+  if (S.vrot) { e.preventDefault(); endVRot(e.button === 0); return; }
   if (e.button !== 0 || e.altKey) return;
   const b = pickCtrl(e);
   if (b) selectBone(b);
@@ -213,11 +225,13 @@ viewCanvas.addEventListener('pointerdown', e => {
 viewCanvas.addEventListener('pointermove', e => {
   const r = viewCanvas.getBoundingClientRect(); S.vpointer = { x: e.clientX - r.left, y: e.clientY - r.top };
   if (S.vgrab) updateVGrab();
+  if (S.vrot) updateVRot(true);
 });
-viewCanvas.addEventListener('contextmenu', e => { if (S.vgrab) { e.preventDefault(); endVGrab(false); } });
+viewCanvas.addEventListener('contextmenu', e => { if (S.vgrab) { e.preventDefault(); endVGrab(false); } if (S.vrot) { e.preventDefault(); endVRot(false); } });
 // G in the 3D Viewport. The Root moves in X (forwards) and Z (up); the squash & stretch controls only in Z.
 // As in Blender: X or Z locks an axis, a typed number goes to the locked axis (X if none).
 function startVGrab() {
+  if (S.bone === 'Rotation') return msg('The Rotation control turns: press R to rotate it.', true);
   const ch = channelOf(S.bone);
   if (!stage().channels.includes(ch)) return msg('This control is not animated in this stage.', true);
   if (!S.vpointer) S.vpointer = { x: viewCanvas.clientWidth / 2, y: viewCanvas.clientHeight / 2 };
@@ -253,6 +267,46 @@ function endVGrab(ok) {
   }
   drawView(); renderSidebar();
 }
+// R in the 3D Viewport: turn the Rotation control. Clockwise = rolling forwards (+Y). Typed numbers are degrees.
+function startVRot() {
+  if (S.bone !== 'Rotation') return msg(S.toggles.ctrls ? 'R turns the Rotation control (the orange arrow). Root, SS_Top and SS_Bottom move with G.' : 'The controls are hidden: turn on Controls in the header to select them.', true);
+  if (!stage().channels.includes('rotY')) return msg('This control is not animated in this stage.', true);
+  if (!S.vpointer) S.vpointer = { x: viewCanvas.clientWidth / 2 + 120, y: viewCanvas.clientHeight / 2 };
+  const c = centreOnScreen(), a = Math.atan2(-(S.vpointer.y - c.y), S.vpointer.x - c.x);
+  S.vrot = { start: S.override.rotY ?? +valueAt('rotY', S.frame).toFixed(2), last: a, acc: 0, num: '', prev: { ...S.override } };
+  viewHost.classList.add('modal'); updateVRot();
+}
+function centreOnScreen() {
+  const p = pose(S.frame), v = new THREE.Vector3(p.x, p.center, 0).project(cam3);
+  return { x: (v.x + 1) / 2 * viewCanvas.clientWidth, y: (1 - v.y) / 2 * viewCanvas.clientHeight };
+}
+function updateVRot(move = false) {
+  const r = S.vrot; if (!r) return;
+  if (move) { const c = centreOnScreen(), a = Math.atan2(-(S.vpointer.y - c.y), S.vpointer.x - c.x); let d = a - r.last; d = ((d + 3 * Math.PI) % (2 * Math.PI)) - Math.PI; r.acc -= d * 180 / Math.PI; r.last = a; }
+  const typed = r.num !== '' && r.num !== '-' && !isNaN(+r.num) ? +r.num : null, delta = typed ?? Math.round(r.acc);
+  S.override = { ...r.prev, rotY: Math.round((r.start + delta) * 100) / 100 };
+  $('#view-readout').hidden = false;
+  $('#view-readout').textContent = `${t('Rotate')}  Y ${delta >= 0 ? '+' : ''}${delta.toFixed(0)}°${r.num ? `  [${r.num}]` : ''} · ${t('clockwise = forwards')}`;
+  drawView(); renderSidebar();
+}
+function endVRot(ok) {
+  const r = S.vrot; if (!r) return;
+  S.vrot = null; viewHost.classList.remove('modal'); $('#view-readout').hidden = true;
+  if (!ok) S.override = r.prev;
+  else { if (S.override.rotY != null && Math.abs(S.override.rotY - valueAt('rotY', S.frame)) < 1e-3) delete S.override.rotY; if (Object.keys(S.override).length) msg('Rotated. Press I to insert a keyframe, or the change is lost when the frame changes.'); }
+  drawView(); renderSidebar();
+}
+function vrotKey(e) {
+  const r = S.vrot, k = e.key;
+  if (k === 'Escape') return endVRot(false);
+  if (k === 'Enter' || k === ' ') return endVRot(true);
+  if (/^[0-9.]$/.test(k)) r.num += k;
+  else if (k === '-') r.num = r.num.startsWith('-') ? r.num.slice(1) : '-' + r.num;
+  else if (k === 'Backspace') r.num = r.num.slice(0, -1);
+  else if (/^[xyzXYZ]$/.test(k)) { msg('The Rotation control turns only around Y in this rig.'); return; }
+  else return;
+  updateVRot();
+}
 function vgrabKey(e) {
   const g = S.vgrab, k = e.key;
   if (k === 'Escape') return endVGrab(false);
@@ -286,13 +340,13 @@ function keyControl() {
     delete S.override[c]; k.select = true; last = k; recalcHandles(ks);
   }
   S.activeKey = last; S.active = ch;
-  msg(tr('Inserted a keyframe on {c} at frame {n}.', { c: `${S.bone} · ${[...chans].sort().map(c => CHANNELS[c].axis).join(', ')} Location`, n: f })); changed(true);
+  msg(tr('Inserted a keyframe on {c} at frame {n}.', { c: ch === 'rotY' ? 'Rotation · Y Euler Rotation' : `${S.bone} · ${[...chans].sort().map(c => CHANNELS[c].axis).join(', ')} Location`, n: f })); changed(true);
 }
 function clearControl() {
   const ch = channelOf(S.bone);
   if (!stage().channels.includes(ch)) return;
   if (ch === 'locZ') return msg('Alt G on the Root would send the ball to the origin (X 0, Z 0): move it with G instead.');
-  S.override = { ...S.override, [ch]: 0 }; drawView(); renderSidebar(); msg('Location cleared. Press I to key it.');
+  S.override = { ...S.override, [ch]: 0 }; drawView(); renderSidebar(); msg(ch === 'rotY' ? 'Rotation cleared. Press I to key it.' : 'Location cleared. Press I to key it.');
 }
 function dropOverrides() {
   const lost = Object.entries(S.override).some(([ch, v]) => Math.abs(v - valueAt(ch, S.frame)) > 1e-3);
@@ -609,7 +663,7 @@ function renderSidebar() {
   const owner = k && Object.keys(S.data.channels).find(c => S.data.channels[c].includes(k));
   if (k && owner && editable(owner)) {
     html += `<label>${esc(t('Frame'))}<input type="number" step="1" data-kf="frame" value="${k.frame}"></label>
-      <label>${esc(t('Value'))}<input type="number" step="0.05" data-kf="value" value="${+k.value.toFixed(3)}"></label>
+      <label>${esc(t('Value'))}<input type="number" step="${CHANNELS[owner].rot ? 1 : 0.05}" data-kf="value" value="${+k.value.toFixed(3)}"></label>
       <label>${esc(t('Interpolation'))}<select data-kf="interp">${INTERPOLATIONS.map(m => `<option value="${m}"${k.interp === m ? ' selected' : ''}>${INTERP_LABELS[m]}</option>`).join('')}</select></label>
       <label>${esc(t('Handles'))}<select data-kf="handle">${HANDLE_TYPES.map(m => `<option value="${m}"${k.handle === m ? ' selected' : ''}>${HANDLE_LABELS[m]}</option>`).join('')}</select></label>`;
   } else html += `<p class="sb-empty">${esc(t('Click a keyframe to see and edit it here.'))}</p>`;
@@ -621,6 +675,14 @@ function renderSidebar() {
   if (stage().id === 'weight') {
     if (fb) html += `<div class="sb-stat"><span>${esc(t('Hang time'))}</span><b>${Math.round(hangTime(z, fb[0], fb[1]) * 100)}%</b></div>`;
     if (S.toggles.ref) html += `<div class="sb-stat"><span>${esc(t('Match'))}</span><b>${matchScore(z, REFERENCE, 1, 60)}%</b></div>`;
+  }
+  if (stage().id === 'rotation') {
+    const r = rollReport(S.data), bad = r.worst > 0.05;
+    html += `<div class="sb-sep"></div><h4>${esc(t('Roll'))}</h4>`;
+    html += `<div class="sb-stat"><span>${esc(t('Rotation now'))}</span><b>${(S.override.rotY ?? valueAt('rotY', S.frame)).toFixed(0)}°</b></div>`;
+    html += `<div class="sb-stat"><span>${esc(t('Needed to roll'))}</span><b>${(valueAt('rotY', S.start) + rollAngle(valueAt('locX', S.frame) - valueAt('locX', S.start))).toFixed(0)}°</b></div>`;
+    html += `<div class="sb-stat${r.backwards ? ' bad' : ''}"><span>${esc(t('Turn at the end'))}</span><b>${r.end.toFixed(0)}° / ${r.want.toFixed(0)}°</b></div>`;
+    html += `<div class="sb-stat${bad ? ' bad' : ''}"><span>${esc(t('Worst slide'))}</span><b>${Math.round(r.worst * 100)}% · ${esc(tr('frame {n}', { n: r.worstF }))}</b></div>`;
   }
   if (stage().id === 'squash') {
     const p = pose(S.frame);
@@ -946,7 +1008,7 @@ function checkProgress() {
 
 // ─── Rendering and updates ──────────────────────────────────────────────────
 function syncToggles() {
-  $('#t-path').checked = S.toggles.path; $('#t-ghosts').checked = S.toggles.ghosts; $('#t-ref').checked = S.toggles.ref;
+  $('#t-path').checked = S.toggles.path; $('#t-ghosts').checked = S.toggles.ghosts; $('#t-ref').checked = S.toggles.ref; $('#t-ctrls').checked = S.toggles.ctrls;
   $('#ref-toggle').hidden = stage().id !== 'weight';
 }
 function renderLive() {
@@ -966,8 +1028,8 @@ function changed(commit = true) {
 }
 function enterStage() {
   $('#bottom-type').value = S.bottom;
-  S.focus = null; lastDone = null; S.hidden.clear(); S.hidden.add('locX'); // the travel curve is shown on demand
-  S.active = 'locZ'; S.bone = 'Root'; S.override = {};
+  S.focus = null; lastDone = null; S.hidden.clear(); for (const id of stage().hide || ['locX']) S.hidden.add(id); // the travel curve is shown on demand
+  S.active = stage().active || 'locZ'; S.bone = CHANNELS[S.active].bone; S.override = {};
   loadData();
   S.toggles.ref = stage().independent ? !!stage().steps[S.step].reference : false;
   frameAll(); sizeBottom(); renderAll(); checkProgress();
@@ -975,6 +1037,7 @@ function enterStage() {
 
 $('#t-path').onchange = e => { S.toggles.path = e.target.checked; renderLive(); };
 $('#t-ghosts').onchange = e => { S.toggles.ghosts = e.target.checked; renderLive(); };
+$('#t-ctrls').onchange = e => { S.toggles.ctrls = e.target.checked; store.set('ctrls', S.toggles.ctrls); if (!S.toggles.ctrls && S.vgrab) endVGrab(false); msg(S.toggles.ctrls ? 'Controls shown.' : 'Controls hidden: only the ball is drawn. Select controls in the Graph Editor or turn them on again.'); renderLive(); };
 $('#t-ref').onchange = e => { S.toggles.ref = e.target.checked; renderAll(); };
 
 // ─── Keyboard (only while the pointer is over the workspace, like Blender) ──
@@ -986,8 +1049,9 @@ let lastPointer = { x: 0, y: 0 };
 graphCanvas.addEventListener('pointermove', e => { const r = graphCanvas.getBoundingClientRect(); lastPointer = { x: e.clientX - r.left, y: e.clientY - r.top, cx: e.clientX, cy: e.clientY }; });
 for (const [el, area] of [[viewHost, 'view'], [$('#graph-host'), 'graph'], [$('#timeline-host'), 'timeline']]) el.addEventListener('pointerenter', () => { S.area = area; });
 document.addEventListener('keydown', e => {
-  if (e.target.closest('input, select, textarea')) return;
+  if (e.target.closest?.('input, select, textarea')) return;
   if (S.vgrab) { e.preventDefault(); vgrabKey(e); return; }
+  if (S.vrot) { e.preventDefault(); vrotKey(e); return; }
   if (S.tlGrab) { if (e.key === 'Escape') endTlGrab(false); else if (e.key === 'Enter') endTlGrab(true); e.preventDefault(); return; }
   if (!S.hover && !S.grab && e.key !== 'Escape') return;
   const k = e.key, ctrl = e.ctrlKey || e.metaKey, low = k.toLowerCase();
@@ -1007,8 +1071,10 @@ document.addEventListener('keydown', e => {
   else if (k === 'ArrowUp') jumpKey(1);
   else if (k === 'ArrowDown') jumpKey(-1);
   else if (S.area === 'view') {
-    if (low === 'g' && e.altKey) clearControl();
+    if (low === 'g' && e.altKey) { if (S.bone === 'Rotation') msg('Alt R clears a rotation.'); else clearControl(); }
+    else if (low === 'r' && e.altKey) { if (S.bone === 'Rotation') clearControl(); else msg('Alt R clears a rotation: select the Rotation control first.'); }
     else if (low === 'g') startVGrab();
+    else if (low === 'r') startVRot();
     else if (low === 'i') keyControl();
     else if (k === 'Home') frameView3();
     else if (e.code === 'Numpad1' || k === '1') frameView3(true);
@@ -1045,4 +1111,4 @@ new ResizeObserver(() => renderLive()).observe($('#graph-host'));
 new ResizeObserver(() => { resize3(); }).observe($('#view-host'));
 onLangChange(() => renderAll());
 frameView3(); enterStage(); resize3();
-window.__anim = S; window.__anim3 = { cam3, ctrls3, selectBone, startVGrab, keyControl }; // for tests and curious students
+window.__anim = S; window.__anim3 = { cam3, ctrls3, selectBone, startVGrab, startVRot, keyControl, ball3, ballGroup }; // for tests and curious students

@@ -35,19 +35,22 @@ A home for small interactive activities that support CIFOG classroom presentatio
 
 **Code Lab 02** (`labs/csharp-objects/`) continues the Code Lab towards Unity with the same app and interpreter (the page sets `data-course="objects"` and loads `labs/csharp/levels-objects.js`). The interpreter adds classes and structs (fields, public/private/protected, constructors with `: base(…)`, instance methods, `this`, virtual/override with real dispatch rules), `new`, `null`, reference semantics, `List<T>` (Add, Remove, RemoveAt, Insert, Contains, IndexOf, Count, indexer, collection initializers, modification during foreach), and a Unity-like layer: `Vector3` as a struct (operators, `normalized`, `magnitude`, `Vector3.up`…), `MonoBehaviour` with `transform.position`, `Time.deltaTime`, `Mathf`, `Debug.Log` and `Scene.Add`, after which the lab calls `Start()` once and `Update()` every frame and draws each object (with a dot per frame). Real compiler errors teach the classic mistakes: CS0122 (private fields), CS1612 (changing `transform.position.y`), CS0037, CS1729, CS0506/CS0115, CS0108/CS0114 warnings, CS8803 (classes must come after the main program), plus NullReferenceException and InvalidOperationException at runtime. The Memory panel shows variables of a class as arrows (→ #3) to objects in a **heap**, structs inline, and objects nothing points to any more faded out. 30 challenges in 7 levels: classes and objects, references and null, lists, structs and Vector3, Update and time (from moving objects to the bouncing ball simulated in code), inheritance, and ready for Unity.
 
-**Animation Lab** (`labs/animation/`) teaches the bouncing ball in three stages with a Blender-style workspace.
+**Animation Lab** (`labs/animation/`) teaches the bouncing ball in four stages with a Blender-style workspace.
 
 The workspace has three editors:
-- **3D Viewport** (Three.js, Pose Mode) with a rigged ball. The rig follows the one used in class: a **Root** control at the base and two squash & stretch controls. **SS_Top** moves the top of the ball (pivot at the base, for the contacts) and **SS_Bottom** moves the bottom (pivot at the top, to stretch towards the floor). The rig keeps the volume. Controls are selected with LMB and moved with G (only up and down, with typed values). I inserts a keyframe and Alt G clears. As in Blender, an unkeyed pose is discarded when the frame changes. The viewport also shows Motion Path dots, optional ghosts and a 1 m grid wall.
+- **3D Viewport** (Three.js, Pose Mode) with a rigged ball. The rig follows the one used in class: a **Root** control at the base, two squash & stretch controls and a **Rotation** control. **SS_Top** moves the top of the ball (pivot at the base, for the contacts) and **SS_Bottom** moves the bottom (pivot at the top, to stretch towards the floor). The rig keeps the volume. Controls are selected with LMB and moved with G (only up and down, with typed values). I inserts a keyframe and Alt G clears. As in Blender, an unkeyed pose is discarded when the frame changes. The viewport also shows Motion Path dots, optional ghosts and a 1 m grid wall.
 - **Graph Editor** with a channel list grouped by bone and a sidebar (Active Keyframe, bounce heights and frame counts, rig values, lowest point). F-curves behave like Blender's: Constant, Linear and Bezier interpolation, and Free, Aligned, Vector, Automatic and Auto Clamped handles (automatic handles become Aligned when dragged).
 - **Timeline** where keyframes can be edited too. Drag the numbers to change frame. Click a keyframe to select it (Shift adds), drag it or press G to move it in time, drag on empty space to box-select, and press X to delete.
 
 Keys go to the editor under the mouse.
 
-The three stages:
+The four stages:
 - **Timing**: ease in and out, sharp contacts with Vector handles, lower bounces, shorter bounces.
 - **Squash & Stretch**: squash with SS_Top at the contacts, stretch down with SS_Bottom before the contact and up with SS_Top after it, round at the tops, and never through the floor.
 - **Weight**: a bowling ball, a beach ball with hang time, and a match with a physically simulated bounce.
+- **Rotation**: a Rotation control (R to turn it, typed degrees, Alt R) turns the ball inside its squash, so the squash stays vertical. Roll the right way and the right amount (360° every π × diameter of travel), make the rotation follow a constant travel (Linear), and slow it down with an eased travel.
+
+The **Controls** switch in the 3D Viewport header hides the rig controls (as Overlays › Bones in Blender) to judge the motion on the ball alone.
 
 Each step is checked automatically, can show a solution and can be undone.
 
