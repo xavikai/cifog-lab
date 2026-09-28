@@ -58,5 +58,18 @@ export function setupBrief() {
   onLangChange(render);
   render();
 }
+// Code Labs: the challenge card above the editor can be folded the same way.
+function setupChallengeFold() {
+  const card = document.getElementById('challenge'), acts = card?.querySelector('.challenge-actions');
+  if (!card || !acts || card.querySelector('.ch-fold')) return;
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ch-fold'; btn.dataset.noI18n = '';
+  acts.append(btn);
+  let folded = false;
+  try { folded = localStorage.getItem(KEY) === '1'; } catch { /* storage unavailable */ }
+  const render = () => { card.classList.toggle('folded', folded); btn.setAttribute('aria-expanded', String(!folded)); btn.innerHTML = `<span aria-hidden="true">${folded ? '▾' : '▴'}</span> ${say(folded ? 'show' : 'hide')}`; };
+  btn.addEventListener('click', () => { folded = !folded; try { localStorage.setItem(KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ } render(); });
+  onLangChange(render); render();
+}
 setupBrief();
 setupReset();
+setupChallengeFold();
