@@ -789,3 +789,9 @@ footer span:nth-child(3){margin-left:auto}
 .vp-menu .menu-title{font-size:11px;padding:6px 9px 3px;border-bottom:0;margin:0}
 @media(max-width:1000px){.vp-body{grid-template-columns:1fr}.vp-side{border-top:1px solid var(--b-border)}.outliner{max-height:180px}.ws-tabs{display:none}}
 @media(max-width:640px){.vp-view{height:420px}.n-sidebar{width:190px}.vp-editor .menu-button{padding:3px 6px}.sb-btn span{display:none}}
+/* Blender header widgets and Outliner (blender-ui.css) */
+.vp-editor .editor-header{gap:6px}
+.bh-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.vp-editor .editor-header .sb-btn{margin-left:4px}
+.outliner{background:none;border-bottom:0;max-height:none}
+.outliner .bo-tree{max-height:230px}

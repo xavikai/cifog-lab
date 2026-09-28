@@ -1,5 +1,6 @@
 // Edit Mode Lab: a Blender-like 3D Viewport in Edit Mode (select modes, loops, extrude, inset, loop cut, bevel, clean-up).
 import * as THREE from 'three';
+import { ICONS, outlinerHTML } from '../../blender-ui.js?v=1';
 import * as V from '../viewport/vp.js?v=1';
 import * as E from './em.js?v=1';
 import { STAGES, startState, TARGETS, markIds, markReport, halfReport, loopsReport, shapeReport, deformReport, bevelReport, cleanReport, stoolReport } from './stages.js?v=1';
@@ -709,13 +710,25 @@ $('#emu-numpad').checked = S.emu;
 $('#emu-numpad').addEventListener('change', e => { S.emu = e.target.checked; store.set('emu', S.emu); msg(S.emu ? 'Emulate Numpad on: the number row now changes the view, so use the header buttons for the select modes.' : 'Emulate Numpad off: 1, 2 and 3 are the select modes again.'); });
 function renderHeader() {
   const ed = edit();
-  $('#mode-btn').textContent = ed ? 'Edit Mode' : 'Object Mode'; $('#mode-btn').setAttribute('aria-pressed', String(ed));
+  $('#mode-btn').innerHTML = `${ICONS[ed ? 'editmode' : 'objectmode']}<span>${ed ? 'Edit Mode' : 'Object Mode'}</span>${ICONS.dropdown}`; $('#mode-btn').setAttribute('aria-pressed', String(ed));
+  renderOutliner();
   document.querySelectorAll('[data-sm]').forEach(b => { b.setAttribute('aria-pressed', String(ed && S.st.sm === b.dataset.sm)); b.disabled = !ed; });
   $('#menus').innerHTML = (ed ? ['View', 'Select', 'Mesh', 'Edge', 'Face'] : ['View', 'Select', 'Object']).map(n => `<button type="button" class="menu-button" data-menu="${n.toLowerCase()}" aria-expanded="false">${n}</button>`).join('');
   $('#xray-btn').setAttribute('aria-pressed', String(!!S.st.xray && ed));
   host.classList.toggle('object-mode', !ed);
 }
 $('#mode-btn').addEventListener('click', toggleEdit);
+// Blender icons for the header buttons (see blender-ui.js).
+document.querySelectorAll('#workspace [data-icon]').forEach(el => { el.innerHTML = ICONS[el.dataset.icon] + (el.classList.contains('bh-dd') ? ICONS.dropdown : ''); });
+// The Outliner of the Modeling workspace: one mesh object, in Edit Mode or not.
+function renderOutliner() {
+  const ed = edit();
+  $('#outliner').innerHTML = outlinerHTML([
+    { name: 'Scene Collection', icon: 'scene_collection', open: true, depth: 0 },
+    { name: 'Collection', icon: 'collection', open: true, depth: 1, exclude: false, eye: true, cam: true },
+    { name: 'Cube', icon: 'ob_mesh', open: false, depth: 2, inline: ['data_mesh'], sel: true, active: true, mode: ed ? 'edit' : 'object', eye: true, cam: true },
+  ], { showMode: true });
+}
 document.querySelectorAll('[data-sm]').forEach(b => b.addEventListener('click', () => setSelectMode(b.dataset.sm)));
 $('#xray-btn').addEventListener('click', () => { if (!edit()) { msg('X-ray is used in Edit Mode here: press Tab.', true); return; } toggleXray(); });
 

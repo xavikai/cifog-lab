@@ -794,7 +794,7 @@ footer span:nth-child(3){margin-left:auto}
 .guide.five{grid-template-columns:repeat(5,minmax(0,1fr))}
 .guide.five li{padding:6px 9px}
 .mode-btn{cursor:pointer;white-space:nowrap}
-.mode-btn[aria-pressed="true"]{background:#5a4a2a;border-color:#8a6d2a}
+.mode-btn[aria-pressed="true"]{background:#282828}
 .sm-group .icon-toggle{height:26px;padding:0 7px}
 .sm-group .icon-toggle:disabled{opacity:.4;cursor:not-allowed}
 .vp-editor .editor-header #sidebar-btn{margin-left:4px;white-space:nowrap}
@@ -805,3 +805,8 @@ footer span:nth-child(3){margin-left:auto}
 .vp-view.object-mode canvas#view{cursor:default}
 @media(max-width:1180px){.guide.five{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:640px){.guide.five{grid-template-columns:1fr 1fr}.vp-editor .editor-header{flex-wrap:wrap}.sb-btn kbd{display:none}}
+/* Blender header widgets (blender-ui.css) */
+.vp-editor .editor-header{gap:6px}
+.bh-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.sm-group .bh-ico:disabled{opacity:.4}
+#outliner .bo-tree{max-height:none}

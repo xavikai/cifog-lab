@@ -6,6 +6,7 @@
   <meta name="description" content="First steps in Blender's 3D Viewport: orbit, pan and zoom, frame objects, axis views and Auto Perspective, selecting with click, Shift, B and A, and moving, rotating and scaling with G, R and S, axis constraints and exact values.">
   <title>Viewport Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../blender-ui.css?v=1">
   <link rel="stylesheet" href="./style.css?v=1">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
@@ -33,9 +34,15 @@
       <div class="vp-body">
         <section class="editor pane vp-editor" aria-label="3D Viewport">
           <div class="editor-header">
-            <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14 5v6l-6 3.5L2 11V5z M2 5l6 3.5L14 5 M8 8.5v6" fill="none" stroke="currentColor"/></svg></span>
-            <span class="mode-pill" data-no-i18n title="Tab switches to Edit Mode in Blender">Object Mode</span>
+            <span class="bh-dd bh-editor" title="Editor Type: 3D Viewport" data-icon="view3d"></span>
+            <span class="bh-dd" data-no-i18n title="Tab switches to Edit Mode in Blender" data-icon="objectmode" data-label="Object Mode"></span>
             <nav class="menubar" aria-label="3D Viewport menus" data-no-i18n><button type="button" class="menu-button" data-menu="view" aria-expanded="false">View</button><button type="button" class="menu-button" data-menu="select" aria-expanded="false">Select</button><button type="button" class="menu-button" data-menu="add" aria-expanded="false">Add</button><button type="button" class="menu-button" data-menu="object" aria-expanded="false">Object</button></nav>
+            <span class="bh-right">
+              <span class="bh-group"><button type="button" class="bh-ico soft" disabled title="Show Gizmo" data-icon="gizmo" aria-pressed="true"></button></span>
+              <span class="bh-group"><button type="button" class="bh-ico soft" disabled title="Show Overlays" data-icon="overlay" aria-pressed="true"></button></span>
+              <span class="bh-group"><button type="button" class="bh-ico" disabled title="Toggle X-Ray (Alt Z)" data-icon="xray"></button></span>
+              <span class="bh-group" role="group" aria-label="Viewport Shading"><button type="button" class="bh-ico" disabled title="Wireframe" data-icon="shading_wire"></button><button type="button" class="bh-ico" aria-pressed="true" title="Solid" data-icon="shading_solid"></button><button type="button" class="bh-ico" disabled title="Material Preview" data-icon="shading_texture"></button><button type="button" class="bh-ico" disabled title="Rendered" data-icon="shading_rendered"></button></span>
+            </span>
             <button type="button" class="ruler-btn sb-btn" id="sidebar-btn" aria-pressed="false" title="Sidebar (N)"><span data-no-i18n>Sidebar</span> <kbd>N</kbd></button>
           </div>
           <div class="view-host vp-view" id="view-host" tabindex="-1">
@@ -90,7 +97,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">IN THE REAL BLENDER</span><h2>The same keys, a few settings</h2><p>Everything here works the same in Blender's Layout workspace, with the mouse over the 3D Viewport.</p></div><ol><li>No middle button or no numpad? <strong>Edit › Preferences › Input</strong>: <strong>Emulate 3 Button Mouse</strong> (<kbd>Alt</kbd> + left button orbits) and <strong>Emulate Numpad</strong> (the number row works as a numpad).</li><li>Laptop touchpad: two fingers orbit, <kbd>Shift</kbd> + two fingers pan, pinch zooms. The gizmo at the top right also orbits, pans and zooms.</li><li><strong>View › Viewpoint</strong> and the <kbd>`</kbd> pie menu give the axis views without a numpad; <strong>View › Frame Selected</strong> and <strong>Frame All</strong> do the same as <kbd>Numpad .</kbd> and <kbd>Home</kbd>.</li><li>The <strong>Select</strong> menu has All, None, Invert and Box Select. The <strong>Outliner</strong> (top right) lists every object and selects them too.</li><li><strong>Object › Transform</strong> has Move, Rotate and Scale; <strong>Object › Clear</strong> resets them (<kbd>Alt</kbd> <kbd>G</kbd>, <kbd>Alt</kbd> <kbd>R</kbd>, <kbd>Alt</kbd> <kbd>S</kbd>).</li><li><strong>Edit › Undo History</strong> jumps back several steps. The sidebar (<kbd>N</kbd>) shows Location, Rotation, Scale and Dimensions, and you can type into them.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Viewport Lab</span><a href="https://docs.blender.org/manual/en/latest/editors/3dview/navigate/index.html" target="_blank" rel="noopener">Blender: Navigation ↗</a><span>Based on the Blender labs by Joan Copla, adapted to CIFOG Lab.</span><a href="https://joancopla.github.io/blender-lab/" target="_blank" rel="noopener">Joan Copla's labs ↗</a><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=1"></script>
+  <script type="module" src="./app.js?v=2"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>

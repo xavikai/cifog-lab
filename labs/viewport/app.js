@@ -1,5 +1,6 @@
 // Viewport Lab: a Blender-like 3D Viewport in Object Mode (navigation, selection, G/R/S).
 import * as THREE from 'three';
+import { ICONS, outlinerHTML } from '../../blender-ui.js?v=1';
 import * as V from './vp.js?v=1';
 import { STAGES, startState, MARKS, MARK_N, VIEW_ORDER, markSeen, panReport, selectReport, moveReport, exactReport, undoReport, ghostState, SELECT_GOAL, PAN_GOAL } from './stages.js?v=1';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
@@ -668,28 +669,26 @@ $('#n-body').addEventListener('change', e => {
 $('#n-body').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { e.target.blur(); renderSidebar(); } e.stopPropagation(); });
 
 // ─── Outliner and the lab panel ──────────────────────────────────────────────
-const ICON = {
-  mesh: '<svg viewBox="0 0 16 16"><path d="M8 2 14 13H2z" fill="none" stroke="#e59a3c" stroke-width="1.4"/></svg>',
-  camera: '<svg viewBox="0 0 16 16"><rect x="1.5" y="5" width="9" height="7" rx="1" fill="none" stroke="#9a8cf0" stroke-width="1.3"/><path d="m10.5 7.5 4-2v6l-4-2" fill="none" stroke="#9a8cf0" stroke-width="1.3"/></svg>',
-  light: '<svg viewBox="0 0 16 16"><circle cx="8" cy="7" r="3.5" fill="none" stroke="#e8d64a" stroke-width="1.3"/><path d="M6.5 12h3M7 14h2" stroke="#e8d64a" stroke-width="1.2"/></svg>',
-  coll: '<svg viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9" rx="1" fill="none" stroke="#ddd" stroke-width="1.2"/><path d="M2 6h12" stroke="#ddd"/></svg>',
-};
+// Blender icons for the header (see blender-ui.js).
+document.querySelectorAll('#workspace [data-icon]').forEach(el => { el.innerHTML = ICONS[el.dataset.icon] + (el.dataset.label ? `<span>${el.dataset.label}</span>` : '') + (el.classList.contains('bh-dd') ? ICONS.dropdown : ''); });
+const OB_ICON = { camera: ['ob_camera', 'data_camera'], light: ['ob_light', 'data_light'] };
 function renderOutliner() {
   const st = S.st;
-  $('#outliner').innerHTML = `<div class="ol-head"><span data-no-i18n>Outliner</span></div><ul class="ol-tree" data-no-i18n>
-    <li class="ol-row ol-scene">${ICON.coll}<span>Scene Collection</span></li>
-    <li class="ol-row ol-coll">${ICON.coll}<span>Collection</span></li>
-    ${st.objs.filter(o => !o.hide).map(o => `<li class="ol-row ol-obj${st.sel.includes(o.name) ? ' sel' : ''}${st.active === o.name && st.sel.includes(o.name) ? ' active' : ''}${o.lock ? ' locked' : ''}" data-name="${esc(o.name)}" role="button" tabindex="0">${ICON[o.kind === 'camera' ? 'camera' : o.kind === 'light' ? 'light' : 'mesh']}<span>${esc(o.name)}</span>${o.lock ? '<em>🔒</em>' : ''}</li>`).join('')}
-  </ul>`;
+  $('#outliner').innerHTML = outlinerHTML([
+    { name: 'Scene Collection', icon: 'scene_collection', open: true, depth: 0 },
+    { name: 'Collection', icon: 'collection', open: true, depth: 1, exclude: false, eye: true, cam: true },
+    ...st.objs.map(o => { const [ob, data] = OB_ICON[o.kind] || ['ob_mesh', 'data_mesh']; return { id: o.name, name: o.name, icon: ob, inline: [data], open: false, depth: 2, sel: st.sel.includes(o.name), active: st.active === o.name && st.sel.includes(o.name), dim: !!o.hide, lock: !!o.lock, eye: !o.hide, cam: true }; }),
+  ]);
 }
 $('#outliner').addEventListener('click', e => {
-  const r = e.target.closest('[data-name]'); if (!r || S.modal) return; const o = objByName(r.dataset.name);
+  if (e.target.closest('[data-ol-tg]')) { msg('Hide and show objects with H and Alt H, as in Blender. In this lab the eye only shows it.'); return; }
+  const r = e.target.closest('[data-ol-id]'); if (!r || S.modal) return; const o = objByName(r.dataset.olId); if (o.hide) return;
   if (o.lock) { msg('This object is locked in this step.'); return; }
   const ext = e.ctrlKey || e.metaKey;
   if (!ext) applySelection({ sel: [o.name], active: o.name });
   else applySelection(S.st.sel.includes(o.name) ? { sel: S.st.sel.filter(n => n !== o.name), active: S.st.active } : { sel: [...S.st.sel, o.name], active: o.name });
 });
-$('#outliner').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.closest('[data-name]')?.click(); });
+$('#outliner').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.closest('[data-ol-id]')?.click(); });
 const yes = ok => `<b class="${ok ? 'ok' : ''}">${ok ? '✓' : '·'}</b>`;
 function renderLabPanel() {
   const st = S.st, id = sid(), p = $('#lab-panel'); let h = '';

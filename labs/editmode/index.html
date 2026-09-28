@@ -6,6 +6,7 @@
   <meta name="description" content="First steps in Blender's Edit Mode: vertices, edges and faces, X-ray, edge loops, moving parts of a mesh, Extrude, Inset, Loop Cut, Bevel, cleaning a broken mesh with Merge by Distance, Delete and Dissolve, and modelling a stool.">
   <title>Edit Mode Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../blender-ui.css?v=1">
   <link rel="stylesheet" href="./style.css?v=1">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
 </head>
@@ -33,15 +34,20 @@
       <div class="vp-body">
         <section class="editor pane vp-editor" aria-label="3D Viewport">
           <div class="editor-header">
-            <span class="editor-type"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14 5v6l-6 3.5L2 11V5z M2 5l6 3.5L14 5 M8 8.5v6" fill="none" stroke="currentColor"/></svg></span>
-            <button type="button" class="mode-pill mode-btn" id="mode-btn" aria-pressed="false" data-no-i18n title="Tab">Object Mode</button>
-            <div class="select-modes sm-group" role="group" aria-label="Select mode">
-              <button type="button" class="icon-toggle" data-sm="vert" title="Vertex (1)" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12 8 3l5 9z" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".55"/><rect x="1.2" y="10.2" width="3.6" height="3.6" fill="currentColor"/></svg></button>
-              <button type="button" class="icon-toggle" data-sm="edge" title="Edge (2)" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12 8 3l5 9z" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".55"/><path d="M3 12h10" stroke="currentColor" stroke-width="2.4"/></svg></button>
-              <button type="button" class="icon-toggle" data-sm="face" title="Face (3)" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12 8 3l5 9z" fill="currentColor" fill-opacity=".7" stroke="currentColor" stroke-width="1.1"/></svg></button>
+            <span class="bh-dd bh-editor" id="editor-type" title="Editor Type: 3D Viewport" data-icon="view3d"></span>
+            <button type="button" class="bh-dd mode-btn" id="mode-btn" aria-pressed="false" data-no-i18n title="Mode (Tab)"></button>
+            <div class="bh-group sm-group" role="group" aria-label="Select mode">
+              <button type="button" class="bh-ico" data-sm="vert" title="Vertex (1)" aria-pressed="false" data-icon="vertexsel"></button>
+              <button type="button" class="bh-ico" data-sm="edge" title="Edge (2)" aria-pressed="false" data-icon="edgesel"></button>
+              <button type="button" class="bh-ico" data-sm="face" title="Face (3)" aria-pressed="false" data-icon="facesel"></button>
             </div>
             <nav class="menubar" id="menus" aria-label="3D Viewport menus" data-no-i18n></nav>
-            <button type="button" class="ruler-btn sb-btn" id="xray-btn" aria-pressed="false" title="Toggle X-Ray (Alt Z)"><span data-no-i18n>X-Ray</span> <kbd>Alt</kbd><kbd>Z</kbd></button>
+            <span class="bh-right">
+              <span class="bh-group"><button type="button" class="bh-ico soft" disabled title="Show Gizmo" data-icon="gizmo" aria-pressed="true"></button></span>
+              <span class="bh-group"><button type="button" class="bh-ico soft" disabled title="Show Overlays" data-icon="overlay" aria-pressed="true"></button></span>
+              <span class="bh-group"><button type="button" class="bh-ico" id="xray-btn" aria-pressed="false" title="Toggle X-Ray (Alt Z)" data-icon="xray"></button></span>
+              <span class="bh-group" role="group" aria-label="Viewport Shading"><button type="button" class="bh-ico" disabled title="Wireframe" data-icon="shading_wire"></button><button type="button" class="bh-ico" aria-pressed="true" title="Solid" data-icon="shading_solid"></button><button type="button" class="bh-ico" disabled title="Material Preview" data-icon="shading_texture"></button><button type="button" class="bh-ico" disabled title="Rendered" data-icon="shading_rendered"></button></span>
+            </span>
             <button type="button" class="ruler-btn" id="sidebar-btn" aria-pressed="false" title="Sidebar (N)"><span data-no-i18n>Sidebar</span> <kbd>N</kbd></button>
           </div>
           <div class="view-host vp-view" id="view-host" tabindex="-1">
@@ -67,7 +73,8 @@
             <span class="graph-hint" id="vp-hint">MMB orbit · Shift MMB pan · Wheel zoom</span>
           </div>
         </section>
-        <aside class="props vp-side" id="props" aria-label="Lab panel">
+        <aside class="props vp-side" id="props" aria-label="Outliner and lab panel">
+          <div id="outliner"></div>
           <div id="lab-panel"></div>
         </aside>
       </div>
@@ -98,7 +105,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">IN THE REAL BLENDER</span><h2>More options, same ideas</h2><p>Everything here works the same in Blender, with the mouse over the 3D Viewport in Edit Mode. Blender has more options for each tool: here are the ones to look for first.</p></div><ol><li>The select mode buttons are in the header, next to <strong>Edit Mode</strong>. With <strong>Emulate Numpad</strong> on, the number row changes the view instead: use the buttons.</li><li><strong>Toggle X-Ray</strong> is the button with two squares at the top right of the viewport. Its opacity is set in the <strong>Shading</strong> popover.</li><li>After each tool, the <strong>Adjust Last Operation</strong> panel (bottom left, or <kbd>F9</kbd>) changes its values: Width and Segments of a bevel, Number of Cuts of a loop cut, Thickness of an inset.</li><li><kbd>E</kbd> also works on vertices and edges, and <kbd>I</kbd> <kbd>I</kbd> insets each face on its own (Individual). This lab extrudes faces only.</li><li><strong>Mesh › Clean Up</strong> has <strong>Merge by Distance</strong>, Delete Loose and more. The <strong>Statistics</strong> overlay counts vertices, edges and faces.</li><li>A bevel of a whole object is also a modifier (<strong>Bevel</strong> in the modifier stack) that keeps the original mesh editable.</li></ol></aside>
   </main>
   <footer><span>CIFOG · Edit Mode Lab</span><a href="https://docs.blender.org/manual/en/latest/modeling/meshes/editing/index.html" target="_blank" rel="noopener">Blender: Mesh editing ↗</a><span>Based on the Blender labs by Joan Copla, adapted to CIFOG Lab.</span><a href="https://joancopla.github.io/blender-lab/" target="_blank" rel="noopener">Joan Copla's labs ↗</a><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=1"></script>
+  <script type="module" src="./app.js?v=2"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>
