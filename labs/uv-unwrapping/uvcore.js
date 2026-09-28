@@ -152,7 +152,7 @@ const area2d = pts => { let a = 0; for (let i = 0; i < pts.length; i++) { const 
 const area3d = pts => { let n = [0, 0, 0]; for (let i = 1; i < pts.length - 1; i++) n = add(n, cross(sub(pts[i], pts[0]), sub(pts[i + 1], pts[0]))); return len(n) / 2; };
 // Flatten one island (faces joined by non-seam edges). A closed island (no boundary) still gets UVs,
 // but they fold over themselves: the surface cannot lie flat without cuts.
-function flattenIsland(m, seams, faces, W) {
+function flattenIsland(m, seams, faces, W, minStretch = false) {
   const { verts, faceLV } = islandVerts(m, seams, faces), P = verts.map(vi => W[vi]);
   const tris = faces.flatMap(fi => fan(faceLV.get(fi)));
   const use = new Map(); for (const fi of faces) { const L = faceLV.get(fi); L.forEach((a, i) => { const b = L[(i + 1) % L.length], k = a < b ? `${a}_${b}` : `${b}_${a}`; use.set(k, (use.get(k) || 0) + 1); }); }
@@ -163,19 +163,43 @@ function flattenIsland(m, seams, faces, W) {
   let U;
   if (best[0] === best[1]) U = P.map(() => [0, 0]);
   else U = lscm(P, tris, [{ i: best[0], uv: [0, 0] }, { i: best[1], uv: [bd, 0] }]);
-  const out = new Map(faces.map(fi => [fi, faceLV.get(fi).map(lv => [...U[lv]])]));
   // Make it face up (not mirrored) and give it the real size (1 UV unit = 1 m before packing).
-  let sa = 0; for (const fi of faces) sa += area2d(out.get(fi));
-  if (sa < 0) { for (const pts of out.values()) for (const p of pts) p[0] = -p[0]; sa = -sa; }
+  let sa = 0; for (const fi of faces) sa += area2d(faceLV.get(fi).map(lv => U[lv]));
+  if (sa < 0) { for (const p of U) p[0] = -p[0]; sa = -sa; }
   const a3 = faces.reduce((s, fi) => s + area3d(m.f[fi].map(i => W[i])), 0), k = sa > 1e-12 ? Math.sqrt(a3 / sa) : 1;
-  for (const pts of out.values()) for (const p of pts) { p[0] *= k; p[1] *= k; }
-  return out;
+  for (const p of U) { p[0] *= k; p[1] *= k; }
+  if (minStretch && bnd.size >= 2) arap(P, tris, U);
+  return new Map(faces.map(fi => [fi, faceLV.get(fi).map(lv => [...U[lv]])]));
+}
+// Minimum Stretch (lab version): "as rigid as possible" steps after the conformal solve. Each triangle is
+// turned to fit its UVs, then the UVs are solved again to keep every triangle as close as possible to its
+// real size and shape. It evens out the area that the conformal solve squeezes.
+function arap(P, tris, U, iters = 12) {
+  const n = U.length; if (n < 3) return;
+  const T = tris.map(([a, b, c]) => { const e1 = sub(P[b], P[a]), l1 = len(e1), ax = mul(e1, 1 / (l1 || 1)), e2 = sub(P[c], P[a]), x2 = dot(e2, ax); return { v: [a, b, c], q: [[0, 0], [l1, 0], [x2, len(sub(e2, mul(ax, x2)))]] }; });
+  const N = n - 1, A = new Float64Array(N * N), id = i => i - 1;  // vertex 0 stays where it is
+  for (const t of T) for (let e = 0; e < 3; e++) { const i = t.v[e], j = t.v[(e + 1) % 3]; for (const [a, b] of [[i, j], [j, i]]) { if (a) { A[id(a) * N + id(a)] += 1; if (b) A[id(a) * N + id(b)] -= 1; } } }
+  for (let it = 0; it < iters; it++) {
+    const bx = new Float64Array(N), by = new Float64Array(N);
+    for (const t of T) {
+      let m00 = 0, m01 = 0, m10 = 0, m11 = 0;
+      for (let e = 0; e < 3; e++) { const i = t.v[e], j = t.v[(e + 1) % 3], qx = t.q[e][0] - t.q[(e + 1) % 3][0], qy = t.q[e][1] - t.q[(e + 1) % 3][1], ux = U[i][0] - U[j][0], uy = U[i][1] - U[j][1]; m00 += ux * qx; m01 += ux * qy; m10 += uy * qx; m11 += uy * qy; }
+      const th = Math.atan2(m10 - m01, m00 + m11), c = Math.cos(th), s = Math.sin(th);
+      for (let e = 0; e < 3; e++) {
+        const i = t.v[e], j = t.v[(e + 1) % 3], qx = t.q[e][0] - t.q[(e + 1) % 3][0], qy = t.q[e][1] - t.q[(e + 1) % 3][1], rx = c * qx - s * qy, ry = s * qx + c * qy;
+        if (i) { bx[id(i)] += rx; by[id(i)] += ry; if (!j) { bx[id(i)] += U[0][0]; by[id(i)] += U[0][1]; } }
+        if (j) { bx[id(j)] -= rx; by[id(j)] -= ry; if (!i) { bx[id(j)] += U[0][0]; by[id(j)] += U[0][1]; } }
+      }
+    }
+    const x = cholSolve(A, bx, N), y = cholSolve(A, by, N);
+    for (let i = 1; i < n; i++) { U[i][0] = x[i - 1]; U[i][1] = y[i - 1]; }
+  }
 }
 // U › Unwrap: only the selected faces; seams and the edge of the selection cut the islands.
 // Blender unwraps the mesh without the object scale (it warns when the scale is not 1).
-export function unwrap(m, uv, faces, seams, { margin = 0.001 } = {}) {
+export function unwrap(m, uv, faces, seams, { margin = 0.001, method = 'angle' } = {}) {
   const out = cloneUV(uv), islands = seamIslands(m, seams, faces);
-  for (const isl of islands) for (const [fi, pts] of flattenIsland(m, seams, isl, m.v)) out[fi] = pts;
+  for (const isl of islands) for (const [fi, pts] of flattenIsland(m, seams, isl, m.v, method === 'minimum')) out[fi] = pts;
   return pack(m, out, faces, { margin, rotate: true, islands });
 }
 // Is the island closed (no boundary to open it on)? Then Unwrap folds it.
@@ -319,6 +343,35 @@ export function smartProject(m, uv, faces, { angle = 66, margin = 0, scale = [1,
   const isl = new Map(); faces.forEach((f, i) => { const r = d.find(i); if (!isl.has(r)) isl.set(r, []); isl.get(r).push(f); });
   for (const fi of faces) { const { r, u } = planeAxes(vecs[group.get(fi)]); out[fi] = m.f[fi].map(i => [dot(W[i], r), dot(W[i], u)]); }
   return pack(m, out, faces, { margin: Math.max(margin, 0.001), rotate: true, islands: [...isl.values()] });
+}
+
+// Lightmap Pack: every face is its own island, flat, packed with a margin (for lightmaps: no pixel is shared).
+export function lightmapPack(m, uv, faces, { margin = 0.1, scale = [1, 1, 1] } = {}) {
+  const out = cloneUV(uv), W = worldV(m, scale);
+  for (const fi of faces) { const { r, u } = planeAxes(normalOf(W, m.f[fi])); out[fi] = m.f[fi].map(i => [dot(W[i], r), dot(W[i], u)]); }
+  return pack(m, out, faces, { margin: margin * 0.05, rotate: true, islands: faces.map(fi => [fi]) });
+}
+// Follow Active Quads: the active quad keeps its UVs and the selected quads around it follow its grid,
+// each new quad continuing the one before it (Edge Length Mode: Length Average, or Even).
+export function followActiveQuads(m, uv, faces, active, { mode = 'average', scale = [1, 1, 1] } = {}) {
+  const out = cloneUV(uv), W = worldV(m, scale), F = new Set(faces.filter(fi => m.f[fi].length === 4));
+  if (!F.has(active)) return null;
+  const ef = edgeFaces(m), done = new Set([active]), queue = [active], L = (a, b) => len(sub(W[a], W[b]));
+  while (queue.length) {
+    const q = queue.shift(), f = m.f[q];
+    for (let i = 0; i < 4; i++) {
+      const a = f[i], b = f[(i + 1) % 4], nb = (ef.get(ek(a, b)) || []).find(x => x !== q && F.has(x) && !done.has(x)); if (nb == null) continue;
+      const g = m.f[nb], ua = out[q][i], ub = out[q][(i + 1) % 4], ud = out[q][(i + 3) % 4], uc = out[q][(i + 2) % 4];
+      const ja = g.indexOf(a), jb = g.indexOf(b), e = g[(jb + (g[(jb + 1) % 4] === a ? 3 : 1)) % 4], fv = g[(ja + (g[(ja + 1) % 4] === b ? 3 : 1)) % 4];
+      // step across the shared edge: the same direction as in the quad before (Even), or scaled by the edge lengths (Length Average)
+      const lenPrev = (L(a, f[(i + 3) % 4]) + L(b, f[(i + 2) % 4])) / 2 || 1, kk = mode === 'even' ? 1 : (L(b, e) + L(a, fv)) / 2 / lenPrev;
+      const da = [ua[0] - ud[0], ua[1] - ud[1]], db = [ub[0] - uc[0], ub[1] - uc[1]];
+      const pe = [ub[0] + db[0] * kk, ub[1] + db[1] * kk], pf = [ua[0] + da[0] * kk, ua[1] + da[1] * kk];
+      const uvOf = v => v === a ? [...ua] : v === b ? [...ub] : v === e ? pe : pf;
+      out[nb] = g.map(uvOf); done.add(nb); queue.push(nb);
+    }
+  }
+  return out;
 }
 
 // ─── Checking the UVs ────────────────────────────────────────────────────────

@@ -81,3 +81,20 @@ test('noteOp records the steps flags', () => {
   assert.deepEqual(s.flags.angles, [30, 89]); assert.equal(s.flags.smartMargin, 0.03);
   void reportOf;
 });
+test('Minimum Stretch evens out the area of a sphere unwrap', () => {
+  const m = U.MESHES.sphere(), f = U.allFaces(m), s = sphereSeam(m);
+  const a = U.report(m, U.unwrap(m, U.resetUV(m), f, s, { method: 'angle' })), b = U.report(m, U.unwrap(m, U.resetUV(m), f, s, { method: 'minimum' }));
+  assert.ok(b.avgArea < a.avgArea); assert.equal(b.flipped, 0);
+});
+test('Lightmap Pack gives every face its own island, without overlaps', () => {
+  const m = U.house(), r = U.report(m, U.lightmapPack(m, U.resetUV(m), U.allFaces(m)));
+  assert.equal(r.islands, m.f.length); assert.equal(r.overlaps, 0); assert.equal(r.outside, 0);
+});
+test('Follow Active Quads unrolls the side of a cylinder from one good quad', () => {
+  const m = U.cylinder(), side = [...Array(16).keys()];
+  const uv = U.resetUV(m), w = 2 * Math.sin(Math.PI / 16) / 10;
+  uv[0] = [[0, 0], [w, 0], [w, 0.2], [0, 0.2]];
+  const r = U.report(m, U.followActiveQuads(m, uv, side, 0), side);
+  assert.equal(r.islands, 1); assert.ok(r.maxShape < 0.02); assert.equal(r.flipped, 0);
+  assert.equal(U.followActiveQuads(m, uv, side, 16), null);
+});

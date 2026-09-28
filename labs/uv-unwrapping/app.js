@@ -260,6 +260,7 @@ function clickSelect(x, y, extend, loop = false) {
   }
   const sm = st.sm, hit = sm === 'vert' ? pickVert(x, y) : sm === 'edge' ? pickEdge(x, y) : pickFace(x, y), list = sm === 'vert' ? 'V' : sm === 'edge' ? 'E' : 'F';
   if (hit == null) { if (!extend) setSel(E.emptySel()); return; }
+  if (sm === 'face') S.st.active = hit;
   if (!extend) { setSel({ V: [], E: [], F: [], [list]: [hit] }); return; }
   const now = cur[list], has = now.includes(hit);
   setSel({ ...cur, [list]: has ? now.filter(v => v !== hit) : [...now, hit] });
@@ -291,7 +292,7 @@ function toggleEdit() {
 function needEdit() { if (!edit()) { msg('UVs are edited in Edit Mode: press Tab.', true); return false; } return true; }
 
 // ─── Undo ────────────────────────────────────────────────────────────────────
-const KEEP = ['m', 'uv', 'seams', 'sel', 'sm', 'mode', 'scale', 'uvSel', 'flags', 'stretch', 'sync', 'live', 'uvMode'];
+const KEEP = ['m', 'uv', 'seams', 'sel', 'sm', 'mode', 'scale', 'uvSel', 'flags', 'stretch', 'sync', 'live', 'uvMode', 'active'];
 const snap = () => JSON.parse(JSON.stringify(Object.fromEntries(KEEP.map(k => [k, S.st[k]]))));
 function pushUndo(name, before = snap()) { S.undo.push({ name, snap: before }); if (S.undo.length > 48) S.undo.shift(); S.redo = []; }
 function restore(s) { Object.assign(S.st, JSON.parse(JSON.stringify(s))); meshChanged(); }
@@ -319,8 +320,12 @@ function markSeam(clear = false) {
 }
 // Operators with an "Adjust Last Operation" panel: run(params) makes the new UVs from the state before.
 const OPS = {
-  unwrap: { name: 'Unwrap', fields: [{ k: 'method', label: 'Method', type: 'select', v: 'angle', options: [['angle', 'Angle Based'], ['conformal', 'Conformal']] }, { k: 'fill', label: 'Fill Holes', type: 'bool', v: true }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }, { k: 'margin', label: 'Margin', type: 'num', v: 0.001, step: 0.005, min: 0, max: 0.2 }],
-    run: (st, F, p) => U.unwrap(st.m, st.uv, F, st.seams, { margin: p.margin }) },
+  unwrap: { name: 'Unwrap', fields: [{ k: 'method', label: 'Method', type: 'select', v: 'angle', options: [['angle', 'Angle Based'], ['conformal', 'Conformal'], ['minimum', 'Minimum Stretch']] }, { k: 'fill', label: 'Fill Holes', type: 'bool', v: true }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }, { k: 'margin', label: 'Margin', type: 'num', v: 0.001, step: 0.005, min: 0, max: 0.2 }],
+    run: (st, F, p) => U.unwrap(st.m, st.uv, F, st.seams, { margin: p.margin, method: p.method }) },
+  lightmap: { name: 'Lightmap Pack', fields: [{ k: 'share', label: 'Share Texture Space', type: 'bool', v: false }, { k: 'quality', label: 'Pack Quality', type: 'num', v: 12, step: 1, min: 1, max: 48 }, { k: 'margin', label: 'Margin', type: 'num', v: 0.1, step: 0.05, min: 0, max: 1 }],
+    run: (st, F, p) => U.lightmapPack(st.m, st.uv, F, { margin: p.margin, scale: st.scale }) },
+  quads: { name: 'Follow Active Quads', fields: [{ k: 'mode', label: 'Edge Length Mode', type: 'select', v: 'average', options: [['even', 'Even'], ['length', 'Length'], ['average', 'Length Average']] }],
+    run: (st, F, p) => U.followActiveQuads(st.m, st.uv, F, st.active, { mode: p.mode === 'even' ? 'even' : 'length', scale: st.scale }) },
   smart: { name: 'Smart UV Project', fields: [{ k: 'angle', label: 'Angle Limit', type: 'num', v: 66, step: 1, min: 1, max: 89, unit: '°' }, { k: 'margin', label: 'Island Margin', type: 'num', v: 0, step: 0.01, min: 0, max: 0.2 }, { k: 'area', label: 'Area Weight', type: 'num', v: 0, step: 0.1, min: 0, max: 1 }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }],
     run: (st, F, p) => U.smartProject(st.m, st.uv, F, { angle: p.angle, margin: p.margin, scale: st.scale }) },
   cube: { name: 'Cube Projection', fields: [{ k: 'size', label: 'Cube Size', type: 'num', v: 2, step: 0.1, min: 0.1, max: 20, unit: ' m' }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }, { k: 'clip', label: 'Clip to Bounds', type: 'bool', v: false }, { k: 'bounds', label: 'Scale to Bounds', type: 'bool', v: false }],
@@ -329,9 +334,9 @@ const OPS = {
     run: (st, F, p, vb) => U.cylinderProject(st.m, st.uv, F, { direction: p.direction, view: vb, radius: p.radius, bounds: p.bounds, scale: st.scale }) },
   sphere: { name: 'Sphere Projection', fields: [{ k: 'direction', label: 'Direction', type: 'select', v: 'equator', options: [['equator', 'View on Equator'], ['poles', 'View on Poles'], ['object', 'Align to Object']] }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }, { k: 'bounds', label: 'Scale to Bounds', type: 'bool', v: false }],
     run: (st, F, p, vb) => U.sphereProject(st.m, st.uv, F, { direction: p.direction, view: vb, bounds: p.bounds, scale: st.scale }) },
-  view: { name: 'Project From View', fields: [{ k: 'ortho', label: 'Orthographic', type: 'bool', v: false }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }, { k: 'bounds', label: 'Scale to Bounds', type: 'bool', v: false }],
+  view: { name: 'Project from View', fields: [{ k: 'ortho', label: 'Orthographic', type: 'bool', v: false }, { k: 'aspect', label: 'Correct Aspect', type: 'bool', v: true }, { k: 'bounds', label: 'Scale to Bounds', type: 'bool', v: false }],
     run: (st, F, p, vb) => U.projectFromView(st.m, st.uv, F, vb, { ortho: p.ortho || !vb.eye, bounds: p.bounds, scale: st.scale }) },
-  viewb: { name: 'Project From View (Bounds)', fields: [{ k: 'ortho', label: 'Orthographic', type: 'bool', v: false }],
+  viewb: { name: 'Project from View (Bounds)', fields: [{ k: 'ortho', label: 'Orthographic', type: 'bool', v: false }],
     run: (st, F, p, vb) => U.projectFromView(st.m, st.uv, F, vb, { ortho: p.ortho || !vb.eye, bounds: true, scale: st.scale }), note: 'view' },
   reset: { name: 'Reset', fields: [], run: (st, F) => U.resetUV(st.m, st.uv, F) },
   pack: { name: 'Pack Islands', uv: true, fields: [{ k: 'rotate', label: 'Rotate', type: 'bool', v: true }, { k: 'margin', label: 'Margin', type: 'num', v: 0.001, step: 0.005, min: 0, max: 0.2 }],
@@ -339,14 +344,15 @@ const OPS = {
   average: { name: 'Average Islands Scale', uv: true, fields: [{ k: 'nonuni', label: 'Non-Uniform', type: 'bool', v: false }], run: (st, F) => U.averageScale(st.m, st.uv, F, st.scale) },
 };
 const lastParams = {};
-function runOp(id) {
+function runOp(id, over = {}) {
   const op = OPS[id]; if (!needEdit()) return;
   const F = op.uv ? uvTargets() : selFaces(S.st);
   if (!F.length) { msg(op.uv ? 'Select the UVs first: mouse over the UV Editor and press A.' : 'Select the faces first (A selects all).', true); return; }
-  const before = snap(), vb = viewBasis(), p = Object.fromEntries(op.fields.map(f => [f.k, lastParams[id]?.[f.k] ?? f.v]));
+  const before = snap(), vb = viewBasis(), p = { ...Object.fromEntries(op.fields.map(f => [f.k, lastParams[id]?.[f.k] ?? f.v])), ...over };
+  if (id === 'quads' && (S.st.sm !== 'face' || !F.includes(S.st.active) || S.st.m.f[S.st.active]?.length !== 4)) { msg('Follow Active Quads needs an active quad: in Face select, click the quad whose UVs the others will follow (last click = active).', true); return; }
   if (id === 'view' || id === 'viewb') p.ortho = p.ortho || S.st.view.ortho;
   const exec = params => {
-    S.st.uv = op.run(S.st, F, params, vb);
+    S.st.uv = op.run(S.st, F, params, vb) || S.st.uv;
     noteOp(S.st, op.note || id, params, F);
     if (id === 'unwrap') { const closed = U.closedIslands(S.st.m, S.st.seams, F).length; noteOp(S.st, 'unwrap', { closed: closed > 0 }, F); return closed; }
     return 0;
@@ -362,7 +368,7 @@ function runOp(id) {
 }
 function renderLastOp() {
   const el = $('#last-op'), op = S.lastOp; el.hidden = !op || !edit(); if (!op) return;
-  const name = OPS[op.id].name;
+  const name = op.id === 'unwrap' ? 'Unwrap' : OPS[op.id].name;
   el.innerHTML = `<button type="button" class="lo-head" id="lo-toggle" aria-expanded="${!el.classList.contains('closed')}"><span class="lo-tri">▾</span><span data-no-i18n>${esc(name)}</span></button><div class="lo-body">` + op.fields.map((f, i) => {
     if (f.type === 'bool') return `<label class="lo-bool"><input type="checkbox" data-i="${i}" ${f.v ? 'checked' : ''}><span data-no-i18n>${esc(f.label)}</span></label>`;
     if (f.type === 'select') return `<label><span data-no-i18n>${esc(f.label)}</span><select data-i="${i}" data-no-i18n>${f.options.map(([v, l]) => `<option value="${v}" ${v === f.v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
@@ -642,19 +648,20 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => { if (S.modal && (e.key === 'Control' || e.key === 'Meta')) { S.modal.ctrl = false; applyUVModal(); } });
 
 // ─── Menus ───────────────────────────────────────────────────────────────────
-const U_MENU = () => [['Unwrap', 'U', () => runOp('unwrap')], ['Smart UV Project', '', () => runOp('smart')], '-', ['Cube Projection', '', () => runOp('cube')], ['Cylinder Projection', '', () => runOp('cylinder')], ['Sphere Projection', '', () => runOp('sphere')], '-', ['Project From View', '', () => runOp('view')], ['Project From View (Bounds)', '', () => runOp('viewb')], '-', ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], '-', ['Reset', '', () => runOp('reset')]];
+const UNWRAPS = () => [['Unwrap Angle Based', '', () => runOp('unwrap', { method: 'angle' })], ['Unwrap Conformal', '', () => runOp('unwrap', { method: 'conformal' })], ['Unwrap Minimum Stretch', '', () => runOp('unwrap', { method: 'minimum' })]];
+const U_MENU = () => [...UNWRAPS(), '-', ['Smart UV Project...', '', () => runOp('smart')], ['Lightmap Pack...', '', () => runOp('lightmap')], ['Follow Active Quads...', '', () => runOp('quads')], '-', ['Cube Projection', '', () => runOp('cube')], ['Cylinder Projection', '', () => runOp('cylinder')], ['Sphere Projection', '', () => runOp('sphere')], '-', ['Project from View', '', () => runOp('view')], ['Project from View (Bounds)', '', () => runOp('viewb')], '-', ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], '-', ['Reset', '', () => runOp('reset')]];
 function menuItems(id) {
   const h = S.undo;
   if (id === 'edit') return [['Undo', 'Ctrl Z', undo], ['Redo', 'Ctrl Shift Z', redo], '-', '#Undo History', ['Original', h.length === 0 ? '●' : '', () => { while (S.undo.length) undo(); }], ...h.map((e, i) => [e.name, i === h.length - 1 ? '●' : '', () => { const n = S.undo.length - i - 1; for (let k = 0; k < n; k++) undo(); }])];
   if (id === 'view') return [['Frame All', 'Home', frameAll], ['Perspective/Orthographic', 'Numpad 5', togglePersp], '-', '#Viewpoint', ...['top', 'bottom', 'front', 'back', 'right', 'left'].map(n => [V.VIEWS[n].label, V.VIEWS[n].key, () => axisView(n)])];
   if (id === 'select') return [['All', 'A', selectAll], ['None', 'Alt A', selectNone], '-', ['Select Linked', 'L', () => msg('Put the mouse over a face and press L.')], '-', '#Select Loops', ['Edge Loops', 'Alt Click', () => msg('Alt + click an edge selects its loop.')]];
   if (id === 'uv' || id === 'unwrap') return ['#UV Mapping', ...U_MENU()];
-  if (id === 'edge' || id === 'context') return ['#' + (id === 'edge' ? 'Edge' : S.st.sm === 'face' ? 'Face Context Menu' : 'Edge Context Menu'), ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], ...(id === 'context' ? ['-', ['Unwrap', 'U', () => runOp('unwrap')]] : [])];
+  if (id === 'edge' || id === 'context') return ['#' + (id === 'edge' ? 'Edge' : S.st.sm === 'face' ? 'Face Context Menu' : 'Edge Context Menu'), ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], ...(id === 'context' ? ['-', ...UNWRAPS()] : [])];
   if (id === 'object') return [['Apply › Scale', 'Ctrl A', applyScale], ['Apply › All Transforms', '', applyScale]];
   if (id === 'apply') return ['#Apply', ['Location', '', () => msg('The location is already 0, 0, 0.')], ['Rotation', '', () => msg('The rotation is already 0°.')], ['Scale', '', applyScale], ['All Transforms', '', applyScale]];
   if (id === 'uvview') return [['Frame All', 'Home', frameUV], ['Zoom In', 'Wheel', () => { S.uvView.zoom *= 1.25; uvDirty = true; }], ['Zoom Out', 'Wheel', () => { S.uvView.zoom /= 1.25; uvDirty = true; }]];
   if (id === 'uvselect') return [['All', 'A', () => uvSelectAll(true)], ['None', 'Alt A', () => uvSelectAll(false)], ['Select Linked', 'L', () => msg('Put the mouse over an island in the UV Editor and press L.')]];
-  if (id === 'uvuv') return [['Unwrap', 'U', () => runOp('unwrap')], '-', ['Pack Islands', 'Ctrl P', () => runOp('pack')], ['Average Islands Scale', 'Ctrl A', () => runOp('average')], '-', [`${S.st.live ? '☑' : '☐'} Live Unwrap`, '', () => { S.st.live = !S.st.live; saveData(); msg(S.st.live ? 'Live Unwrap on: marking or clearing a seam unwraps the whole mesh again.' : 'Live Unwrap off.'); }], '-', ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], '-', ['Reset', '', () => runOp('reset')]];
+  if (id === 'uvuv') return ['#Unwrap', ...UNWRAPS(), '-', ['Pack Islands', 'Ctrl P', () => runOp('pack')], ['Average Islands Scale', 'Ctrl A', () => runOp('average')], '-', [`${S.st.live ? '☑' : '☐'} Live Unwrap`, '', () => { S.st.live = !S.st.live; saveData(); msg(S.st.live ? 'Live Unwrap on: marking or clearing a seam unwraps the whole mesh again.' : 'Live Unwrap off.'); }], '-', ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], '-', ['Reset', '', () => runOp('reset')]];
   return [];
 }
 let menuEl = null, menuFor = null;

@@ -26,7 +26,7 @@ export const CAPS = [16, 17];                 // top and bottom n-gons
 export function freshState(obj = 'cube') {
   const m = U.MESHES[obj]();
   return { obj, m, uv: U.resetUV(m), seams: [], sel: emptySel(), sm: 'edge', mode: 'edit', scale: [1, 1, 1], view: view(),
-    flags: {}, uvSel: [], uvMode: 'island', sync: false, stretch: 'off', live: false, lastOp: null };
+    flags: {}, active: null, uvSel: [], uvMode: 'island', sync: false, stretch: 'off', live: false, lastOp: null };
 }
 export function startState(step) {
   const s = freshState(step.start?.obj || 'cube');
@@ -107,7 +107,7 @@ export const STAGES = [
       {
         id: 'b1', title: 'Unwrap without seams',
         text: 'Unwrap flattens the selected faces like a paper model. But a closed box cannot lie flat without cutting it: try it. With no seams, Blender still unwraps, but it cannot solve the island: it squashes the faces into a line and warns "Unwrap could not solve any island(s), edge seams may need to be added". On the model the texture turns into stripes.',
-        how: ['Mouse over the 3D Viewport: press <kbd>A</kbd> to select everything.', 'Press <kbd>U</kbd> › <b>Unwrap</b>.', 'Look at the UV Editor: the six faces are a thin line. Turn on <b>Display Stretch</b> (Overlays in the UV Editor header): red means a lot of stretch.'],
+        how: ['Mouse over the 3D Viewport: press <kbd>A</kbd> to select everything.', 'Press <kbd>U</kbd> › <b>Unwrap Angle Based</b>.', 'Look at the UV Editor: the six faces are a thin line. Turn on <b>Display Stretch</b> (Overlays in the UV Editor header): red means a lot of stretch.'],
         why: 'A seam is where the surface is allowed to split. Without seams, a closed object has no edge to open it from, so the unwrap fails.',
         start: { obj: 'cube', sm: 'edge' },
         check: s => !!s.flags.closedUnwrap,
@@ -116,7 +116,7 @@ export const STAGES = [
       {
         id: 'b2', title: 'Cut the box open',
         text: 'Mark seams on the edges where the cube may split, like the cuts of a cardboard box. A cube needs 7 cuts to lie flat in one piece: the 5 edges that stay joined hold the six faces together. Too few cuts and the unwrap still fails or stretches; with every edge cut you get six separate squares. Goal: one island, flat, with no stretch.',
-        how: ['Edge select (<kbd>2</kbd>). Click an edge, <kbd>Shift</kbd> click more. <kbd>Alt</kbd> click selects a whole loop.', 'Mark them: <kbd>U</kbd> › <b>Mark Seam</b> (or <kbd>Ctrl</kbd> <kbd>E</kbd>, or right-click). Seams turn red. <b>Clear Seam</b> removes them.', 'Select all (<kbd>A</kbd>) and <kbd>U</kbd> › <b>Unwrap</b>. Tip: turn on <b>Live Unwrap</b> in the UV Editor\'s UV menu to see the result each time you mark a seam.'],
+        how: ['Edge select (<kbd>2</kbd>). Click an edge, <kbd>Shift</kbd> click more. <kbd>Alt</kbd> click selects a whole loop.', 'Mark them: <kbd>U</kbd> › <b>Mark Seam</b> (or <kbd>Ctrl</kbd> <kbd>E</kbd>, or right-click). Seams turn red. <b>Clear Seam</b> removes them.', 'Select all (<kbd>A</kbd>) and <kbd>U</kbd> › <b>Unwrap Angle Based</b>. Tip: turn on <b>Live Unwrap</b> in the UV Editor\'s UV menu to see the result each time you mark a seam.'],
         why: 'Where you put the seams decides where the texture has a visible join. Hide them where people do not look: under the object, at the back, along hard corners.',
         start: { obj: 'cube', sm: 'edge', setup: 'collapsed' },
         check: s => flatOk(reportOf(s), 1),
@@ -125,7 +125,7 @@ export const STAGES = [
       {
         id: 'b3', title: 'Seams on a cylinder',
         text: 'A cylinder is a tube with two lids. The classic cut: a loop around each lid, so the caps come off as two discs, and one straight seam down the side, so the tube unrolls into a rectangle, like the label of a tin. Goal: three islands with no stretch.',
-        how: ['Edge select (<kbd>2</kbd>). <kbd>Alt</kbd> click an edge of the top rim: the whole loop is selected. <kbd>Shift</kbd> <kbd>Alt</kbd> click the bottom rim to add it.', '<kbd>Shift</kbd> click one vertical edge of the side. Put it at the back, where it will be seen less.', '<kbd>U</kbd> › <b>Mark Seam</b>, then <kbd>A</kbd> and <kbd>U</kbd> › <b>Unwrap</b>.'],
+        how: ['Edge select (<kbd>2</kbd>). <kbd>Alt</kbd> click an edge of the top rim: the whole loop is selected. <kbd>Shift</kbd> <kbd>Alt</kbd> click the bottom rim to add it.', '<kbd>Shift</kbd> click one vertical edge of the side. Put it at the back, where it will be seen less.', '<kbd>U</kbd> › <b>Mark Seam</b>, then <kbd>A</kbd> and <kbd>U</kbd> › <b>Unwrap Angle Based</b>.'],
         why: 'Most objects are made of simple shapes. Once you know how to cut a box, a tube and a ball, you can cut a bottle, a lamp or an arm.',
         start: { obj: 'cylinder', sm: 'edge' },
         check: s => flatOk(reportOf(s), 3),
@@ -134,7 +134,7 @@ export const STAGES = [
       {
         id: 'b4', title: 'Apply the scale first',
         text: 'Someone stretched this cube to twice its width in Object Mode (Scale X = 2) and then unwrapped it. Unwrap uses the mesh without the object\'s scale, so the islands are squares while the faces are rectangles: the texture is stretched. Blender warns about it: "Object has non-uniform scale, unwrap will operate on a non-scaled version of the mesh". Apply the scale and unwrap again.',
-        how: ['The cube is in Object Mode. Mouse over the 3D Viewport: <kbd>Ctrl</kbd> <kbd>A</kbd> › <b>Scale</b>. The scale goes back to 1, 1, 1 and the cube keeps its shape.', 'Press <kbd>Tab</kbd> for Edit Mode, <kbd>A</kbd> to select all and <kbd>U</kbd> › <b>Unwrap</b>.', 'Check: square checker cells, and a long cross in the UV Editor.'],
+        how: ['The cube is in Object Mode. Mouse over the 3D Viewport: <kbd>Ctrl</kbd> <kbd>A</kbd> › <b>Scale</b>. The scale goes back to 1, 1, 1 and the cube keeps its shape.', 'Press <kbd>Tab</kbd> for Edit Mode, <kbd>A</kbd> to select all and <kbd>U</kbd> › <b>Unwrap Angle Based</b>.', 'Check: square checker cells, and a long cross in the UV Editor.'],
         why: 'Apply the scale before unwrapping, baking or adding modifiers: many tools use the mesh as it is stored, not as you see it.',
         start: { obj: 'cube', sm: 'edge', mode: 'object', scale: [2, 1, 1], setup: 'stretched' },
         check: s => s.scale.every(k => k === 1) && flatOk(reportOf(s), 1),
@@ -146,10 +146,10 @@ export const STAGES = [
     id: 'project', name: 'Projections', sub: 'View · cylinder · sphere',
     steps: [
       {
-        id: 'c1', title: 'Project From View',
-        text: 'Projections do not use seams: they shine the image onto the faces like a projector, from one direction. Project From View uses the direction you are looking from. Seen straight on, a flat face gets perfect UVs; seen at an angle, the UVs come out skewed. The front face is selected: project it from the front.',
-        how: ['Try it first from here: mouse over the 3D Viewport, <kbd>U</kbd> › <b>Project From View</b>. The square comes out skewed (Display Stretch shows it).', 'Now look straight at the front: <kbd>Numpad 1</kbd> (or click <b>-Y</b> on the navigation gizmo).', 'Project again: <kbd>U</kbd> › <b>Project From View</b>. Now it is a perfect square.'],
-        why: 'Project From View is the quickest way to map a flat part: a sign, a screen, the front of a building. Always look straight at it first.',
+        id: 'c1', title: 'Project from View',
+        text: 'Projections do not use seams: they shine the image onto the faces like a projector, from one direction. Project from View uses the direction you are looking from. Seen straight on, a flat face gets perfect UVs; seen at an angle, the UVs come out skewed. The front face is selected: project it from the front.',
+        how: ['Try it first from here: mouse over the 3D Viewport, <kbd>U</kbd> › <b>Project from View</b>. The square comes out skewed (Display Stretch shows it).', 'Now look straight at the front: <kbd>Numpad 1</kbd> (or click <b>-Y</b> on the navigation gizmo).', 'Project again: <kbd>U</kbd> › <b>Project from View</b>. Now it is a perfect square.'],
+        why: 'Project from View is the quickest way to map a flat part: a sign, a screen, the front of a building. Always look straight at it first.',
         start: { obj: 'cube', sm: 'face', sel: { V: [], E: [], F: [2] } },
         check: s => !!s.flags.viewFront && reportOf(s, [2]).maxShape < 0.03,
         solve: s => { s.view = view({ az: -90, el: 0, ortho: true, axis: 'front', auto: true }); s.uv = U.projectFromView(s.m, s.uv, [2], { r: [1, 0, 0], u: [0, 0, 1], f: [0, 1, 0] }, { ortho: true }); s.flags.viewFront = true; },
@@ -166,7 +166,7 @@ export const STAGES = [
       {
         id: 'c3', title: 'The lids, from above and below',
         text: 'The Cylinder Projection turned the two lids into lines (red in Display Stretch). A lid is flat, so project it from the direction that looks straight at it. Careful: the bottom lid seen from the top is seen through the object, back to front: its UVs come out mirrored (flipped). Project each lid from its own side.',
-        how: ['Face select (<kbd>3</kbd>). Click the top lid. <kbd>Numpad 7</kbd> (top view), then <kbd>U</kbd> › <b>Project From View</b>.', 'Click the bottom lid. <kbd>Ctrl</kbd> <kbd>Numpad 7</kbd> (bottom view), then <kbd>U</kbd> › <b>Project From View</b>.', 'Both lids are now round, not flipped, with no stretch. They overlap other UVs: Pack Islands will fix that (stage 4).'],
+        how: ['Face select (<kbd>3</kbd>). Click the top lid. <kbd>Numpad 7</kbd> (top view), then <kbd>U</kbd> › <b>Project from View</b>.', 'Click the bottom lid. <kbd>Ctrl</kbd> <kbd>Numpad 7</kbd> (bottom view), then <kbd>U</kbd> › <b>Project from View</b>.', 'Both lids are now round, not flipped, with no stretch. They overlap other UVs: Pack Islands will fix that (stage 4).'],
         why: 'Real objects are mixes: one projection for the flat parts, another for the round ones. Mapping part by part, each from its best direction, is everyday work.',
         start: { obj: 'cylinder', sm: 'face', setup: 'cylProjected' },
         check: s => { const r = reportOf(s, CAPS); return r.collapsed === 0 && r.flipped === 0 && r.maxShape < 0.03 && sideUpright(s); },
