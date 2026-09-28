@@ -849,3 +849,34 @@ footer span:nth-child(3){margin-left:auto}
 .panel h4 small{font-size:10.5px}
 @media(max-width:1180px){.uv-body{grid-template-columns:1fr 1fr}.vp-side{grid-column:1/-1}.uv-host,.vp-view{height:420px}}
 @media(max-width:760px){.uv-body{grid-template-columns:1fr}.uv-pane .editor-header,.vp-editor .editor-header{overflow-x:auto}}
+/* UV Editor header, tool settings row, toolbar and navigation, after Blender's UV Editor */
+.uv-header{gap:5px}
+.uv-header .bh-dd .bi,.uv-header .bh-ico .bi{width:16px;height:16px}
+.bh-soft{cursor:default}
+.bh-off{opacity:.45}
+.bh-pair{gap:0}
+.img-browse{display:inline-flex;align-items:center;gap:0}
+.img-browse .bh-dd{border-radius:4px 0 0 4px}
+.img-browse .img-name{border-radius:0 4px 4px 0;border-left:0}
+.uv-toolset{position:absolute;left:6px;top:6px;display:flex;gap:1px;z-index:3;background:#1d1d1d;border-radius:4px;padding:1px}
+.uv-toolset span{width:24px;height:22px;display:grid;place-items:center;background:#2c2c2c;color:#cfcfcf;border-radius:3px}
+.uv-toolset span.on{background:#3d5f96}
+.uv-toolset .bi{width:15px;height:15px}
+.uv-tools{position:absolute;left:6px;top:36px;display:flex;flex-direction:column;gap:1px;z-index:3;background:#1d1d1dcc;border-radius:5px;padding:2px}
+.uv-tools button{width:34px;height:34px;display:grid;place-items:center;background:#2c2c2c;border:0;border-radius:4px;color:#e0e0e0;cursor:pointer;padding:0}
+.uv-tools button:hover{background:#3a3a3a}
+.uv-tools button.on{background:#4772b3}
+.uv-tools button .bi{width:22px;height:22px}
+.uv-tools i{height:6px}
+.uv-nav{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:8px;z-index:3}
+.uv-nav span{width:28px;height:28px;display:grid;place-items:center;color:#d4d4d4;border-radius:50%;cursor:grab;touch-action:none}
+.uv-nav span:hover{background:#ffffff1c}
+.uv-nav .bi{width:20px;height:20px}
+.uv-host .overlay-pop{right:48px}
+.uv-host .op-readout{top:8px}
+@media(max-width:760px){.uv-tools{display:none}}
+.uv-pane{container-type:inline-size}
+@container (max-width:820px){.uv-header .bh-pair{display:none}}
+@container (max-width:560px){.uv-header .bh-right>.bh-dd.bh-soft,.uv-header .bh-soft[title^="Sticky"]{display:none}}
+@container (max-width:760px){.uv-header .img-browse .img-name{display:none}}
+@container (max-width:640px){.uv-header .img-browse{display:none}}

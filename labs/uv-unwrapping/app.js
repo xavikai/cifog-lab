@@ -39,13 +39,33 @@ function msg(text, warning = false) {
 // ─── Lab icons that blender-ui.js does not have ──────────────────────────────
 const svg = b => `<svg class="bi" viewBox="0 0 16 16" aria-hidden="true">${b}</svg>`;
 const UICONS = {
-  sync: svg('<path d="M3 6.2a5 5 0 0 1 9-1.6M13 9.8a5 5 0 0 1-9 1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m12.6 2.2.2 3.2-3.1-.4M3.4 13.8l-.2-3.2 3.1.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>'),
-  uvvert: svg('<path d="M2.5 13.5 8 2.5l5.5 11z" fill="none" stroke="currentColor" opacity=".5"/><rect x="6.3" y="1" width="3.4" height="3.4" fill="currentColor"/>'),
-  uvedge: svg('<path d="M2.5 13.5 8 2.5l5.5 11z" fill="none" stroke="currentColor" opacity=".5"/><path d="M2.5 13.5h11" stroke="currentColor" stroke-width="2.4"/>'),
-  uvface: svg('<path d="M2.5 13.5 8 2.5l5.5 11z" fill="currentColor" opacity=".85"/>'),
-  uvisland: svg('<path d="M1.5 12.5 5 4l4 3.5L14.5 3l-1 9.5z" fill="currentColor" opacity=".85"/>'),
+  uveditor: svg('<rect x="2" y="2" width="12" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M2 8h12M8 2v12" stroke="currentColor" stroke-width="1.1"/><path d="M2.6 2.6h5v5h-5zM8.4 8.4h5v5h-5z" fill="currentColor" opacity=".55"/>'),
+  sync: svg('<path d="M3 6.2a5 5 0 0 1 9-1.6M13 9.8a5 5 0 0 1-9 1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m12.6 2.2.2 3.2-3.1-.4M3.4 13.8l-.2-3.2 3.1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>'),
+  uvisland: svg('<rect x="1.8" y="3" width="5.2" height="10" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="3" width="5.2" height="10" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.2"/>'),
+  sticky: svg('<rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1" opacity=".6"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/><circle cx="4.2" cy="4.2" r="1.1" fill="currentColor" opacity=".7"/><circle cx="11.8" cy="11.8" r="1.1" fill="currentColor" opacity=".7"/>'),
+  pivot: svg('<path d="M5 2.5H2.5v11H5M11 2.5h2.5v11H11" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.8" fill="currentColor"/>'),
+  snap: svg('<path d="M3.5 3v5a4.5 4.5 0 0 0 9 0V3h-3v5a1.5 1.5 0 0 1-3 0V3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M3.5 5.2h3M9.5 5.2h3" stroke="currentColor" stroke-width="1.2"/>'),
+  increment: svg('<path d="M2 12h12M3 12V8M6 12V9.5M9 12V8M12 12V9.5" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="5" r="1.3" fill="currentColor"/>'),
+  proportional: svg('<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="8" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".7"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/>'),
+  falloff: svg('<path d="M2 13c3 0 3-9 6-9s3 9 6 9" fill="none" stroke="currentColor" stroke-width="1.2"/>'),
   image: svg('<rect x="2" y="3" width="12" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="m3 12 3.5-4 2.5 2.5 2-2 2 3.5" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="10.5" cy="6" r="1.2" fill="currentColor"/>'),
   overlay: ICONS.overlay,
+  boxset: svg('<rect x="2.5" y="3.5" width="11" height="9" fill="none" stroke="#6aa6ff" stroke-width="1.2" stroke-dasharray="2 1.4"/>'),
+  boxext: svg('<rect x="2" y="4" width="8" height="8" fill="currentColor" opacity=".8"/><rect x="6" y="2" width="8" height="8" fill="currentColor" opacity=".5"/>'),
+  boxsub: svg('<rect x="2" y="4" width="8" height="8" fill="currentColor" opacity=".8"/><rect x="6" y="2" width="8" height="8" fill="none" stroke="currentColor" stroke-dasharray="1.6 1.2"/>'),
+  t_select: svg('<rect x="1.5" y="1.5" width="13" height="13" fill="none" stroke="#f0a030" stroke-width="1.1" stroke-dasharray="2.2 1.4"/><path d="M6 4.5v7l1.9-1.8 1.3 2.7 1.1-.5-1.3-2.6h2.6z" fill="#fff"/>'),
+  t_cursor: svg('<circle cx="8" cy="8" r="5.2" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="2.6 2"/><circle cx="8" cy="8" r="5.2" fill="none" stroke="#e03c3c" stroke-width="1.6" stroke-dasharray="2.6 2" stroke-dashoffset="2.3"/><path d="M8 1v4M8 11v4M1 8h4M11 8h4" stroke="#ddd" stroke-width="1"/>'),
+  t_move: svg('<path d="M8 1.5v13M1.5 8h13" stroke="currentColor" stroke-width="1.1"/><path d="m8 1 2 2.6H6zM8 15l2-2.6H6zM1 8l2.6-2v4zM15 8l-2.6-2v4z" fill="currentColor"/><rect x="6.6" y="6.6" width="2.8" height="2.8" fill="currentColor"/>'),
+  t_rotate: svg('<path d="M3 6.5A5.3 5.3 0 0 1 12.8 5M13 9.5A5.3 5.3 0 0 1 3.2 11" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m13.8 2.6-.3 3.4-3.2-1.1zM2.2 13.4l.3-3.4 3.2 1.1z" fill="currentColor"/><path d="M8 5.5 10.5 8 8 10.5 5.5 8z" fill="currentColor"/>'),
+  t_scale: svg('<rect x="2" y="7" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1" opacity=".45"/><path d="M8 8l5-5M9.5 3H13v3.5" fill="none" stroke="currentColor" stroke-width="1.3"/>'),
+  t_transform: svg('<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="5.6" y="5.6" width="4.8" height="4.8" fill="currentColor"/><path d="m8 .8 1.6 2H6.4zM8 15.2l1.6-2H6.4zM.8 8l2-1.6v3.2zM15.2 8l-2-1.6v3.2z" fill="currentColor"/>'),
+  t_annotate: svg('<path d="m10.5 2 3.2 3.2-6.5 6.5-3.7.6.6-3.7z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M1.5 14.5c2-1.5 3.5 1.2 5.5-.2s3.3-.6 5 .3" fill="none" stroke="#4fd06a" stroke-width="1.3"/>'),
+  t_rip: svg('<path d="M2.5 6.5 7 4l6.5 2v6.5L9 15l-6.5-2.3z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M7 4v5l6.5-2.5M7 9 2.5 6.5M7 9l2 6" fill="none" stroke="currentColor" stroke-width="1" opacity=".7"/>'),
+  t_grab: svg('<path d="M5.2 8.5V4a1 1 0 0 1 2 0v3.5m0-4.3a1 1 0 0 1 2 0v4.3m0-3.3a1 1 0 0 1 2 0V9m0-2.5a1 1 0 0 1 2 0v3c0 3-2 5-4.7 5-2 0-3-.9-4-2.6L2.4 9.5a1 1 0 0 1 1.7-1l1.1 1.3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>'),
+  t_relax: svg('<path d="M6.2 9V5a1 1 0 0 1 2 0v3.5m0-3.8a1 1 0 0 1 2 0v3.8m0-2.8a1 1 0 0 1 2 0V10c0 2.7-1.8 4.5-4.2 4.5-1.8 0-2.7-.8-3.6-2.3L3.2 10a1 1 0 0 1 1.6-1l1.4 1.5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M1 3.5c1.2-1 2.2 1 3.4 0M1 6c1.2-1 2.2 1 3.4 0" fill="none" stroke="currentColor" stroke-width="1"/>'),
+  t_pinch: svg('<path d="M6.2 9V5a1 1 0 0 1 2 0v3.5m0-3.8a1 1 0 0 1 2 0v3.8m0-2.8a1 1 0 0 1 2 0V10c0 2.7-1.8 4.5-4.2 4.5-1.8 0-2.7-.8-3.6-2.3L3.2 10a1 1 0 0 1 1.6-1l1.4 1.5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><circle cx="3" cy="3.6" r="2" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="3" cy="3.6" r=".6" fill="currentColor"/>'),
+  zoomin: svg('<circle cx="6.8" cy="6.8" r="4.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10 10 4.2 4.2" stroke="currentColor" stroke-width="2"/><path d="M4.6 6.8h4.4M6.8 4.6v4.4" stroke="currentColor" stroke-width="1.3"/>'),
+  hand: svg('<path d="M5.2 8.5V3.8a1 1 0 0 1 2 0v3.7m0-4.6a1 1 0 0 1 2 0v4.6m0-3.6a1 1 0 0 1 2 0V9m0-2.3a1 1 0 0 1 2 0v3c0 3-2 5-4.7 5-2 0-3-.9-4-2.6L2.4 9.5a1 1 0 0 1 1.7-1l1.1 1.3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>'),
 };
 document.querySelectorAll('#workspace [data-icon]').forEach(el => { el.innerHTML = ICONS[el.dataset.icon] + (el.classList.contains('bh-dd') ? ICONS.dropdown : ''); });
 document.querySelectorAll('#workspace [data-uicon]').forEach(el => { el.insertAdjacentHTML('afterbegin', UICONS[el.dataset.uicon] + (el.classList.contains('bh-dd') ? ICONS.dropdown : '')); });
@@ -292,7 +312,7 @@ function toggleEdit() {
 function needEdit() { if (!edit()) { msg('UVs are edited in Edit Mode: press Tab.', true); return false; } return true; }
 
 // ─── Undo ────────────────────────────────────────────────────────────────────
-const KEEP = ['m', 'uv', 'seams', 'sel', 'sm', 'mode', 'scale', 'uvSel', 'flags', 'stretch', 'sync', 'live', 'uvMode', 'active'];
+const KEEP = ['m', 'uv', 'seams', 'sel', 'sm', 'mode', 'scale', 'uvSel', 'flags', 'stretch', 'sync', 'live', 'uvMode', 'uvIsland', 'active'];
 const snap = () => JSON.parse(JSON.stringify(Object.fromEntries(KEEP.map(k => [k, S.st[k]]))));
 function pushUndo(name, before = snap()) { S.undo.push({ name, snap: before }); if (S.undo.length > 48) S.undo.shift(); S.redo = []; }
 function restore(s) { Object.assign(S.st, JSON.parse(JSON.stringify(s))); meshChanged(); }
@@ -430,6 +450,11 @@ function drawUV() {
   for (const fi of F) { path(fi); g.strokeStyle = '#000000b0'; g.lineWidth = 3; g.stroke(); }
   for (const fi of F) { path(fi); g.strokeStyle = uvSel.has(fi) ? '#ffa000' : '#d8d8d8'; g.lineWidth = uvSel.has(fi) ? 1.6 : 1; g.stroke(); }
   if (hov != null) { path(hov); g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.stroke(); }
+  // vertex dots (Vertex select) or face dots (Face select), orange when selected, as in Blender
+  const mode = st.uvMode === 'island' ? 'vert' : st.uvMode;
+  if (mode === 'vert') { const seen = new Map(); for (const fi of F) for (const p of st.uv[fi]) { const k2 = `${Math.round(p[0] * 1e4)},${Math.round(p[1] * 1e4)}`; if (!seen.has(k2) || uvSel.has(fi)) seen.set(k2, [p, uvSel.has(fi)]); }
+    for (const [p, on] of seen.values()) { const [x, y] = toPx(p); g.fillStyle = on ? '#ff9a1f' : '#111'; g.beginPath(); g.arc(x, y, on ? 3 : 2.4, 0, Math.PI * 2); g.fill(); } }
+  if (mode === 'face') for (const fi of F) { const c = st.uv[fi].reduce((a, p) => [a[0] + p[0] / st.uv[fi].length, a[1] + p[1] / st.uv[fi].length], [0, 0]), [x, y] = toPx(c); g.fillStyle = uvSel.has(fi) ? '#ff9a1f' : '#111'; g.fillRect(x - 2, y - 2, 4, 4); }
   // overlapping faces: red hatching outline
   if (r.overlaps) for (const fi of F) if (r.overlapFaces.has(fi)) { path(fi); g.setLineDash([4, 3]); g.strokeStyle = '#ff5a4a'; g.lineWidth = 1.4; g.stroke(); g.setLineDash([]); }
   // seams: drawn on both islands' borders, as Blender shows them
@@ -451,7 +476,7 @@ const islandOf = fi => (U.uvIslands(S.st.m, S.st.uv, shownFaces()).find(I => I.i
 function uvClick(x, y, extend) {
   const fi = uvFaceAt(x, y), st = S.st;
   if (fi == null) { if (!extend) st.uvSel = []; refresh(); saveData(); return; }
-  const pick = st.uvMode === 'island' ? islandOf(fi) : [fi], cur = new Set(uvTargets());
+  const pick = st.uvIsland !== false ? islandOf(fi) : [fi], cur = new Set(uvTargets());
   if (!extend) st.uvSel = pick;
   else if (pick.every(f => cur.has(f))) st.uvSel = [...cur].filter(f => !pick.includes(f));
   else st.uvSel = [...new Set([...cur, ...pick])];
@@ -519,11 +544,18 @@ uvc.addEventListener('wheel', e => {
   S.uvView.zoom = Math.max(0.3, Math.min(12, S.uvView.zoom * (e.deltaY > 0 ? 1 / 1.15 : 1.15)));
   const after = toUV(x, y); S.uvView.cx += before[0] - after[0]; S.uvView.cy += before[1] - after[1]; uvDirty = true;
 }, { passive: false });
+for (const b of document.querySelectorAll('[data-nav2]')) {
+  b.addEventListener('pointerdown', e => { e.stopPropagation(); b.setPointerCapture(e.pointerId); b.dataset.drag = `${e.clientX},${e.clientY}`; });
+  b.addEventListener('pointermove', e => { if (!b.dataset.drag) return; const [x0, y0] = b.dataset.drag.split(',').map(Number), dx = e.clientX - x0, dy = e.clientY - y0; b.dataset.drag = `${e.clientX},${e.clientY}`; if (b.dataset.nav2 === 'zoom') S.uvView.zoom = Math.max(0.3, Math.min(12, S.uvView.zoom * Math.exp(-dy * 0.01))); else { const k = uvScale(); S.uvView.cx -= dx / k; S.uvView.cy += dy / k; } uvDirty = true; });
+  b.addEventListener('pointerup', () => { delete b.dataset.drag; });
+}
 uvHost.addEventListener('pointerenter', () => { S.inUV = true; });
 uvHost.addEventListener('pointerleave', () => { S.inUV = false; });
 // Header: sync, select mode, overlays
 $('#sync-btn').addEventListener('click', () => { S.st.sync = !S.st.sync; saveData(); renderHeader(); refresh(); msg(S.st.sync ? 'UV Sync Selection on: the UV Editor shows every face of the mesh.' : 'UV Sync Selection off: the UV Editor shows the faces selected in the 3D Viewport.'); });
-document.querySelectorAll('[data-uvmode]').forEach(b => b.addEventListener('click', () => { S.st.uvMode = b.dataset.uvmode; saveData(); renderHeader(); msg(S.st.uvMode === 'island' ? 'Island select: a click selects a whole island.' : 'Face select: a click selects one face.'); }));
+document.querySelectorAll('[data-uvmode]').forEach(b => b.addEventListener('click', () => { S.st.uvMode = b.dataset.uvmode; saveData(); renderHeader(); uvDirty = true; msg({ vert: 'Vertex select: the UV vertices are shown as dots.', edge: 'Edge select.', face: 'Face select: each face shows a dot in its centre.' }[S.st.uvMode]); }));
+$('#island-btn').addEventListener('click', () => { S.st.uvIsland = !S.st.uvIsland; saveData(); renderHeader(); msg(S.st.uvIsland ? 'Island select: a click selects a whole island.' : 'Island select off: a click selects one face.'); });
+document.querySelectorAll('.uv-tools [data-tool]').forEach(b => b.addEventListener('click', () => { const tl = b.dataset.tool; if ('GRS'.includes(tl) && tl.length === 1) { S.mouseUV = [UW / 2, UH / 2]; startUVModal(tl); return; } if (tl === 'select') return; msg('This tool is not used in this lab: the Select Box tool and the keys G, R and S are enough here.'); }));
 $('#overlay-btn').addEventListener('click', e => { e.stopPropagation(); const p = $('#overlay-pop'); p.hidden = !p.hidden; $('#overlay-btn').setAttribute('aria-expanded', String(!p.hidden)); renderOverlay(); });
 document.addEventListener('pointerdown', e => { if (!e.target.closest('#overlay-pop') && !e.target.closest('#overlay-btn')) { $('#overlay-pop').hidden = true; $('#overlay-btn').setAttribute('aria-expanded', 'false'); } });
 $('#stretch-on').addEventListener('change', e => { S.st.stretch = e.target.checked ? (S.lastStretch || 'area') : 'off'; saveData(); renderOverlay(); refresh(); });
@@ -659,6 +691,7 @@ function menuItems(id) {
   if (id === 'edge' || id === 'context') return ['#' + (id === 'edge' ? 'Edge' : S.st.sm === 'face' ? 'Face Context Menu' : 'Edge Context Menu'), ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], ...(id === 'context' ? ['-', ...UNWRAPS()] : [])];
   if (id === 'object') return [['Apply › Scale', 'Ctrl A', applyScale], ['Apply › All Transforms', '', applyScale]];
   if (id === 'apply') return ['#Apply', ['Location', '', () => msg('The location is already 0, 0, 0.')], ['Rotation', '', () => msg('The rotation is already 0°.')], ['Scale', '', applyScale], ['All Transforms', '', applyScale]];
+  if (id === 'uvimage') return [['New', 'Alt N', () => msg('This lab uses one generated image: Color Grid (Image › New, Generated Type: Color Grid).')], ['Open...', 'Alt O', () => msg('This lab uses one generated image: Color Grid (Image › New, Generated Type: Color Grid).')], '-', ['Color Grid (generated, 1024 px)', '●', () => {}]];
   if (id === 'uvview') return [['Frame All', 'Home', frameUV], ['Zoom In', 'Wheel', () => { S.uvView.zoom *= 1.25; uvDirty = true; }], ['Zoom Out', 'Wheel', () => { S.uvView.zoom /= 1.25; uvDirty = true; }]];
   if (id === 'uvselect') return [['All', 'A', () => uvSelectAll(true)], ['None', 'Alt A', () => uvSelectAll(false)], ['Select Linked', 'L', () => msg('Put the mouse over an island in the UV Editor and press L.')]];
   if (id === 'uvuv') return ['#Unwrap', ...UNWRAPS(), '-', ['Pack Islands', 'Ctrl P', () => runOp('pack')], ['Average Islands Scale', 'Ctrl A', () => runOp('average')], '-', [`${S.st.live ? '☑' : '☐'} Live Unwrap`, '', () => { S.st.live = !S.st.live; saveData(); msg(S.st.live ? 'Live Unwrap on: marking or clearing a seam unwraps the whole mesh again.' : 'Live Unwrap off.'); }], '-', ['Mark Seam', '', () => markSeam(false)], ['Clear Seam', '', () => markSeam(true)], '-', ['Reset', '', () => runOp('reset')]];
@@ -690,7 +723,8 @@ function renderHeader() {
   document.querySelectorAll('[data-sm]').forEach(b => { b.setAttribute('aria-pressed', String(ed && S.st.sm === b.dataset.sm)); b.disabled = !ed; });
   $('#menus').innerHTML = (ed ? ['View', 'Select', 'UV'] : ['View', 'Object']).map(n => `<button type="button" class="menu-button" data-menu="${n.toLowerCase()}" aria-expanded="false">${n}</button>`).join('');
   $('#sync-btn').setAttribute('aria-pressed', String(!!S.st.sync));
-  document.querySelectorAll('[data-uvmode]').forEach(b => b.setAttribute('aria-pressed', String(S.st.uvMode === b.dataset.uvmode)));
+  document.querySelectorAll('[data-uvmode]').forEach(b => b.setAttribute('aria-pressed', String((S.st.uvMode === 'island' ? 'vert' : S.st.uvMode) === b.dataset.uvmode)));
+  $('#island-btn').setAttribute('aria-pressed', String(S.st.uvIsland !== false));
   host.classList.toggle('object-mode', !ed);
   const name = U.MESH_NAMES[S.st.obj];
   $('#outliner').innerHTML = outlinerHTML([

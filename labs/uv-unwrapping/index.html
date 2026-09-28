@@ -7,7 +7,7 @@
   <title>UV Unwrap Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../../blender-ui.css?v=2">
-  <link rel="stylesheet" href="./style.css?v=10">
+  <link rel="stylesheet" href="./style.css?v=11">
   <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
   <link rel="stylesheet" href="../../lab-brief.css?v=3">
   <script type="module" src="../../lab-brief.js?v=4"></script>
@@ -35,22 +35,45 @@
       </div>
       <div class="uv-body">
         <section class="editor pane uv-pane" aria-label="UV Editor">
-          <div class="editor-header">
-            <span class="bh-dd bh-editor" title="Editor Type: UV Editor" data-icon="uv"></span>
+          <div class="editor-header uv-header">
+            <span class="bh-dd bh-editor" title="Editor Type: UV Editor" data-uicon="uveditor"></span>
             <span class="bh-group"><button type="button" class="bh-ico" id="sync-btn" aria-pressed="false" title="UV Sync Selection: show and select the whole mesh" data-uicon="sync"></button></span>
             <div class="bh-group" role="group" aria-label="UV select mode">
-              <button type="button" class="bh-ico" disabled title="Vertex · not used in this lab" data-uicon="uvvert"></button>
-              <button type="button" class="bh-ico" disabled title="Edge · not used in this lab" data-uicon="uvedge"></button>
-              <button type="button" class="bh-ico" data-uvmode="face" title="Face" aria-pressed="false" data-uicon="uvface"></button>
-              <button type="button" class="bh-ico" data-uvmode="island" title="Island" aria-pressed="true" data-uicon="uvisland"></button>
+              <button type="button" class="bh-ico" data-uvmode="vert" title="Vertex" aria-pressed="true" data-icon="vertexsel"></button>
+              <button type="button" class="bh-ico" data-uvmode="edge" title="Edge" aria-pressed="false" data-icon="edgesel"></button>
+              <button type="button" class="bh-ico" data-uvmode="face" title="Face" aria-pressed="false" data-icon="facesel"></button>
             </div>
-            <nav class="menubar" aria-label="UV Editor menus" data-no-i18n><button type="button" class="menu-button" data-menu="uvview" aria-expanded="false">View</button><button type="button" class="menu-button" data-menu="uvselect" aria-expanded="false">Select</button><button type="button" class="menu-button" data-menu="uvuv" aria-expanded="false">UV</button></nav>
+            <span class="bh-group"><button type="button" class="bh-ico" id="island-btn" aria-pressed="true" title="Island selection: a click selects the whole island" data-uicon="uvisland"></button></span>
+            <span class="bh-dd bh-soft" title="Sticky Selection Mode: Shared Location" data-uicon="sticky"></span>
+            <nav class="menubar" aria-label="UV Editor menus" data-no-i18n><button type="button" class="menu-button" data-menu="uvview" aria-expanded="false">View</button><button type="button" class="menu-button" data-menu="uvselect" aria-expanded="false">Select</button><button type="button" class="menu-button" data-menu="uvimage" aria-expanded="false">Image</button><button type="button" class="menu-button" data-menu="uvuv" aria-expanded="false">UV</button></nav>
             <span class="bh-right">
-              <span class="img-name" data-no-i18n title="The image shown in the UV Editor and on the model"><span data-uicon="image"></span>Color Grid</span>
+              <span class="bh-dd bh-soft" title="Pivot Point: Bounding Box Center" data-uicon="pivot"></span>
+              <span class="bh-group bh-pair"><span class="bh-ico bh-soft" title="Snap" data-uicon="snap"></span><span class="bh-dd bh-soft" title="Snap To: Increment" data-uicon="increment"></span></span>
+              <span class="bh-group bh-pair"><span class="bh-ico bh-soft" title="Proportional Editing" data-uicon="proportional"></span><span class="bh-dd bh-soft bh-off" title="Proportional Editing Falloff" data-uicon="falloff"></span></span>
+              <span class="img-browse"><span class="bh-dd bh-soft" title="Browse Image to be linked" data-uicon="image"></span><span class="img-name" data-no-i18n title="The image shown in the UV Editor and on the model">Color Grid</span></span>
               <button type="button" class="bh-dd overlay-btn" id="overlay-btn" aria-expanded="false" title="Overlays: Display Stretch" data-uicon="overlay"></button>
             </span>
           </div>
           <div class="view-host uv-host" id="uv-host" tabindex="-1">
+            <div class="uv-toolset" aria-hidden="true"><span class="on" data-uicon="boxset"></span><span data-uicon="boxext"></span><span data-uicon="boxsub"></span></div>
+            <div class="uv-tools" role="toolbar" aria-label="UV Editor tools">
+              <button type="button" class="on" data-tool="select" title="Select Box" data-uicon="t_select"></button>
+              <button type="button" data-tool="cursor" title="Cursor · not used in this lab" data-uicon="t_cursor"></button>
+              <i></i>
+              <button type="button" data-tool="G" title="Move (G)" data-uicon="t_move"></button>
+              <button type="button" data-tool="R" title="Rotate (R)" data-uicon="t_rotate"></button>
+              <button type="button" data-tool="S" title="Scale (S)" data-uicon="t_scale"></button>
+              <button type="button" data-tool="transform" title="Transform · not used in this lab" data-uicon="t_transform"></button>
+              <i></i>
+              <button type="button" data-tool="annotate" title="Annotate · not used in this lab" data-uicon="t_annotate"></button>
+              <i></i>
+              <button type="button" data-tool="rip" title="Rip Region · not used in this lab" data-uicon="t_rip"></button>
+              <i></i>
+              <button type="button" data-tool="grab" title="Grab · not used in this lab" data-uicon="t_grab"></button>
+              <button type="button" data-tool="relax" title="Relax · not used in this lab" data-uicon="t_relax"></button>
+              <button type="button" data-tool="pinch" title="Pinch · not used in this lab" data-uicon="t_pinch"></button>
+            </div>
+            <div class="uv-nav" aria-hidden="true"><span data-nav2="zoom" title="Zoom" data-uicon="zoomin"></span><span data-nav2="pan" title="Pan" data-uicon="hand"></span></div>
             <canvas id="uv" aria-label="UV Editor: the image and the UVs of the selected faces"></canvas>
             <div class="uv-empty" id="uv-empty" hidden></div>
             <div class="op-readout" id="uv-readout" hidden data-no-i18n></div>
@@ -126,7 +149,7 @@
     <aside class="blender-bridge"><div><span class="eyebrow">BACK IN BLENDER</span><h2>The same steps in Blender</h2><p>The lab is a simplified copy of the <strong>UV Editing</strong> workspace: the menus, keys and panels have the same names. Blender has more options; these are the ones to know first.</p></div><ol><li>Open the <strong>UV Editing</strong> workspace tab. The object enters <strong>Edit Mode</strong>; the UV Editor shows the UVs of the selected faces.</li><li>Seams: <strong>Edge</strong> select, <kbd>Alt</kbd> click for loops, then <kbd>U</kbd> › <strong>Mark Seam</strong> (also in <kbd>Ctrl</kbd> <kbd>E</kbd>). <strong>Clear Seam</strong> removes them.</li><li><kbd>A</kbd> and <kbd>U</kbd>: the menu has three unwraps, <strong>Unwrap Angle Based</strong>, <strong>Unwrap Conformal</strong> and <strong>Unwrap Minimum Stretch</strong>. In this lab the first two use the same conformal solver; Minimum Stretch adds a correction that evens out the area.</li><li>Projections: <kbd>U</kbd> › <strong>Smart UV Project</strong>, <strong>Cube</strong>, <strong>Cylinder</strong>, <strong>Sphere Projection</strong>, <strong>Project from View</strong>. After each one, open <strong>Adjust Last Operation</strong> (bottom left, or <kbd>F9</kbd>) for Direction, Angle Limit, Margin…</li><li>In the UV Editor: <strong>UV</strong> › <strong>Pack Islands</strong> (<kbd>Ctrl</kbd> <kbd>P</kbd>) and <strong>Average Islands Scale</strong> (<kbd>Ctrl</kbd> <kbd>A</kbd>). The Overlays popover has <strong>Display Stretch</strong>.</li><li>Scaled the object? <kbd>Ctrl</kbd> <kbd>A</kbd> › <strong>Scale</strong> in Object Mode before unwrapping. To check the result, add an image with <strong>Image › New</strong>, Generated Type <strong>Color Grid</strong>.</li></ol></aside>
   </main>
   <footer><span>CIFOG · UV Unwrap Lab</span><a href="https://docs.blender.org/manual/en/latest/modeling/meshes/uv/unwrapping/index.html" target="_blank" rel="noopener">Blender: Unwrapping ↗</a><span>Teaching model · simplified meshes and solvers.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=10"></script>
+  <script type="module" src="./app.js?v=11"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; import dict from './i18n.js?v=10'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
 </body>
 </html>

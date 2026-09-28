@@ -26,7 +26,7 @@ export const CAPS = [16, 17];                 // top and bottom n-gons
 export function freshState(obj = 'cube') {
   const m = U.MESHES[obj]();
   return { obj, m, uv: U.resetUV(m), seams: [], sel: emptySel(), sm: 'edge', mode: 'edit', scale: [1, 1, 1], view: view(),
-    flags: {}, active: null, uvSel: [], uvMode: 'island', sync: false, stretch: 'off', live: false, lastOp: null };
+    flags: {}, active: null, uvSel: [], uvMode: 'vert', uvIsland: true, sync: false, stretch: 'off', live: false, lastOp: null };
 }
 export function startState(step) {
   const s = freshState(step.start?.obj || 'cube');
