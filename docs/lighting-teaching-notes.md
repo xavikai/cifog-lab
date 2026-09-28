@@ -29,6 +29,7 @@ Explanations are in Catalan or Spanish. Blender's interface names (Point, Sun, S
 | Soft Falloff off | a real sphere of radius R, partly below the horizon if needed (Lagarde & de Rousiers 2014); 0 inside the sphere |
 | Custom Distance | × (1 − (d/D)⁴)², 0 beyond D (EEVEE) |
 | Light Linking | 0 on objects the light may not reach (Include / Exclude); the meter knows which probes are on the bust and which on the backdrop |
+| Shadow Linking | the Blocker Collection decides whether the bust (head and chest spheres) blocks the light; a probe on the backdrop (backS) sits in the bust's shadow |
 | Fog_Volume | Volume Scatter: scattering = extinction = Density · Color. Principled Volume: scattering = Density · Color, absorption = Density · (1 − Color) · (1 − Absorption Color). The meter dims light by exp(−σ · d) with σ the luminance of the extinction; the render does it per colour channel |
 
 - A diffuse surface of albedo ρ has the scene-linear value ρ · E / π. The meter shows it in stops from middle grey (0.18), after the Exposure.
@@ -43,7 +44,7 @@ Explanations are in Catalan or Spanish. Blender's interface names (Point, Sun, S
 - **Display**: Exposure in stops, then Standard (clip), AgX (three.js AgX) or False Color (bands from the same table as the legend).
 - **Cookies**: gobos, IES profiles and Spread are drawn as `SpotLight.map` textures made from the same functions as the meter (a Point light with an IES profile becomes a spot as wide as its cut-off).
 - **Falloff**: the three.js light decay carries the Light Falloff exponent, the Radius for Soft Falloff and a flag for the hard sphere (a patched `getDistanceAttenuation`). Custom Distance is the three.js light distance. With Soft Falloff off, the lamp is rendered from its centre (no soft shadows) so the inside of the sphere stays dark.
-- **Light Linking**: the unlinked lights render the whole set; each linked light is rendered alone and added on top, only on its receivers. The other objects still hide what is behind them and cast shadows.
+- **Light and Shadow Linking**: the unlinked lights render the whole set; each linked light is rendered alone and added on top, only on its receivers. The other objects still hide what is behind them; only the objects of its Blocker Collection cast its shadows. The fog volume ignores both.
 - **Fog_Volume**: after every sample, a pass marches 48 steps along each camera ray inside the cube (6 × 3.4 × 4 m). Every step adds the light that the fog scatters towards the camera (Henyey–Greenstein phase with the Anisotropy) from each light at its jittered position, with its cone, cookie, falloff and Custom Distance, times its Volume Scatter influence. The bust, the pedestal and the ball stand cast shadows into the fog as simple shapes. Surfaces are dimmed by exp(−Density · distance) both from the light and towards the camera. The World light is not dimmed.
 - **Not modelled**:
   - Indirect light between objects, except the bounce card.
@@ -78,6 +79,7 @@ Explanations are in Catalan or Spanish. Blender's interface names (Point, Sun, S
 | g1 A gobo | Blinds gobo, Mapping Rotation, small Radius | Spot, Blinds, rotation 20–45° (or 135–160°), Radius ≤ 0.02 m |
 | i1 Photometric light (IES) | BG_Light: Scallop profile, high and close to the wall | Scallop, Elevation ≥ 65°, Distance ≤ 0.8 m |
 | l1 Light Linking | Rim_Light: Backdrop Exclude (or Bust Include) | rim reaches the bust but not the backdrop, rim ≥ 70% of the face |
+| l2 Shadow Linking | Key_Light: Blocker Collection, Bust Exclude | the bust casts no shadow of the key on the backdrop (backS lit), the key still lights the bust, face +1 |
 | f1 Light Falloff | Linear or Constant, raise Power | not Quadratic, Distance ≤ 0.9 m, backdrop ≥ face − 1.2 stops, face +1 |
 | f2 Soft Falloff | Tick Soft Falloff (or move the lamp off the wall) | Radius ≥ 0.2 m and Soft Falloff on or distance to the wall > Radius |
 | c1 Custom Distance | Candle with Custom Distance | Custom Distance on, backdrop ≤ 1% of the candle's light on the face, face +1 |

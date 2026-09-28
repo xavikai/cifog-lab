@@ -1,10 +1,10 @@
 // Stages of the Lighting Lab. Every step loads its own lights; checks read the light meter (measure).
-import { measure, apparentSize, lightPos, linkOk, wallGap } from './light.js?v=3';
+import { measure, apparentSize, lightPos, linkOk, shadowOk, wallGap } from './light.js?v=4';
 
 export const LIGHT_IDS = ['key', 'fill', 'rim', 'bg'];
 export const LIGHT_NAMES = { key: 'Key_Light', fill: 'Fill_Light', rim: 'Rim_Light', bg: 'BG_Light', card: 'Bounce_Card' };
 const light = o => ({ on: true, type: 'AREA', power: 12, strength: 1, colorMode: 'rgb', color: [1, 1, 1], kelvin: 5500, radius: 0.1, angle: 1, spotSize: 45, blend: 0.15, shape: 'SQUARE', size: 0.6, sizeY: 0.6, az: -45, el: 30, dist: 1.5, target: 'head', shadow: true,
-  spread: 180, gobo: 'none', goboScale: 1, goboRot: 0, ies: 'none', falloff: 'QUADRATIC', softFalloff: true, customDist: false, customDistance: 3, volume: 1, link: {}, ...o });
+  spread: 180, gobo: 'none', goboScale: 1, goboRot: 0, ies: 'none', falloff: 'QUADRATIC', softFalloff: true, customDist: false, customDistance: 3, volume: 1, link: {}, shadowLink: {}, ...o });
 export function defaultState() {
   return {
     lights: {
@@ -270,6 +270,15 @@ export const STAGES = [
         start: { lights: { key: { az: -45, el: 30, power: 12 }, fill: { on: false }, bg: { on: false }, rim: { on: true, type: 'POINT', radius: 0.05, az: 150, el: 35, dist: 1.3, power: 60 } } },
         check: (s, m) => { const r = s.lights.rim, E = m.E; return r.on && linkOk(r, 'bust') && !linkOk(r, 'backdrop') && m.rim >= 0.7 * m.face && E.backC.per.rim === 0; },
         solve: s => { s.lights.rim.link = { backdrop: 'exclude' }; },
+      },
+      {
+        id: 'l2', title: 'Shadow Linking',
+        text: 'The key light comes from low on the camera left, and the bust throws a big dark shadow on the backdrop, right next to the face. On a set you would move the backdrop away or light it. In CG you can also choose which objects cast a light\'s shadows: Shadow Linking. In Blender it sits under Light Linking: a Blocker Collection whose objects cast shadows (Include) or do not (Exclude). Take the bust\'s shadow off the backdrop without changing the light on the face.',
+        how: ['Select <b>Key_Light</b> and open its <b>Light &amp; Shadow Linking</b> panel.', 'In <b>Shadow Linking</b>, set the <b>Bust</b> to <b>Exclude</b>. The shadow on the backdrop disappears; the face stays exactly as lit.', 'Look at the nose and the neck: the bust no longer shadows itself either, because it is out of the blockers of this light.'],
+        why: 'Shadow Linking works in Cycles and, since Blender 4.3, in EEVEE. Like Light Linking it is a cheat: a light without shadows from an object can look flat, so keep it for problems you cannot solve by moving lights or objects.',
+        start: { world: { color: [0.02, 0.02, 0.02] }, lights: { key: { type: 'POINT', radius: 0.01, az: -30, el: 5, dist: 1.2, power: 24 }, fill: { on: true, type: 'AREA', az: 50, el: 10, size: 1, sizeY: 1, power: 2 }, rim: { on: false }, bg: { on: false } } },
+        check: (s, m) => { const k = s.lights.key; return k.on && !shadowOk(k, 'bust') && linkOk(k, 'bust') && m.E.backS.per.key > 0 && faceOk(m, 0.5); },
+        solve: s => { s.lights.key.shadowLink = { bust: 'exclude' }; facePlus1(s, 'key'); s.lights.key.power = round(s.lights.key.power); },
       },
     ],
   },

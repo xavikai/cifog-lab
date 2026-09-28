@@ -39,6 +39,8 @@ export const PROBES = {
   backL: { p: [-0.75, 1.6, BACKDROP_Z], n: [0, 0, 1], obj: 'backdrop' },
   backR: { p: [0.75, 1.6, BACKDROP_Z], n: [0, 0, 1], obj: 'backdrop' },
   backC: { p: [0, 1.8, BACKDROP_Z], n: [0, 0, 1], obj: 'backdrop' },
+  // where the bust's shadow falls on the backdrop in the Shadow Linking step
+  backS: { p: [0.6, 1.3, BACKDROP_Z], n: [0, 0, 1], obj: 'backdrop' },
 };
 
 export const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
@@ -90,7 +92,9 @@ function hitsSphere(o, d, len, s) {
   const t = -b - Math.sqrt(h);
   return t > 1e-4 && t < len;
 }
-function visible(p, onHead, to, len) {
+// bust = false when Shadow Linking takes the bust out of the light's blockers.
+function visible(p, onHead, to, len, bust = true) {
+  if (!bust) return true;
   if (!onHead && hitsSphere(p, to, len, HEAD)) return false;
   return !hitsSphere(p, to, len, CHEST);
 }
@@ -226,6 +230,8 @@ export function linkOk(l, obj) {
   if (L[obj] === 'exclude') return false;
   return !Object.values(L).includes('include') || L[obj] === 'include';
 }
+// Shadow Linking (Blocker Collection): the same rules decide which objects cast this light's shadows.
+export const shadowOk = (l, obj) => linkOk({ link: l.shadowLink }, obj);
 // Is the sphere of a Point or Spot light going into the backdrop?
 export function wallGap(l) { return lightPos(l)[2] - BACKDROP_Z; }
 
@@ -235,9 +241,10 @@ export function irradiance(l, probe, fog = 0) {
   if (!l.on) return 0;
   const { p, n } = probe;
   if (probe.obj && !linkOk(l, probe.obj)) return 0;
+  const blocks = shadowOk(l, 'bust');
   if (l.type === 'SUN') {
     const d = lightDir(l), c = dot(n, d);
-    return c > 0 && visible(p, probe.onHead, d, 50) ? l.strength * c : 0;
+    return c > 0 && visible(p, probe.onHead, d, 50, blocks) ? l.strength * c : 0;
   }
   const e = FALLOFF_EXP[l.falloff] ?? 2;
   if (l.type === 'AREA') {
@@ -246,13 +253,13 @@ export function irradiance(l, probe, fog = 0) {
     for (const s of S) {
       const v = sub(s, p), d = Math.hypot(...v), dir = mul(v, 1 / d);
       const cr = dot(n, dir), cl = -dot(w, dir);
-      if (cr > 0 && cl > 0 && visible(p, probe.onHead, dir, d)) E += I0 * cl * spreadFactor(spread, cl) * cr / Math.max(d ** e, 0.01) * customWindow(l, d) * Math.exp(-fog * d);
+      if (cr > 0 && cl > 0 && visible(p, probe.onHead, dir, d, blocks)) E += I0 * cl * spreadFactor(spread, cl) * cr / Math.max(d ** e, 0.01) * customWindow(l, d) * Math.exp(-fog * d);
     }
     return E;
   }
   const L = lightPos(l), v = sub(L, p), d = Math.hypot(...v), dir = mul(v, 1 / d), c = dot(n, dir), R = l.radius || 0;
   const sphere = e === 2 && l.softFalloff === false && R > 0;
-  if ((c <= 0 && !sphere) || !visible(p, probe.onHead, dir, d)) return 0;
+  if ((c <= 0 && !sphere) || !visible(p, probe.onHead, dir, d, blocks)) return 0;
   const toP = mul(dir, -1), shape = (l.type === 'SPOT' ? spotFactor(l, toP) : 1) * cookieFactor(l, toP), I = l.power / (4 * Math.PI);
   let E;
   if (sphere) E = I / (Math.PI * R * R) * sphereIllum(c, d, R);            // Soft Falloff off: a real glowing sphere

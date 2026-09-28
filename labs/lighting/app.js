@@ -2,12 +2,12 @@
 // Elevation, Distance, always aimed at it), measured with a light meter and rendered progressively.
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import { TARGETS, CAMERA, PROBES, HDRIS, FALSE_COLOR, GOBOS, IES, lightPos, lightDir, lightFrame, apparentSize, measure, ratioLabel, stopsOf, luminance, MIDDLE_GREY, rad, deg, wallGap, fogDensity } from './light.js?v=3';
-import { buildSet, applySet, Rig, World, Progressive, FOG, FOG_BOX } from './scene.js?v=7';
+import { TARGETS, CAMERA, PROBES, HDRIS, FALSE_COLOR, GOBOS, IES, lightPos, lightDir, lightFrame, apparentSize, measure, ratioLabel, stopsOf, luminance, MIDDLE_GREY, rad, deg, wallGap, fogDensity } from './light.js?v=4';
+import { buildSet, applySet, Rig, World, Progressive, FOG, FOG_BOX } from './scene.js?v=8';
 import { parseModel, fitModel } from './models.js?v=2';
-import { STAGES, startState, referenceState, upgradeState, LIGHT_IDS, LIGHT_NAMES } from './stages.js?v=3';
+import { STAGES, startState, referenceState, upgradeState, LIGHT_IDS, LIGHT_NAMES } from './stages.js?v=4';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=3';
+import dictionary from './i18n.js?v=4';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -357,9 +357,12 @@ function lightPanel(id, l) {
     <p class="bl-note">${esc(`Apparent size ${apparentSize(l).toFixed(1)}°`)}${pointLike && l.radius > 0 && wallGap(l) < l.radius ? ' · ' + esc('the sphere touches the backdrop') : ''}</p></div>`;
   // Light Linking (Object Properties › Shading)
   const link = l.link || {}, rows = [['bust', 'Bust'], ['backdrop', 'Backdrop'], ['balls', 'Balls']];
-  h += `<div class="panel bl" data-no-i18n><h4>Light Linking<small>Object · Shading</small></h4>
+  h += `<div class="panel bl" data-no-i18n><h4>Light &amp; Shadow Linking<small>Object · Shading</small></h4>
     <p class="bl-note">Receiver Collection ${Object.values(link).some(Boolean) ? '· Light_Receivers' : '· none'}</p>
-    ${rows.map(([k, lab]) => `<label class="bl-row"><span>${lab}</span><select data-link="${k}">${opt('', link[k] || '', '—')}${opt('include', link[k] || '', 'Include')}${opt('exclude', link[k] || '', 'Exclude')}</select><em></em></label>`).join('')}</div>`;
+    ${rows.map(([k, lab]) => `<label class="bl-row"><span>${lab}</span><select data-link="${k}">${opt('', link[k] || '', '—')}${opt('include', link[k] || '', 'Include')}${opt('exclude', link[k] || '', 'Exclude')}</select><em></em></label>`).join('')}
+    <div class="bl-sec">Shadow Linking</div>
+    <p class="bl-note">Blocker Collection ${Object.values(l.shadowLink || {}).some(Boolean) ? '· Shadow_Blockers' : '· none'}</p>
+    ${rows.map(([k, lab]) => `<label class="bl-row"><span>${lab}</span><select data-shadowlink="${k}">${opt('', (l.shadowLink || {})[k] || '', '—')}${opt('include', (l.shadowLink || {})[k] || '', 'Include')}${opt('exclude', (l.shadowLink || {})[k] || '', 'Exclude')}</select><em></em></label>`).join('')}</div>`;
   return h;
 }
 function fogPanel(f) {
@@ -412,6 +415,7 @@ $('#props').addEventListener('change', e => {
     changed(); return;
   }
   if (d.link) { const o = objOf(S.st.sel); pushUndo(); o.link = { ...(o.link || {}), [d.link]: v }; if (!v) delete o.link[d.link]; changed(); return; }
+  if (d.shadowlink) { const o = objOf(S.st.sel); pushUndo(); o.shadowLink = { ...(o.shadowLink || {}), [d.shadowlink]: v }; if (!v) delete o.shadowLink[d.shadowlink]; changed(); return; }
   if (d.w) { pushUndo(); S.st.world[d.w] = d.w === 'color' ? fromHex(v) : d.w === 'hdri' ? v : +v || 0; changed(); return; }
   if (d.g) {
     pushUndo();

@@ -1,6 +1,6 @@
 // Lighting Lab: the set (bust, balls, backdrop), the lights and the progressive renderer.
 import * as THREE from 'three';
-import { HEAD, BACKDROP_Z, BACKDROPS, CARD_COLORS, ALBEDO, TARGETS, lightPos, lightDir, lightColor, lightFrame, allLights, makeHdri, FALSE_COLOR, rad, fogCoeffs, cookieOf, linkOk, FALLOFF_EXP, IES } from './light.js?v=3';
+import { HEAD, BACKDROP_Z, BACKDROPS, CARD_COLORS, ALBEDO, TARGETS, lightPos, lightDir, lightColor, lightFrame, allLights, makeHdri, FALSE_COLOR, rad, fogCoeffs, cookieOf, linkOk, shadowOk, FALLOFF_EXP, IES } from './light.js?v=4';
 
 // ─── Blender's falloff options inside three.js lights ─────────────────────────
 // three.js gives every point and spot light a decay exponent. The lab packs more into it:
@@ -257,14 +257,14 @@ export class Rig {
     const h = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
     this.lights.forEach((l, i) => this.place(this.items[i], l, [h(sample + 1 + i * 7, 2), h(sample + 1 + i * 7, 3)]));
   }
-  // Light Linking: the lights that only reach some objects.
-  linked() { return this.items.filter(it => it.obj && it.l?.link && Object.values(it.l.link).some(Boolean)); }
+  // Light and Shadow Linking: the lights that only reach some objects, or whose shadows only some objects cast.
+  linked() { const set = o => o && Object.values(o).some(Boolean); return this.items.filter(it => it.obj && (set(it.l?.link) || set(it.l?.shadowLink))); }
 }
 
-// ─── Light Linking in the render ─────────────────────────────────────────────
+// ─── Light and Shadow Linking in the render ───────────────────────────────────
 // First every light that is not linked lights the whole set. Then each linked light is rendered alone and
-// added on top, only on the objects it may reach; the others only hide what is behind them (and still
-// cast their shadows, as in Blender).
+// added on top, only on the objects it may reach (the others only hide what is behind them), and only the
+// objects of its Blocker Collection cast its shadows.
 const DEPTH_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide });
 function additive(m) {
   if (!m.userData.additive) {
@@ -284,13 +284,15 @@ export function renderLinked(r, scene, camera, rig) {
   const meshes = []; scene.traverse(o => { if (o.isMesh && o.visible) meshes.push(o); });
   for (const it of linked) {
     it.obj.visible = true;
-    const saved = meshes.map(m => [m, m.material, m.renderOrder]);
+    const saved = meshes.map(m => [m, m.material, m.renderOrder, m.castShadow]);
     for (const m of meshes) {
-      if (linkOk(it.l, m.userData.link || 'other')) m.material = additive(m.material);
+      const obj = m.userData.link || 'other';
+      if (linkOk(it.l, obj)) m.material = additive(m.material);
       else { m.material = DEPTH_ONLY; m.renderOrder = -1; }
+      m.castShadow = m.castShadow && shadowOk(it.l, obj);
     }
     r.clearDepth(); r.render(scene, camera);
-    for (const [m, mat, ro] of saved) { m.material = mat; m.renderOrder = ro; }
+    for (const [m, mat, ro, cs] of saved) { m.material = mat; m.renderOrder = ro; m.castShadow = cs; }
     it.obj.visible = false;
   }
   for (const it of [...others, ...linked]) it.obj.visible = true;
