@@ -7,7 +7,7 @@
   <meta name="description" content="CIFOG Lab: hands-on browser experiments for learning 3D modeling, materials, lighting, rigging, animation and programming.">
   <title>CIFOG Lab · Learn by experimenting</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./home.css?v=20">
+  <link rel="stylesheet" href="./home.css?v=21">
 </head>
 <body>
   <header class="site-header">
@@ -36,8 +36,21 @@
     </section>
 
     <section class="labs-section" id="labs" aria-labelledby="labs-title">
-      <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2 id="labs-title">Explore the labs</h2></div><p>Grouped in the order of a 3D production: model, texture, light, animate, and program the game. And a visit to the theatre and to graphic design.</p></div>
-      <nav class="topic-nav" aria-label="Topics"><a href="#topic-modeling"><b>01</b>Modeling &amp; UVs<small>3</small></a><a href="#topic-materials"><b>02</b>Materials &amp; texturing<small>4</small></a><a href="#topic-light"><b>03</b>Light, camera &amp; render<small>4</small></a><a href="#topic-animation"><b>04</b>Rigging &amp; animation<small>3</small></a><a href="#topic-code"><b>05</b>Programming for games<small>2</small></a><a href="#topic-stage"><b>06</b>Stage &amp; scenography<small>2</small></a><a href="#topic-graphic"><b>07</b>Graphic design &amp; UI<small>1</small></a></nav>
+      <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2 id="labs-title">Explore the labs</h2></div><p>Start with the basics of Blender, then follow the order of a 3D production: model, texture, light, animate, and program the game. And a visit to the theatre and to graphic design.</p></div>
+      <nav class="topic-nav" aria-label="Topics"><a href="#topic-basics"><b>00</b>Blender basics<small>2</small></a><a href="#topic-modeling"><b>01</b>Modeling &amp; UVs<small>3</small></a><a href="#topic-materials"><b>02</b>Materials &amp; texturing<small>4</small></a><a href="#topic-light"><b>03</b>Light, camera &amp; render<small>4</small></a><a href="#topic-animation"><b>04</b>Rigging &amp; animation<small>3</small></a><a href="#topic-code"><b>05</b>Programming for games<small>2</small></a><a href="#topic-stage"><b>06</b>Stage &amp; scenography<small>2</small></a><a href="#topic-graphic"><b>07</b>Graphic design &amp; UI<small>1</small></a></nav>
+      <section class="topic" id="topic-basics" aria-labelledby="topic-basics-title">
+        <div class="topic-heading"><span class="topic-number">00</span><div><h3 id="topic-basics-title">Blender basics</h3><p>The first hours in Blender: move around a scene, move objects, then edit a mesh.</p></div><span class="topic-count">2 labs</span></div>
+        <div class="lab-grid">
+        <article class="lab-card vpl-card">
+          <div class="card-visual vpl-visual" aria-hidden="true"><svg viewBox="0 0 320 200"><path class="vpl-floor" d="M20 150 160 110 300 150M60 185 160 110M260 185 160 110"/><path class="vpl-ghost" d="M200 62l34 -12 30 12 -34 12z M200 62v34l30 12v-34 M264 62v34l-34 12"/><path class="vpl-cube" d="M96 84l38 -14 36 14 -38 14z"/><path class="vpl-cube side" d="M96 84v40l36 14v-40z"/><path class="vpl-cube dark" d="M132 98v40l38 -14v-40z"/><path class="vpl-outline" d="M96 84l38 -14 36 14v40l-38 14 -36 -14z"/><path class="vpl-arrow" d="M150 76c20 -22 42 -26 52 -18"/><circle class="vpl-gz x" cx="286" cy="34" r="7"/><circle class="vpl-gz y" cx="270" cy="22" r="7"/><circle class="vpl-gz z" cx="276" cy="46" r="7"/></svg><span class="uv-decor">ORBIT · G R S · NUMPAD</span></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">20 / BLENDER BASICS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Viewport Lab</h3><p>Your first hour in Blender's 3D Viewport: orbit, pan and zoom, frame objects, use the axis views and Auto Perspective, select with click, Shift, B and A, and move, rotate and scale with G, R and S, axis constraints, typed values, cancel and undo.</p><div class="card-bottom"><span>Navigation · selection · G R S · exact values</span><a href="./labs/viewport/" aria-label="Open Viewport Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+        </article>
+        <article class="lab-card eml-card">
+          <div class="card-visual eml-visual" aria-hidden="true"><svg viewBox="0 0 320 200"><path class="eml-face" d="M110 70l50 -20 50 20 -50 20z"/><path class="eml-side" d="M110 70v60l50 20v-60z"/><path class="eml-side dark" d="M160 90v60l50 -20v-60z"/><path class="eml-sel" d="M135 60l25 -10 25 10 -25 10z"/><path class="eml-ext" d="M135 60v-26l25 -10 25 10v26M160 24v26"/><path class="eml-edge" d="M110 70l50 -20 50 20 -50 20z M110 70v60l50 20 50 -20v-60M160 90v60"/><g class="eml-vert"><circle cx="110" cy="70" r="3.5"/><circle cx="160" cy="50" r="3.5"/><circle cx="210" cy="70" r="3.5"/><circle cx="160" cy="90" r="3.5"/><circle cx="110" cy="130" r="3.5"/><circle cx="160" cy="150" r="3.5"/><circle cx="210" cy="130" r="3.5"/></g></svg><span class="uv-decor">TAB · E · I · CTRL R · CTRL B</span></div>
+          <div class="card-content"><div class="card-topline"><span class="lab-number">21 / BLENDER BASICS</span><span class="available"><span></span> AVAILABLE</span></div><h3>Edit Mode Lab</h3><p>Press Tab and edit the mesh: vertex, edge and face select modes, X-ray, edge loops, moving parts of a mesh, Extrude, Inset, Loop Cut and Bevel, cleaning a broken mesh with Merge by Distance, Delete and Dissolve, and a stool as the final challenge.</p><div class="card-bottom"><span>Select modes · extrude · loop cut · clean mesh</span><a href="./labs/editmode/" aria-label="Open Edit Mode Lab">Open lab <span aria-hidden="true">↗</span></a></div></div>
+        </article>
+        </div>
+      </section>
       <section class="topic" id="topic-modeling" aria-labelledby="topic-modeling-title">
         <div class="topic-heading"><span class="topic-number">01</span><div><h3 id="topic-modeling-title">Modeling &amp; UVs</h3><p>Build clean meshes and unfold them for textures.</p></div><span class="topic-count">3 labs</span></div>
         <div class="lab-grid">
@@ -164,6 +177,6 @@
     <section class="method" aria-label="How to use the labs"><span class="method-label">A SIMPLE LOOP</span><div><b>01</b> Open a lab</div><span class="method-arrow" aria-hidden="true">→</span><div><b>02</b> Change something</div><span class="method-arrow" aria-hidden="true">→</span><div><b>03</b> Observe the result</div></section>
   </main>
   <footer><span>cifog <strong>LAB</strong></span><span>Interactive studies for the classroom</span><a href="#labs">Back to labs ↑</a></footer>
-  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js?v=20'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
+  <script type="module">import { initI18n } from './i18n.js'; import dict from './home.i18n.js?v=21'; initI18n({ dictionaries: [dict], mount: '.site-header', append: true });</script>
 </body>
 </html>
