@@ -1,9 +1,9 @@
 // Tileable Texture Lab: the Blender-style workspace (Image/UV Editor, 3D Viewport and Properties with nodes).
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import { stones, stonesAt, photoRough, bricks, rock, moss, photoTexture, N } from './bank.js?v=1';
-import { WALLS, WALL, HEIGHT, TILE_M, report, bbox, translate, scale as scaleQ, rotate as rotateQ, cloneUV } from './walls.js?v=1';
-import { wallReports, cornersOk, density, noiseSize, coverage, mossTile, repeatTogether, mapsAligned } from './stages.js?v=1';
+import { stones, stonesAt, photoRough, bricks, rock, moss, photoTexture, N } from './bank.js?v=2';
+import { WALLS, WALL, HEIGHT, TILE_M, report, bbox, translate, scale as scaleQ, rotate as rotateQ, cloneUV } from './walls.js?v=2';
+import { wallReports, cornersOk, density, noiseSize, coverage, mossTile, repeatTogether, mapsAligned } from './stages.js?v=2';
 import { t, tr } from '../../i18n.js';
 
 const $ = s => document.querySelector(s);
@@ -17,17 +17,17 @@ function canvasOf(key, im) {
   return canvases.get(key);
 }
 const IMAGES = {
-  photo: { name: 'stones_photo.jpg', get: () => photoTexture() },
-  tile: { name: 'stones_tileable.png', get: () => stones().col },
-  rough: { name: 'stones_rough.png', get: () => stones().rough },
-  roughPhoto: { name: 'stones_rough_photo.png', get: () => photoRough() },
-  normal: { name: 'stones_normal.png', get: () => stones().normal },
+  photo: { name: 'gravel_photo.jpg', get: () => photoTexture() },
+  tile: { name: 'gravel_tileable.png', get: () => stones().col },
+  rough: { name: 'gravel_rough.png', get: () => stones().rough },
+  roughPhoto: { name: 'gravel_rough_photo.png', get: () => photoRough() },
+  normal: { name: 'gravel_normal.png', get: () => stones().normal },
   bricks: { name: 'bricks.png', get: () => bricks().col },
   bricksN: { name: 'bricks_normal.png', get: () => bricks().normal },
   rock: { name: 'rock.png', get: () => rock().col },
   rockN: { name: 'rock_normal.png', get: () => rock().normal },
   moss: { name: 'moss_earth.png', get: () => moss() },
-  t256: { name: 'stones_256.png', get: () => stonesAt(256) }, t512: { name: 'stones_512.png', get: () => stonesAt(512) }, t1024: { name: 'stones_1024.png', get: () => stonesAt(1024) }, t2048: { name: 'stones_2048.png', get: () => stonesAt(1024) },
+  t256: { name: 'gravel_256.png', get: () => stonesAt(256) }, t512: { name: 'gravel_512.png', get: () => stonesAt(512) }, t1024: { name: 'gravel_1024.png', get: () => stonesAt(1024) }, t2048: { name: 'gravel_2048.png', get: () => stonesAt(1024) },
 };
 const imgCanvas = key => canvasOf(key, IMAGES[key].get());
 function texOf(key, color = true) {
@@ -117,7 +117,7 @@ export function createBL(ctx) {
   const grid = new THREE.GridHelper(200, 100, 0x4a4a4a, 0x424242); grid.position.y = -0.002; scene.add(grid);
   let mainMat = null, wallMeshes = {}, pickables = [];
   const CAMS = { floor: [[5.5, 5.2, 8.4], [0, 0.4, 0]], building: [[9.5, 6.8, 11], [0, 1.3, 0]], rock: [[3.4, 2.3, 4.6], [0, 0.5, 0]], plaza: [[26, 17, 30], [0, 0, 0]] };
-  function frame() { const [p, tg] = CAMS[st().scene]; camera.position.set(...p); controls.target.set(...tg); controls.update(); dirty = true; }
+  function frame() { const [p, tg] = st().maps ? [[-2.2, 2.6, 4.6], [-0.4, 0, 0.2]] : CAMS[st().scene]; camera.position.set(...p); controls.target.set(...tg); controls.update(); dirty = true; }
   const plainMat = (c, rough = 0.8) => makeMat({ uPlain: { value: 1 }, uPlainCol: { value: new THREE.Color().setRGB(...c, THREE.SRGBColorSpace) }, uRoughK: { value: rough } });
   function person() {
     const g = new THREE.Group(), m = plainMat([0.72, 0.74, 0.78], 0.6);
@@ -197,7 +197,7 @@ export function createBL(ctx) {
     Object.assign(u, extra);
   }
   // The sun: in front of the camera for the PBR steps (so the reflections show), otherwise over the viewer's shoulder.
-  function sunDir(s) { const el = s.sun * Math.PI / 180, c = Math.cos(el); return s.maps ? new THREE.Vector3(-c * 0.55, Math.sin(el), -c * 0.84) : new THREE.Vector3(c * 0.5, Math.sin(el), c * 0.86); }
+  function sunDir(s) { const el = s.sun * Math.PI / 180, c = Math.cos(el); return s.maps ? new THREE.Vector3(c * 0.43, Math.sin(el), -c * 0.9) : new THREE.Vector3(c * 0.5, Math.sin(el), c * 0.86); }
   function update() {
     const s = st(); if (builtScene !== s.scene) { build(); return; }
     const sd = sunDir(s); world.traverse(o => { if (o.material?.uniforms) o.material.uniforms.uSunDir.value.copy(sd); });
@@ -422,7 +422,7 @@ export function createBL(ctx) {
         const texOpts = [['uv', 'UV'], ['object', 'Object']];
         h += node('input', 'Texture Coordinate', nrow('Output', sel('coord', s.coord, texOpts, id !== 'd2'))) + arrow;
         h += node('vector', 'Mapping', `<div class="n-note" data-no-i18n>Type: Point</div>${nrow('Scale X', numIn('sx', s.scale[0], id === 'd2' ? 0.05 : 0.5, 0.01, 100, id === 'u1'))}${nrow('Scale Y', numIn('sy', s.scale[1], id === 'd2' ? 0.05 : 0.5, 0.01, 100, id === 'u1'))}`) + arrow;
-        const imgOpts = s.scene === 'rock' ? [['rock', 'rock.png']] : [['photo', 'stones_photo.jpg'], ['tile', 'stones_tileable.png']];
+        const imgOpts = s.scene === 'rock' ? [['rock', 'rock.png']] : [['photo', 'gravel_photo.jpg'], ['tile', 'gravel_tileable.png']];
         let body = nrow('Image', sel('img', s.img, imgOpts, id !== 'u1'));
         if (id === 'd1') body += nrow('Size', sel('res', s.res, [[256, '256 × 256'], [512, '512 × 512'], [1024, '1024 × 1024'], [2048, '2048 × 2048']]));
         body += nrow('Extension', sel('ext', s.ext, [['repeat', 'Repeat'], ['extend', 'Extend'], ['clip', 'Clip'], ['mirror', 'Mirror']], id !== 'u2'));
@@ -441,9 +441,9 @@ export function createBL(ctx) {
   function mapsNodes() {
     const s = st(), m = s.maps, id = ctx.stepId(), off = k => (id === 'm2' ? nrow('Offset X', numIn(`off-${k}-x`, m[k].off[0], 64, -2048, 2048)) + nrow('Offset Y', numIn(`off-${k}-y`, m[k].off[1], 64, -2048, 2048)) : '');
     const card = (k, title, imgSel, space) => node('texture', title, imgSel + nrow('Color Space', `<em class="n-val" data-no-i18n>${space}</em>`) + off(k) + `<button type="button" class="n-view${s.show === k ? ' on' : ''}" data-view="${k}">${esc(t(s.show === k ? 'Shown in the Image Editor' : 'Show in the Image Editor'))}</button>`, ` data-show="${k}"`);
-    return card('color', 'Image Texture · Base Color', nrow('Image', `<em class="n-val" data-no-i18n>stones_tileable.png</em>`), 'sRGB')
-      + card('rough', 'Image Texture · Roughness', nrow('Image', sel('rough', m.rough.img, [['photo', 'stones_rough_photo.png'], ['tile', 'stones_rough.png']], id !== 'm1')), 'Non-Color')
-      + card('normal', 'Image Texture · Normal', nrow('Image', `<em class="n-val" data-no-i18n>stones_normal.png</em>`), 'Non-Color') + arrow
+    return card('color', 'Image Texture · Base Color', nrow('Image', `<em class="n-val" data-no-i18n>gravel_tileable.png</em>`), 'sRGB')
+      + card('rough', 'Image Texture · Roughness', nrow('Image', sel('rough', m.rough.img, [['photo', 'gravel_rough_photo.png'], ['tile', 'gravel_rough.png']], id !== 'm1')), 'Non-Color')
+      + card('normal', 'Image Texture · Normal', nrow('Image', `<em class="n-val" data-no-i18n>gravel_normal.png</em>`), 'Non-Color') + arrow
       + node('vector', 'Normal Map', `<div class="n-note" data-no-i18n>Tangent Space · Strength 1.0</div>`) + arrow + node('shader', 'Principled BSDF', `<div class="n-note" data-no-i18n>Base Color · Roughness · Normal</div>`)
       + `<div class="sun-row">${nrow('Sun elevation', `<input type="range" data-k="sun" min="6" max="80" value="${s.sun}"><output data-no-i18n>${s.sun}°</output>`)}</div>`;
   }
@@ -476,7 +476,7 @@ export function createBL(ctx) {
     if (s.macro) h += stat('Variation', fmt(s.macro.fac), s.macro.fac >= 0.25 && s.macro.fac <= 0.8) + stat('Spot size', `${fmt(noiseSize(s.macro.scale), 1)} m`, noiseSize(s.macro.scale) >= 6);
     if (s.moss) {
       const r = repeatTogether(TILE_M, mossTile(s)), cov = coverage(s.moss.pos);
-      h += stat('Moss', s.moss.on ? `${Math.round(cov * 100)}%` : t('off'), s.moss.on && cov >= 0.15 && cov <= 0.6) + stat('Stones repeat every', `${TILE_M} m`, null) + stat('Moss repeats every', `${fmt(mossTile(s))} m`, null) + stat('Both line up again every', r === Infinity ? '> 400 m' : `${fmt(r, 1)} m`, s.moss.on && r >= 20);
+      h += stat('Moss', s.moss.on ? `${Math.round(cov * 100)}%` : t('off'), s.moss.on && cov >= 0.15 && cov <= 0.6) + stat('Gravel repeats every', `${TILE_M} m`, null) + stat('Moss repeats every', `${fmt(mossTile(s))} m`, null) + stat('Both line up again every', r === Infinity ? '> 400 m' : `${fmt(r, 1)} m`, s.moss.on && r >= 20);
     }
     return h + '</div>';
   }
@@ -515,7 +515,7 @@ export function createBL(ctx) {
       else if (k.startsWith('off-')) { const [, m, ax] = k.split('-'); s.maps[m].off[ax === 'x' ? 0 : 1] = Math.round(clampN(f, -2048, 2048)); }
       else if (k === 'moss-on') { s.moss.on = v; if (v) s.show = 'moss'; } else if (k === 'moss-scale') s.moss.scale = clampN(f, 1, 60);
     });
-    if (k === 'img' || k === 'res') ctx.msg(k === 'img' ? (v === 'tile' ? 'stones_tileable.png: the copies join without a line.' : 'stones_photo.jpg: every copy ends in a seam.') : tr('Image size {n} px.', { n: v }));
+    if (k === 'img' || k === 'res') ctx.msg(k === 'img' ? (v === 'tile' ? 'gravel_tileable.png: the copies join without a line.' : 'gravel_photo.jpg: every copy ends in a seam.') : tr('Image size {n} px.', { n: v }));
     if (k === 'ext') ctx.msg({ repeat: 'Repeat: the image starts again after 1, in both directions.', extend: 'Extend: outside 0–1 the edge pixels are stretched out.', clip: 'Clip: outside 0–1 there is nothing (black).', mirror: 'Mirror: every other copy is flipped.' }[v]);
   });
   props.addEventListener('input', e => {

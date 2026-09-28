@@ -17,8 +17,8 @@ test('every step starts unsolved and its solution solves it', () => {
 test('Offset with Wrap Around keeps every pixel and moves the edges to the middle', () => {
   const im = flatSquare(), o = offset(im, 512, 512, 'wrap'), back = offset(o, -512, -512, 'wrap');
   assert.deepEqual(back.d, im.d);
-  assert.ok(seamReport(o, 512, 512).bad > 20, 'the old edges show as a cross');
-  assert.ok(seamReport(im, 0, 0).bad > 20, 'the edges of the photo do not match');
+  assert.ok(seamReport(o, 512, 512).bad >= 14, 'the old edges show as a cross');
+  assert.ok(seamReport(im, 0, 0).bad >= 14, 'the edges of the photo do not match');
 });
 test('the tileable stones have no seam at their edges', () => {
   assert.ok(seamReport(stones().col, 0, 0).ok);

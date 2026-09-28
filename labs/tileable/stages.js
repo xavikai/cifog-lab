@@ -1,9 +1,9 @@
 // Tileable Texture Lab: stages, steps and checks. Pure JS (tested with node).
 // Two kinds of step: 'ps' steps work on pixels in a Photoshop-style workspace,
 // 'bl' steps work on a scene in a Blender-style workspace.
-import { composite, copyImage, crop, resize, offset, gaussianBlur, desaturate, invert, seamReport, unevenness, structure, chroma, blotRatio, isPow2, fbm } from './texture.js?v=1';
-import { photo, litSquare, flatSquare, offsetSquare, healedSquare, healCross, healBlot, stainAt, CROP, N } from './bank.js?v=1';
-import { WALLS, report, joins, CORNERS, packedUV, solvedUV, scatteredUV, rotate, scale as scaleQ, bbox, cloneUV, TILE_M } from './walls.js?v=1';
+import { composite, copyImage, crop, resize, offset, gaussianBlur, desaturate, invert, seamReport, unevenness, structure, chroma, blotRatio, isPow2, fbm } from './texture.js?v=2';
+import { photo, litSquare, flatSquare, offsetSquare, healedSquare, healCross, healBlot, stainAt, CROP, N } from './bank.js?v=2';
+import { WALLS, report, joins, CORNERS, packedUV, solvedUV, scatteredUV, rotate, scale as scaleQ, bbox, cloneUV, TILE_M } from './walls.js?v=2';
 
 const clone = o => JSON.parse(JSON.stringify(o));
 const near = (a, b, t) => Math.abs(a - b) <= t;
@@ -65,8 +65,8 @@ export const STAGES = [
     steps: [
       {
         id: 'u1', title: 'Spot the seam',
-        text: 'A tileable (or seamless) texture is an image whose right edge continues into its left edge, and whose top continues into its bottom. Copies laid side by side join without a line, so one small image can cover a big surface. This 8 × 8 m floor repeats a 2 m photo of stones 4 × 4 times, but the photo is not tileable: every copy ends in a hard line, and the light of the photo turns the floor into a checkerboard. Click one of those lines on the floor, then swap the photo for the tileable version.',
-        how: ['Orbit the <b>3D Viewport</b> with <b>MMB</b> and look for straight lines every 2 m.', 'Click a seam on the floor.', 'In the <b>Image Texture</b> node, change the image from <b>stones_photo.jpg</b> to <b>stones_tileable.png</b>.'],
+        text: 'A tileable (or seamless) texture is an image whose right edge continues into its left edge, and whose top continues into its bottom. Copies laid side by side join without a line, so one small image can cover a big surface. This 8 × 8 m floor repeats a 2 m photo of gravel 4 × 4 times, but the photo is not tileable: every copy ends in a hard line, and the light of the photo turns the floor into a checkerboard. Click one of those lines on the floor, then swap the photo for the tileable version.',
+        how: ['Orbit the <b>3D Viewport</b> with <b>MMB</b> and look for straight lines every 2 m.', 'Click a seam on the floor.', 'In the <b>Image Texture</b> node, change the image from <b>gravel_photo.jpg</b> to <b>gravel_tileable.png</b>.'],
         why: 'A seam repeats with the texture: one bad edge becomes a grid of lines across the whole floor.',
         start: () => blState({ img: 'photo' }),
         check: s => !!s.flags.seam && s.img === 'tile',
@@ -74,9 +74,9 @@ export const STAGES = [
       },
       {
         id: 'u2', title: 'Repeat it at real size',
-        text: 'The tileable image shows 2 m of floor. The Mapping node multiplies the UVs: with Scale 1 the image is stretched once over the whole 8 m floor, so every stone is four times too big next to the 1.8 m person. And with Extension set to Extend, the Image Texture node does not repeat the image at all: outside the first copy it smears the edge pixels. Make the image repeat, and scale it so one copy covers 2 m.',
+        text: 'The tileable image shows 2 m of floor. The Mapping node multiplies the UVs: with Scale 1 the image is stretched once over the whole 8 m floor, so every pebble is four times too big next to the 1.8 m person. And with Extension set to Extend, the Image Texture node does not repeat the image at all: outside the first copy it smears the edge pixels. Make the image repeat, and scale it so one copy covers 2 m.',
         how: ['In the <b>Image Texture</b> node, set <b>Extension</b> to <b>Repeat</b>. Try <b>Mirror</b> and <b>Clip</b> too, to see what they do.', 'In the <b>Mapping</b> node, set <b>Scale</b> X and Y to floor size ÷ size of one copy = 8 ÷ 2.', 'The <b>Image Editor</b> shows the UVs of the floor over the repeated image.'],
-        why: 'Tiling is a multiplication: UVs from 0 to 4 show the image four times. The scale sets the size of the stones, so it must come from the real size the photo shows.',
+        why: 'Tiling is a multiplication: UVs from 0 to 4 show the image four times. The scale sets the size of the pebbles, so it must come from the real size the photo shows.',
         start: () => blState({ ext: 'extend', scale: [1, 1] }),
         check: s => s.ext === 'repeat' && near(s.scale[0], 4, 0.05) && near(s.scale[1], 4, 0.05),
         solve: s => { s.ext = 'repeat'; s.scale = [4, 4]; },
@@ -123,16 +123,16 @@ export const STAGES = [
         text: 'Now make a tileable texture yourself, from a photo, in Photoshop. This photo of a floor is 1400 × 1050 px and shows 2.7 m. Textures for 3D and games are square and power-of-two sized (512, 1024, 2048…): the GPU builds mipmaps from them, and they tile at the same scale in U and V. Crop a square and make it 1024 × 1024 px. Do not stretch the photo, and do not make it bigger than your crop: new pixels add no detail.',
         how: ['Choose the <b>Crop Tool</b> (<b>C</b>) and set <b>1:1 (Square)</b> in the options bar.', 'Drag a square as big as the photo allows and press <b>Enter</b>.', '<b>Image › Image Size…</b> (<b>Alt Ctrl I</b>): 1024 × 1024 px.'],
         why: 'A square, power-of-two image tiles the same in U and V and keeps clean mipmaps. The pixels per metre of the photo limit how sharp the texture can be.',
-        start: () => psState(photo(), 'stones_photo.jpg'),
+        start: () => psState(photo(), 'gravel_photo.jpg'),
         check: s => sizeReport(s).ok,
         solve: s => { const L = s.layers[0]; L.img = resize(crop(L.img, CROP.x, CROP.y, CROP.s, CROP.s), N, N); s.cropSide = CROP.s; },
       },
       {
         id: 'p2', title: 'Even out the light',
-        text: 'The photo was shot with the sun on one side: the top left is bright, the bottom right is dark and a soft shadow crosses it. In one photo that looks natural; repeated, it becomes a checkerboard of bright and dark squares. Remove the big changes of light and keep the stones: blur a grey copy until only the light is left, invert it and blend it over the photo at 50 %.',
-        how: ['<b>Layer › Duplicate Layer</b> (<b>Ctrl J</b>).', 'On the copy: <b>Image › Adjustments › Desaturate</b> (<b>Shift Ctrl U</b>), then <b>Filter › Blur › Gaussian Blur…</b> with a radius about the size of a stone (40–100 px).', '<b>Image › Adjustments › Invert</b> (<b>Ctrl I</b>). In the <b>Layers</b> panel set the blend mode to <b>Linear Light</b> and <b>Opacity</b> to 50 %.'],
+        text: 'The photo was shot with the sun on one side: the top left is bright, the bottom right is dark and a soft shadow crosses it. In one photo that looks natural; repeated, it becomes a checkerboard of bright and dark squares. Remove the big changes of light and keep the pebbles: blur a grey copy until only the light is left, invert it and blend it over the photo at 50 %.',
+        how: ['<b>Layer › Duplicate Layer</b> (<b>Ctrl J</b>).', 'On the copy: <b>Image › Adjustments › Desaturate</b> (<b>Shift Ctrl U</b>), then <b>Filter › Blur › Gaussian Blur…</b> with a radius much bigger than a pebble (40–100 px).', '<b>Image › Adjustments › Invert</b> (<b>Ctrl I</b>). In the <b>Layers</b> panel set the blend mode to <b>Linear Light</b> and <b>Opacity</b> to 50 %.'],
         why: 'Light that changes across the photo repeats with every copy. A tileable texture needs the same light everywhere: the 3D scene adds its own light later.',
-        start: () => psState(litSquare(), 'stones_1024.psd', { cropSide: N }),
+        start: () => psState(litSquare(), 'gravel_1024.psd', { cropSide: N }),
         check: s => lightReport(s).ok,
         solve: s => { s.layers = [s.layers[0], { name: 'Background copy', img: invert(gaussianBlur(desaturate(s.layers[0].img), 60)), blend: 'Linear Light', opacity: 0.5, visible: true }]; s.active = 1; },
       },
@@ -146,7 +146,7 @@ export const STAGES = [
         text: 'The edges of the photo do not match, but you cannot paint across the edge of an image. Filter › Other › Offset moves the image and wraps what leaves one side back in on the other side. With an offset of half the size, the four edges meet in a cross in the middle, where you can see them and paint over them.',
         how: ['<b>Filter › Other › Offset…</b>', '<b>Horizontal</b> +512 px and <b>Vertical</b> +512 px: half of 1024.', '<b>Undefined Areas</b>: <b>Wrap Around</b>. The other two options fill the gap instead of wrapping.'],
         why: 'Wrap Around keeps every pixel: what goes out on the right comes back in on the left. The edges of the image now continue into each other; only the cross in the middle is left to fix.',
-        start: () => psState(flatSquare(), 'stones_1024.psd', { cropSide: N, seam: { x: 0, y: 0 } }),
+        start: () => psState(flatSquare(), 'gravel_1024.psd', { cropSide: N, seam: { x: 0, y: 0 } }),
         check: s => !s.flags.smeared && seamIn(s.seam.x) && seamIn(s.seam.y),
         solve: s => { s.layers[0].img = offset(s.layers[0].img, N / 2, N / 2, 'wrap'); s.seam = { x: (s.seam.x + N / 2) % N, y: (s.seam.y + N / 2) % N }; },
       },
@@ -155,16 +155,16 @@ export const STAGES = [
         text: 'Paint over the cross with pixels from other parts of the photo. The Clone Stamp copies pixels exactly; the Healing Brush copies the texture and matches its colour to the place you paint. Alt-click a source away from the cross, then paint along the lines. Change the source often: the same source dragged along a line makes a new straight line. The Lab check panel turns every piece of the cross green when it no longer jumps.',
         how: ['Choose the <b>Clone Stamp Tool</b> (<b>S</b>) or the <b>Healing Brush Tool</b> (<b>J</b>).', '<b>Alt</b>-click a source, then drag over the seam. <b>[</b> and <b>]</b> change the size; a soft brush (low <b>Hardness</b>) hides its edge.', 'Cover the whole cross, edge to edge, in both directions.'],
         why: 'The cross is where the old edges meet. When it is gone, the image continues across every edge: it tiles.',
-        start: () => psState(offsetSquare(), 'stones_1024.psd', { cropSide: N, seam: { x: N / 2, y: N / 2 } }),
+        start: () => psState(offsetSquare(), 'gravel_1024.psd', { cropSide: N, seam: { x: N / 2, y: N / 2 } }),
         check: s => !!seamOf(s)?.ok,
         solve: s => { healCross(s.layers[s.active].img, s.seam.x, s.seam.y); },
       },
       {
         id: 's3', title: 'Pattern Preview: the giveaway',
         text: 'Your texture tiles now. Turn on View › Pattern Preview and Photoshop shows it repeated. A texture can tile without a seam and still repeat badly: one feature that stands out — here a dark oil stain — comes back every 2 m and draws the grid. Heal it away.',
-        how: ['<b>View › Pattern Preview</b>.', 'Choose the <b>Healing Brush Tool</b> (<b>J</b>), <b>Alt</b>-click clean stone and paint over the stain.', 'Keep the cross clean: the seam check must stay green.'],
-        why: 'The eye finds a repetition through the details that stand out. A good tileable texture is evenly busy: no stain, no leaf, no stone much darker or brighter than the rest.',
-        start: () => psState(healedSquare(), 'stones_tileable.psd', { cropSide: N, seam: { x: N / 2, y: N / 2 }, stain: stainAt() }),
+        how: ['<b>View › Pattern Preview</b>.', 'Choose the <b>Healing Brush Tool</b> (<b>J</b>), <b>Alt</b>-click clean gravel and paint over the stain.', 'Keep the cross clean: the seam check must stay green.'],
+        why: 'The eye finds a repetition through the details that stand out. A good tileable texture is evenly busy: no stain, no leaf, no pebble much darker or brighter than the rest.',
+        start: () => psState(healedSquare(), 'gravel_tileable.psd', { cropSide: N, seam: { x: N / 2, y: N / 2 }, stain: stainAt() }),
         check: s => !!s.flags.pattern && stainOf(s) >= 0.9 && !!seamOf(s)?.ok,
         solve: s => { s.flags.pattern = true; healBlot(s.layers[s.active].img, s.stain); },
       },
@@ -176,7 +176,7 @@ export const STAGES = [
       {
         id: 'm1', title: 'Every map must tile',
         text: 'A material uses several images — Base Color, Roughness, Normal — and all of them must tile, not only the colour. On this floor the colour is seamless, yet a grid shows in the reflections: the Roughness map was made from the original photo, with its edges and its light. Click each Image Texture node to see its image repeated, find the broken one and swap it for the version made from the tileable texture.',
-        how: ['Click an <b>Image Texture</b> node: the <b>Image Editor</b> shows its image repeated.', 'Lower the <b>Sun</b> to a grazing light to see the reflections.', 'Set the Roughness image to <b>stones_rough.png</b>.'],
+        how: ['Click an <b>Image Texture</b> node: the <b>Image Editor</b> shows its image repeated.', 'Lower the <b>Sun</b> to a grazing light to see the reflections.', 'Set the Roughness image to <b>gravel_rough.png</b>.'],
         why: 'Every map is a separate image read with the same UVs. A seam in any of them shows: in the colour, in the shine or in the relief.',
         start: () => blState({ maps: { color: { img: 'tile', off: [0, 0] }, rough: { img: 'photo', off: [0, 0] }, normal: { img: 'tile', off: [0, 0] } }, sun: 30, show: 'rough' }),
         check: s => s.maps.rough.img === 'tile',
@@ -184,8 +184,8 @@ export const STAGES = [
       },
       {
         id: 'm2', title: 'Keep the maps aligned',
-        text: 'To check the seams, the colour was offset by 512 × 512 px in Photoshop and saved like that, but the Roughness and Normal maps were not. The maps no longer match: the grooves of the mortar run through the middle of the stones. Give every map the same offset (or offset the colour back).',
-        how: ['Each Image Texture node shows the <b>Offset</b> applied to its image in Photoshop (a lab field, not a Blender setting).', 'Give the three maps the same offset: 512 × 512 on all of them, or 0 × 0 on all of them.', 'Look at the floor with a low sun: the dark lines of mortar must be the grooves.'],
+        text: 'To check the seams, the colour was offset by 512 × 512 px in Photoshop and saved like that, but the Roughness and Normal maps were not. The maps no longer match: the relief of the gaps falls on the middle of the pebbles. Give every map the same offset (or offset the colour back).',
+        how: ['Each Image Texture node shows the <b>Offset</b> applied to its image in Photoshop (a lab field, not a Blender setting).', 'Give the three maps the same offset: 512 × 512 on all of them, or 0 × 0 on all of them.', 'Look at the floor with a low sun: the dark gaps between the pebbles must be the hollows.'],
         why: 'The maps of a material are layers of the same surface. Any edit that moves pixels — offset, clone, heal — must be made on all of them in the same way.',
         start: () => blState({ maps: { color: { img: 'tile', off: [512, 512] }, rough: { img: 'tile', off: [0, 0] }, normal: { img: 'tile', off: [0, 0] } }, sun: 20, show: 'normal' }),
         check: s => mapsAligned(s),
@@ -198,9 +198,9 @@ export const STAGES = [
     steps: [
       {
         id: 'd1', title: 'Sharp enough',
-        text: 'How sharp a tileable texture looks depends on its pixels and on the metres one copy covers: texel density = image size in px ÷ metres per copy. Here a 512 px image covers 2 m: 256 px/m, blurry next to the person. The project asks for 512 px/m. Reach it without changing the size of the stones.',
-        how: ['Change the image size in the <b>Image Texture</b> node: 256, 512, 1024 or 2048 px.', 'Keep the Mapping <b>Scale</b> at 4, so one copy still covers 2 m and the stones keep their real size.', 'The panel shows the texel density and the memory the image takes.'],
-        why: 'A bigger Mapping scale would also give more pixels per metre, but the stones would shrink. The real size of the stones is fixed, so the pixels must come from a bigger image. The Texel Density Lab goes further.',
+        text: 'How sharp a tileable texture looks depends on its pixels and on the metres one copy covers: texel density = image size in px ÷ metres per copy. Here a 512 px image covers 2 m: 256 px/m, blurry next to the person. The project asks for 512 px/m. Reach it without changing the size of the pebbles.',
+        how: ['Change the image size in the <b>Image Texture</b> node: 256, 512, 1024 or 2048 px.', 'Keep the Mapping <b>Scale</b> at 4, so one copy still covers 2 m and the pebbles keep their real size.', 'The panel shows the texel density and the memory the image takes.'],
+        why: 'A bigger Mapping scale would also give more pixels per metre, but the pebbles would shrink. The real size of the pebbles is fixed, so the pixels must come from a bigger image. The Texel Density Lab goes further.',
         start: () => blState({ res: 512 }),
         check: s => density(s) === 512 && near(s.scale[0], 4, 0.05) && near(s.scale[1], 4, 0.05),
         solve: s => { s.res = 1024; s.scale = [4, 4]; },
@@ -230,7 +230,7 @@ export const STAGES = [
       },
       {
         id: 'b2', title: 'A second texture, another size',
-        text: 'Mix a second tileable texture — moss and earth — into the stones through a noise mask. Choose its size with care: if one copy covers 4 m, it lines up with the 2 m stones every 4 m and the grid comes back. With a size that is not a multiple, such as 3.3 m, the two patterns only meet again after tens of metres.',
+        text: 'Mix a second tileable texture — moss and earth — into the gravel through a noise mask. Choose its size with care: if one copy covers 4 m, it lines up with the 2 m gravel every 4 m and the grid comes back. With a size that is not a multiple, such as 3.3 m, the two patterns only meet again after tens of metres.',
         how: ['Turn on the <b>Moss</b> texture and set its <b>Mapping</b> scale (40 m ÷ scale = metres per copy).', 'Move the <b>Color Ramp</b> of the mask: it decides how much moss there is (15–60 %).', 'The panel shows after how many metres the two patterns line up again: aim for 20 m or more.'],
         why: 'Two patterns that repeat every a and every b metres repeat together every least common multiple of a and b. Sizes that are not simple multiples of each other push it far away.',
         start: () => blState({ scene: 'plaza', scale: [20, 20], macro: { fac: 0.45, scale: 0.08 }, moss: { on: false, scale: 10, mask: 0.08, pos: 0.5 } }),

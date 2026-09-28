@@ -1,6 +1,6 @@
 // Tileable Texture Lab: every image the lab uses, painted on first use and kept.
 // Pure JS: the stages and the tests use the same images as the page.
-import { paint, lightOver, crop, resize, offset, normalFromHeight, stroke, copyImage, newImage, STAIN } from './texture.js?v=1';
+import { paint, lightOver, crop, resize, offset, normalFromHeight, stroke, copyImage, newImage, gaussianBlur, STAIN } from './texture.js?v=2';
 
 const cache = new Map();
 const once = (key, fn) => { if (!cache.has(key)) cache.set(key, fn()); return cache.get(key); };
@@ -47,8 +47,10 @@ export const stones = () => once('stones', () => { const p = paint(N, N, [0, 0, 
 export const stonesAt = res => once('stones' + res, () => (res === N ? stones().col : resize(stones().col, res, res)));
 // A roughness map made from the photo before it was tileable: its edges and its light are still in it.
 export const photoRough = () => once('photoRough', () => {
-  const src = litSquare(), out = newImage(N, N);
-  for (let i = 0; i < src.d.length; i += 4) { const l = (src.d[i] * 0.3 + src.d[i + 1] * 0.59 + src.d[i + 2] * 0.11) / 255, r = Math.min(1, Math.max(0.05, 1.45 - l * 1.7)) * 255; out.d[i] = out.d[i + 1] = out.d[i + 2] = r; }
+  // Mostly the light of the photo (blurred), plus a little of the pebbles: every copy gets one shiny corner.
+  const src = litSquare(), soft = gaussianBlur(src, 40), out = newImage(N, N);
+  const L = (im, i) => (im.d[i] * 0.3 + im.d[i + 1] * 0.59 + im.d[i + 2] * 0.11) / 255;
+  for (let i = 0; i < src.d.length; i += 4) { const r = Math.min(1, Math.max(0.05, 1.7 - L(soft, i) * 2.6 + (0.5 - L(src, i)) * 0.35)) * 255; out.d[i] = out.d[i + 1] = out.d[i + 2] = r; }
   return out;
 });
 export const bricks = () => once('bricks', () => { const p = paint(512, 512, [0, 0, 2, 2], { kind: 'brick', P: 2, maps: true }); return { col: p.col, normal: normalFromHeight(p.height, 1.6) }; });

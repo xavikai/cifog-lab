@@ -1,6 +1,6 @@
 // Tileable Texture Lab: the Photoshop-style workspace (menus, tools, options bar, Layers and a lab check panel).
-import { composite, copyImage, crop, resize, offset, gaussianBlur, desaturate, invert, stroke, BLEND_MODES, isPow2, SEAM_OK } from './texture.js?v=1';
-import { flat, lightReport, sizeReport, seamOf, stainOf, seamIn } from './stages.js?v=1';
+import { composite, copyImage, crop, resize, offset, gaussianBlur, desaturate, invert, stroke, BLEND_MODES, isPow2, SEAM_OK, SEAM_SEG } from './texture.js?v=2';
+import { flat, lightReport, sizeReport, seamOf, stainOf, seamIn } from './stages.js?v=2';
 import { t, tr } from '../../i18n.js';
 
 const $ = s => document.querySelector(s);
@@ -83,7 +83,7 @@ export function createPS(ctx) {
     const s = st(), id = ctx.stepId();
     if (!s.seam || !U.seamOverlay || U.preview || !(id === 's2' || id === 's3')) return;
     const rep = seamCache(); if (!rep) return;
-    const [w, h] = docSize(), seg = 32;
+    const [w, h] = docSize(), seg = SEAM_SEG;
     g.lineWidth = 3;
     rep.v.forEach((r, i) => { g.strokeStyle = r > SEAM_OK ? 'rgba(255,70,60,.85)' : 'rgba(90,220,120,.7)'; g.beginPath(); g.moveTo(x0 + s.seam.x * U.z, y0 + i * seg * U.z + 1); g.lineTo(x0 + s.seam.x * U.z, y0 + Math.min(h, (i + 1) * seg) * U.z - 1); g.stroke(); });
     rep.h.forEach((r, i) => { g.strokeStyle = r > SEAM_OK ? 'rgba(255,70,60,.85)' : 'rgba(90,220,120,.7)'; g.beginPath(); g.moveTo(x0 + i * seg * U.z + 1, y0 + s.seam.y * U.z); g.lineTo(x0 + Math.min(w, (i + 1) * seg) * U.z - 1, y0 + s.seam.y * U.z); g.stroke(); });
@@ -422,8 +422,8 @@ export function createPS(ctx) {
       h += `<p class="sb-empty">${esc(t('Power of two: 256, 512, 1024, 2048… The photo covers 2.7 m in 1400 px: about 520 px per metre.'))}</p>`;
     } else if (id === 'p2') {
       const r = lightReportCached();
-      h += row('Light across the image', `${Math.round(r.uneven * 100)}%`, r.evenOk) + row('Stones kept', `${Math.round(r.structure * 100)}%`, r.structureOk) + row('Colour kept', `${Math.round(r.chroma * 100)}%`, r.chromaOk);
-      h += `<p class="sb-empty">${esc(t(!r.structureOk ? 'The stones lost their shape: the blur radius is too small, so the copy removes the stones too.' : !r.chromaOk ? 'The colour is gone: desaturate the copy before you blur it, so it only corrects the light.' : !r.evenOk ? 'Light: the difference between the brightest and darkest areas must be 10% or less.' : '✓ Even light, stones and colour kept.'))}</p>`;
+      h += row('Light across the image', `${Math.round(r.uneven * 100)}%`, r.evenOk) + row('Pebbles kept', `${Math.round(r.structure * 100)}%`, r.structureOk) + row('Colour kept', `${Math.round(r.chroma * 100)}%`, r.chromaOk);
+      h += `<p class="sb-empty">${esc(t(!r.structureOk ? 'The pebbles lost their shape: the blur radius is too small, so the copy removes the pebbles too.' : !r.chromaOk ? 'The colour is gone: desaturate the copy before you blur it, so it only corrects the light.' : !r.evenOk ? 'Light: the difference between the brightest and darkest areas must be 10% or less.' : '✓ Even light, pebbles and colour kept.'))}</p>`;
     } else if (s.seam) {
       const [w, h2] = docSize(), inX = seamIn(s.seam.x), inY = seamIn(s.seam.y);
       if (id === 's1') {

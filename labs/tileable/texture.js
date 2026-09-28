@@ -68,6 +68,41 @@ function stoneSample(mx, my, P, seed) {
   const rough = mortar * 0.92 + (1 - mortar) * (0.5 + 0.25 * fine + 0.12 * hash2(id, 5, seed));
   return { col, height, rough };
 }
+// Gravel: rounded pebbles of 3–6 cm in a darker, earthy bed. No lines that must meet, so a seam is easy to clone away.
+const GRAVEL_PAL = [[0.62, 0.60, 0.56], [0.70, 0.66, 0.58], [0.52, 0.50, 0.48], [0.66, 0.58, 0.47], [0.44, 0.42, 0.41], [0.74, 0.71, 0.66], [0.58, 0.52, 0.45], [0.36, 0.34, 0.33]];
+function gravelSample(mx, my, P, seed) {
+  const base = 0.055, cell = P ? P / Math.round(P / base) : base, n = P ? Math.round(P / cell) : 0;
+  const cx = Math.floor(mx / cell), cy = Math.floor(my / cell);
+  // The nearest pebble: each one is a rounded, slightly long shape with its own size and turn.
+  let best = -9, second = -9, id = 0, bx = 0, by = 0, br = 1;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const gx = cx + i, gy = cy + j, wx = n ? mod(gx, n) : gx, wy = n ? mod(gy, n) : gy;
+    const px = (gx + 0.2 + 0.6 * hash2(wx, wy, seed)) * cell, py = (gy + 0.2 + 0.6 * hash2(wx, wy, seed + 7)) * cell;
+    const a = hash2(wx, wy, seed + 13) * Math.PI, c = Math.cos(a), s = Math.sin(a), asp = 1 + 0.6 * hash2(wx, wy, seed + 17);
+    const dx = mx - px, dy = my - py, u = (dx * c + dy * s) / asp, v = -dx * s + dy * c;
+    const r = cell * (0.36 + 0.2 * hash2(wx, wy, seed + 19));
+    const inside = r - Math.sqrt(u * u + v * v);
+    if (inside > best) { second = best; best = inside; id = wx * 131 + wy * 7; bx = dx; by = dy; br = r; } else if (inside > second) second = inside;
+  }
+  // Two pebbles that touch keep a thin dark crack between them.
+  const e = Math.min(best, (best - second) * 0.5) + (vnoise(mx * 110, my * 110, seed + 3, P ? Math.round(P * 110) : 0) - 0.5) * 0.004;
+  const gap = 1 - smooth(-0.001, 0.003, e);
+  const dome = Math.sqrt(clamp01(e / (cell * 0.3)));
+  const pal = GRAVEL_PAL[Math.floor(hash2(id, 3, seed) * GRAVEL_PAL.length)];
+  const tone = 0.85 + 0.3 * hash2(id, 11, seed);
+  const big = fbm(mx, my, 1.5, 3, seed + 20, P), grain = vnoise(mx * 260, my * 260, seed + 60, P ? Math.round(P * 260) : 0);
+  const grit = vnoise(mx * 520, my * 520, seed + 70, P ? Math.round(P * 520) : 0);
+  const lit = 1 - 0.22 * (bx + by) / (br * 1.4); // light from the top left
+  const k = tone * (0.86 + 0.24 * big) * (0.62 + 0.42 * dome) * lit * (0.95 + 0.1 * grain);
+  const peb = [pal[0] * k, pal[1] * k, pal[2] * k];
+  // Between the pebbles: dark earth with small light grit.
+  const dg = (0.17 + 0.1 * smooth(0.55, 0.85, grit)) * (0.9 + 0.2 * big);
+  const dirt = [dg * 1.08, dg * 0.98, dg * 0.86];
+  const col = peb.map((c, i) => c * (1 - gap) + dirt[i] * gap);
+  const height = (1 - gap) * (0.35 + 0.6 * dome) + gap * (0.05 + 0.1 * grit);
+  const rough = gap * 0.95 + (1 - gap) * (0.45 + 0.3 * (1 - dome) + 0.15 * hash2(id, 5, seed));
+  return { col, height, rough };
+}
 // Bricks: 25 × 8.3 cm (8 per row, 24 rows in a 2 m tile), stretcher bond.
 function brickSample(mx, my, P, seed) {
   const bw = 0.25, bh = 2 / 24, row = Math.floor(my / bh), shift = (row & 1) ? bw / 2 : 0;
@@ -99,7 +134,7 @@ function mossSample(mx, my, P, seed) {
   const k = (0.8 + 0.3 * b) * (0.88 + 0.24 * c);
   return { col: earth.map((v, i) => (v * (1 - g) + moss[i] * g) * k), height: 0.3 + 0.5 * b, rough: 0.9 };
 }
-const SAMPLERS = { stone: stoneSample, brick: brickSample, rock: rockSample, moss: mossSample };
+const SAMPLERS = { gravel: gravelSample, stone: stoneSample, brick: brickSample, rock: rockSample, moss: mossSample };
 
 // Light on a photo: a slope from bright (top left) to dark (bottom right), a soft shadow band and a vignette.
 function photoLight(mx, my) {
@@ -120,7 +155,7 @@ function stainK(mx, my) {
 // Paint a material over a region (metres). opts: { kind, P (period m, 0 = photo), seed, light, stain, maps }.
 // Returns { col, height, rough } (height and rough only when maps is true).
 export function paint(w, h, region, opts = {}) {
-  const { kind = 'stone', P = 0, seed = 7, light = false, stain = false, maps = false } = opts;
+  const { kind = 'gravel', P = 0, seed = 7, light = false, stain = false, maps = false } = opts;
   const f = SAMPLERS[kind], col = newImage(w, h), d = col.d, hm = maps ? newImage(w, h) : null, rm = maps ? newImage(w, h) : null;
   const [x0, y0, x1, y1] = region, g = 1 / 1.25;
   for (let y = 0; y < h; y++) {
@@ -337,7 +372,8 @@ export function stroke(im, src, pts, ox, oy, radius, hardness, heal) {
 const lum = (d, i) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
 // How much a line of pixels jumps compared with its neighbours. A seam is a jump much bigger than the columns next to it.
 // axis 'x': the seam is between columns at-1 and at (a vertical line). Returns one ratio per segment of seg pixels.
-export function seamRatios(im, at, axis = 'x', seg = 32) {
+export const SEAM_SEG = 128;
+export function seamRatios(im, at, axis = 'x', seg = SEAM_SEG) {
   const { w, h, d } = im, n = axis === 'x' ? h : w, size = axis === 'x' ? w : h, out = [];
   const P = (a, b) => (axis === 'x' ? (b * w + mod(a, size)) * 4 : (mod(a, size) * w + b) * 4);
   const diff = (a, b, k) => { let s = 0; const p = P(a, k), q = P(b, k); for (let c = 0; c < 3; c++) s += Math.abs(d[p + c] - d[q + c]); return s; };
@@ -348,7 +384,7 @@ export function seamRatios(im, at, axis = 'x', seg = 32) {
   }
   return out;
 }
-export const SEAM_OK = 1.6;
+export const SEAM_OK = 2.4;
 export function seamReport(im, sx, sy) {
   const v = seamRatios(im, sx, 'x'), hz = seamRatios(im, sy, 'y');
   const bad = [...v, ...hz].filter(r => r > SEAM_OK).length;

@@ -1,9 +1,9 @@
 // Tileable Texture Lab: stages, steps, undo and the two workspaces (Photoshop-style and Blender-style).
-import { STAGES, startState } from './stages.js?v=1';
-import { createPS } from './ps.js?v=1';
-import { createBL } from './bl.js?v=1';
+import { STAGES, startState } from './stages.js?v=2';
+import { createPS } from './ps.js?v=2';
+import { createBL } from './bl.js?v=2';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=1';
+import dictionary from './i18n.js?v=2';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
