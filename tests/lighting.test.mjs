@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { blackbody, luminance, irradiance, measure, apparentSize, worldIrradiance, spotFactor, falseColorBand, FALSE_COLOR, MIDDLE_GREY } from '../labs/lighting/light.js';
 import { STAGES, startState, defaultState, upgradeState } from '../labs/lighting/stages.js';
-import { spreadFactor, goboValue, iesValue, cookieFactor, sphereIllum, linkOk, customWindow } from '../labs/lighting/light.js';
+import { fogCoeffs, spreadFactor, goboValue, iesValue, cookieFactor, sphereIllum, linkOk, customWindow } from '../labs/lighting/light.js';
 
 const near = (a, b, e) => Math.abs(a - b) <= e;
 const probe = { p: [0, 1.55, 0.2], n: [0, 0, 1], onHead: true };
@@ -79,6 +79,9 @@ test('falloff, soft falloff, custom distance, linking and fog', () => {
   assert.ok(linkOk({ link: { backdrop: 'exclude' } }, 'bust') && !linkOk({ link: { backdrop: 'exclude' } }, 'backdrop'));
   assert.ok(linkOk({ link: { bust: 'include' } }, 'bust') && !linkOk({ link: { bust: 'include' } }, 'balls'));
   assert.ok(near(irradiance(base({}), probe, 0.2) / irradiance(base({}), probe), Math.exp(-0.2 * 0.8), 1e-9), 'the fog dims the light on its way');
+  const pv = fogCoeffs({ on: true, shader: 'PRINCIPLED', density: 1, color: [0.5, 0.5, 1], absorption: [0, 1, 0] });
+  assert.deepEqual(pv.sigS, [0.5, 0.5, 1]); assert.deepEqual(pv.sigT, [1, 0.5, 1], 'Absorption Color white lets the light through');
+  assert.deepEqual(fogCoeffs({ on: true, shader: 'SCATTER', density: 0.2, color: [1, 1, 1] }).sigT, [0.2, 0.2, 0.2]);
   const old = JSON.parse(JSON.stringify(defaultState())); delete old.fog; delete old.lights.key.spread; delete old.lights.key.link;
   const up = upgradeState(old);
   assert.ok(up.fog && up.lights.key.spread === 180 && up.lights.key.link, 'work saved before the update gets the new settings');

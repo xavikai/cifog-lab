@@ -2,12 +2,12 @@
 // Elevation, Distance, always aimed at it), measured with a light meter and rendered progressively.
 import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
-import { TARGETS, CAMERA, PROBES, HDRIS, FALSE_COLOR, GOBOS, IES, lightPos, lightDir, lightFrame, apparentSize, measure, ratioLabel, stopsOf, luminance, MIDDLE_GREY, rad, deg, wallGap } from './light.js?v=2';
-import { buildSet, applySet, Rig, World, Progressive, FOG, FOG_BOX } from './scene.js?v=6';
+import { TARGETS, CAMERA, PROBES, HDRIS, FALSE_COLOR, GOBOS, IES, lightPos, lightDir, lightFrame, apparentSize, measure, ratioLabel, stopsOf, luminance, MIDDLE_GREY, rad, deg, wallGap, fogDensity } from './light.js?v=3';
+import { buildSet, applySet, Rig, World, Progressive, FOG, FOG_BOX } from './scene.js?v=7';
 import { parseModel, fitModel } from './models.js?v=2';
-import { STAGES, startState, referenceState, upgradeState, LIGHT_IDS, LIGHT_NAMES } from './stages.js?v=2';
+import { STAGES, startState, referenceState, upgradeState, LIGHT_IDS, LIGHT_NAMES } from './stages.js?v=3';
 import { t, tr, onLangChange, addDictionary } from '../../i18n.js';
-import dictionary from './i18n.js?v=2';
+import dictionary from './i18n.js?v=3';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -132,7 +132,7 @@ function syncScenes() {
   applySet(vSet, s); applySet(rSet, s);
   vRig.sync(s); rRig.sync(s);
   vWorld.sync(s.world, false); rWorld.sync(s.world, true);
-  FOG.value = s.fog?.on ? s.fog.density : 0;
+  FOG.value = fogDensity(s);
   vScene.background = new THREE.Color(0x2b2c2f);
   vr.toneMapping = s.view.transform === 'Standard' ? THREE.NoToneMapping : THREE.AgXToneMapping; vr.toneMappingExposure = Math.pow(2, s.view.exposure);
   prog.reset(); vDirty = true;
@@ -363,10 +363,14 @@ function lightPanel(id, l) {
   return h;
 }
 function fogPanel(f) {
-  return `<div class="panel bl" data-no-i18n><h4>Fog_Volume<small>Material · Volume Scatter</small></h4>
-    <p class="bl-note">Cube around the set · Volume → Volume Scatter</p>
+  const pr = f.shader === 'PRINCIPLED';
+  return `<div class="panel bl" data-no-i18n><h4>Fog_Volume<small>Material · Volume</small></h4>
+    <p class="bl-note">Cube around the set · Material Output › Volume</p>
+    <div class="bl-row stack"><div class="seg small"><button type="button" data-seg="shader" data-val="SCATTER" aria-pressed="${!pr}">Volume Scatter</button><button type="button" data-seg="shader" data-val="PRINCIPLED" aria-pressed="${pr}">Principled Volume</button></div></div>
+    <label class="bl-row"><span>Color</span><input type="color" data-f="color" value="${toHex(f.color || [1, 1, 1])}"><em></em></label>
     <label class="bl-row"><span>Density</span>${num('density', f.density, 0, 3, 0.01)}</label>
-    <label class="bl-row"><span>Anisotropy</span>${num('anisotropy', f.anisotropy, -0.9, 0.9, 0.05)}</label></div>`;
+    <label class="bl-row"><span>Anisotropy</span>${num('anisotropy', f.anisotropy, -0.9, 0.9, 0.05)}</label>
+    ${pr ? `<label class="bl-row"><span>Absorption Color</span><input type="color" data-f="absorption" value="${toHex(f.absorption || [0, 0, 0])}"><em></em></label>` : ''}</div>`;
 }
 function cardPanel(c) {
   return `<div class="panel bl" data-no-i18n><h4>Bounce_Card<small>Foam board · reflector</small></h4>
@@ -402,7 +406,7 @@ $('#props').addEventListener('change', e => {
   const d = e.target.dataset, v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
   if (d.f) {
     const o = objOf(S.st.sel); pushUndo();
-    if (d.f === 'color' && S.st.sel !== 'card') o.color = fromHex(v);
+    if ((d.f === 'color' && S.st.sel !== 'card') || d.f === 'absorption') o[d.f] = fromHex(v);
     else if (e.target.type === 'number') o[d.f] = Math.max(+e.target.min, Math.min(+e.target.max, +v || 0));
     else o[d.f] = v;
     changed(); return;

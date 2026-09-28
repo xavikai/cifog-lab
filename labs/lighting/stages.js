@@ -1,5 +1,5 @@
 // Stages of the Lighting Lab. Every step loads its own lights; checks read the light meter (measure).
-import { measure, apparentSize, lightPos, linkOk, wallGap } from './light.js?v=2';
+import { measure, apparentSize, lightPos, linkOk, wallGap } from './light.js?v=3';
 
 export const LIGHT_IDS = ['key', 'fill', 'rim', 'bg'];
 export const LIGHT_NAMES = { key: 'Key_Light', fill: 'Fill_Light', rim: 'Rim_Light', bg: 'BG_Light', card: 'Bounce_Card' };
@@ -15,7 +15,7 @@ export function defaultState() {
     },
     card: { on: false, color: 'white', size: 1, az: 60, el: -20, dist: 0.7 },
     world: { mode: 'color', color: [0.05, 0.05, 0.05], strength: 1, hdri: 'studio', rot: 0 },
-    fog: { on: false, density: 0.1, anisotropy: 0, color: [1, 1, 1] },
+    fog: { on: false, shader: 'SCATTER', density: 0.1, anisotropy: 0, color: [1, 1, 1], absorption: [0, 0, 0] },
     view: { exposure: 0, transform: 'AgX' },
     backdrop: 'grey',
     sel: 'key',
@@ -320,6 +320,15 @@ export const STAGES = [
         start: { backdrop: 'black', world: { color: [0.005, 0.005, 0.005] }, lights: { key: { type: 'SPOT', gobo: 'blinds', goboRot: 25, spotSize: 34, blend: 0.1, radius: 0.01, az: 60, el: 25, dist: 2.5, power: 700 }, fill: { on: true, type: 'POINT', radius: 0.05, az: -35, el: 10, dist: 1, power: 15 }, rim: { on: false }, bg: { on: false } }, fog: { on: true, density: 0.12, anisotropy: 0.5 } },
         check: s => { const k = s.lights.key, f = s.lights.fill; return s.fog.on && k.on && k.type === 'SPOT' && k.gobo !== 'none' && Math.abs(k.az) >= 110 && (!f.on || f.volume <= 0.05); },
         solve: s => { Object.assign(s.lights.key, { az: 140, el: 30 }); s.lights.fill.volume = 0; },
+      },
+      {
+        id: 'v3', title: 'Coloured fog',
+        text: 'Volume Scatter only scatters light: its fog is as white as the lights. The Principled Volume shader (the one Blender adds by default) separates two things. Color is the colour of the light the fog scatters towards you. Whatever it does not scatter is absorbed, unless Absorption Color lets it through: black absorbs it all (dark smoke), white absorbs nothing. Turn this white haze into a blue night mist that swallows the backdrop but still lets the face read.',
+        how: ['Select <b>Fog_Volume</b> and switch its shader to <b>Principled Volume</b> (in Blender: Material Output › Volume).', 'Give it a blue <b>Color</b> (more blue than red) and raise <b>Density</b> to 0.15–1: the beam turns blue and the backdrop sinks into the mist.', 'Try <b>Absorption Color</b>: black makes a dark, heavy smoke; white a bright, milky fog. Keep the face at −0.5 stops or brighter on the meter.'],
+        why: 'The colour of the air is part of the mood: blue mist for night, warm dust for a desert, grey smoke for a fire. In Cycles the Principled Volume can also glow (Emission, Blackbody) for fire and explosions.',
+        start: { backdrop: 'grey', world: { color: [0.005, 0.005, 0.008] }, lights: { key: { az: -45, el: 30, power: 12, colorMode: 'kelvin', kelvin: 7000 }, fill: { on: false }, bg: { on: false }, rim: { on: true, type: 'SPOT', az: 150, el: 45, dist: 2.2, spotSize: 20, blend: 0.3, radius: 0.03, power: 600, colorMode: 'kelvin', kelvin: 9000 } }, fog: { on: true, shader: 'SCATTER', density: 0.1, anisotropy: 0.5, color: [1, 1, 1] } },
+        check: (s, m) => { const f = s.fog, c = f.color || [1, 1, 1]; return f.on && f.shader === 'PRINCIPLED' && c[2] >= 0.3 && c[2] >= 1.3 * c[0] && f.density >= 0.15 && f.density <= 1 && m.faceStops >= -0.5; },
+        solve: s => { Object.assign(s.fog, { shader: 'PRINCIPLED', color: [0.25, 0.45, 0.9], absorption: [0.2, 0.3, 0.6], density: 0.3 }); },
       },
     ],
   },

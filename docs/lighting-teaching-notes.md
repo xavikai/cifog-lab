@@ -29,7 +29,7 @@ Explanations are in Catalan or Spanish. Blender's interface names (Point, Sun, S
 | Soft Falloff off | a real sphere of radius R, partly below the horizon if needed (Lagarde & de Rousiers 2014); 0 inside the sphere |
 | Custom Distance | × (1 − (d/D)⁴)², 0 beyond D (EEVEE) |
 | Light Linking | 0 on objects the light may not reach (Include / Exclude); the meter knows which probes are on the bust and which on the backdrop |
-| Fog_Volume | × exp(−Density · d) on the way from the light |
+| Fog_Volume | Volume Scatter: scattering = extinction = Density · Color. Principled Volume: scattering = Density · Color, absorption = Density · (1 − Color) · (1 − Absorption Color). The meter dims light by exp(−σ · d) with σ the luminance of the extinction; the render does it per colour channel |
 
 - A diffuse surface of albedo ρ has the scene-linear value ρ · E / π. The meter shows it in stops from middle grey (0.18), after the Exposure.
 - **Bounce card**: it receives E and becomes an area light of power ρ · E · A, with the colour of the card.
@@ -83,6 +83,7 @@ Explanations are in Catalan or Spanish. Blender's interface names (Point, Sun, S
 | c1 Custom Distance | Candle with Custom Distance | Custom Distance on, backdrop ≤ 1% of the candle's light on the face, face +1 |
 | v1 Light you can see | Fog_Volume on, Density, Anisotropy | fog on, Density 0.03–0.5, Anisotropy ≥ 0.3 |
 | v2 Shafts through the blinds | Gobo spot behind the bust, fill Volume Scatter 0 | fog on, gobo spot with Azimuth ≥ 110° (either side), fill off or Volume Scatter ≤ 0.05 |
+| v3 Coloured fog | Principled Volume, blue Color, Density, Absorption Color | Principled, Color blue ≥ 1.3 × red, Density 0.15–1, face ≥ −0.5 stops |
 
 Every step has a solution button. The tests check that each step starts unsolved and that its solution solves it.
 
@@ -97,4 +98,4 @@ Every step has a solution button. The tests check that each step starts unsolved
 - **i1**: open a real .ies file from a manufacturer afterwards in Blender and compare the scallop.
 - **l1, f1 and c1**: they are cheats (non-physical). Ask what the honest alternative is each time: a flag, moving the light away, a smaller lamp.
 - **f2**: a detail of Blender 4.x that surprises students with practical lamps near walls.
-- **v1 and v2**: compare Anisotropy 0 and 0.6 with a backlight; then turn the fill's Volume Scatter on and off. In the Stage Lighting Lab, the same haze reveals the beams of a rig.
+- **v1 and v2**: compare Anisotropy 0 and 0.6 with a backlight; then turn the fill's Volume Scatter on and off. In v3, compare Absorption Color black and white with the same Color. In the Stage Lighting Lab, the same haze reveals the beams of a rig.

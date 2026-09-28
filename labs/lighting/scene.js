@@ -1,6 +1,6 @@
 // Lighting Lab: the set (bust, balls, backdrop), the lights and the progressive renderer.
 import * as THREE from 'three';
-import { HEAD, BACKDROP_Z, BACKDROPS, CARD_COLORS, ALBEDO, TARGETS, lightPos, lightDir, lightColor, lightFrame, allLights, makeHdri, FALSE_COLOR, rad, cookieOf, linkOk, FALLOFF_EXP, IES } from './light.js?v=2';
+import { HEAD, BACKDROP_Z, BACKDROPS, CARD_COLORS, ALBEDO, TARGETS, lightPos, lightDir, lightColor, lightFrame, allLights, makeHdri, FALSE_COLOR, rad, fogCoeffs, cookieOf, linkOk, FALLOFF_EXP, IES } from './light.js?v=3';
 
 // ─── Blender's falloff options inside three.js lights ─────────────────────────
 // three.js gives every point and spot light a decay exponent. The lab packs more into it:
@@ -323,7 +323,8 @@ export class World {
 // Fog_Volume is a cube around the set with a Volume Scatter shader (Density, Anisotropy). After every
 // sample, a pass marches along each camera ray through the fog: the surface behind is dimmed by
 // exp(−Density · distance), and every step adds the light that the fog scatters towards the camera
-// (Henyey–Greenstein phase with the Anisotropy). The lights are the same three.js lights, at the same
+// (Henyey–Greenstein phase with the Anisotropy). Scattering and extinction are per colour channel, so a
+// Principled Volume can tint the beam and absorb light (see fogCoeffs). The lights are the same three.js lights, at the same
 // jittered positions, with their cones, cookies (gobos, IES, Spread), falloff and Custom Distance; the
 // bust, the pedestal and the stand of the balls cast their shadows into the fog as simple shapes.
 export const FOG_BOX = { min: [-3, 0, BACKDROP_Z], max: [3, 3.4, 2.8] };
@@ -332,7 +333,7 @@ const VOLUME_FS = `
 #define NL ${NL}
 uniform sampler2D tColor, tDepth;
 uniform mat4 projInv, camWorld; uniform vec3 camPos;
-uniform float density, g, seed; uniform vec3 fogColor, boxMin, boxMax;
+uniform float g, seed; uniform vec3 sigS, sigT, boxMin, boxMax;
 uniform int nL;
 uniform vec3 lPos[NL], lAxis[NL], lCol[NL];
 uniform vec4 lPar[NL];
@@ -365,7 +366,7 @@ float atten(float dl, float code, float cut) {
   if (sphere) f = dl < r ? 0.0 : 1.0 / max(pow(dl, e), 0.01);
   else f = 1.0 / max(pow(dl, e) + (e > 1.5 ? r * r : 0.0), 0.01);
   if (cut > 0.0) { float q = clamp(1.0 - pow(dl / cut, 4.0), 0.0, 1.0); f *= q * q; }
-  return f * exp(-density * dl);
+  return f;
 }
 float phaseHG(float c) { float g2 = g * g; return (1.0 - g2) / (12.566371 * pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5)); }
 void main() {
@@ -399,16 +400,16 @@ void main() {
         }
       }
       if (a <= 0.0 || blocked(x, toL, dl)) continue;
-      S += lCol[i] * a * phaseHG(dot(wi, -rd));
+      S += lCol[i] * a * phaseHG(dot(wi, -rd)) * (P.x > 1.5 ? vec3(1.0) : exp(-sigT * dl));
     }
-    L += exp(-density * (t - tin)) * density * S * dt;
+    L += exp(-sigT * (t - tin)) * sigS * S * dt;
   }
-  gl_FragColor = vec4(col * exp(-density * (tEnd - tin)) + L * fogColor, 1.0);
+  gl_FragColor = vec4(col * exp(-sigT * (tEnd - tin)) + L, 1.0);
 }`;
 export class Volume {
   constructor() {
     const u = { tColor: { value: null }, tDepth: { value: null }, projInv: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() }, camPos: { value: new THREE.Vector3() },
-      density: { value: 0 }, g: { value: 0 }, seed: { value: 0 }, fogColor: { value: new THREE.Color(1, 1, 1) }, boxMin: { value: new THREE.Vector3(...FOG_BOX.min) }, boxMax: { value: new THREE.Vector3(...FOG_BOX.max) },
+      sigS: { value: new THREE.Vector3() }, sigT: { value: new THREE.Vector3() }, g: { value: 0 }, seed: { value: 0 }, boxMin: { value: new THREE.Vector3(...FOG_BOX.min) }, boxMax: { value: new THREE.Vector3(...FOG_BOX.max) },
       nL: { value: 0 }, lPos: { value: [] }, lAxis: { value: [] }, lCol: { value: [] }, lPar: { value: [] }, lCut: { value: [] }, lMapOn: { value: [] }, lMat: { value: [] } };
     for (let i = 0; i < NL; i++) { u.lPos.value.push(new THREE.Vector3()); u.lAxis.value.push(new THREE.Vector3()); u.lCol.value.push(new THREE.Vector3()); u.lPar.value.push(new THREE.Vector4()); u.lCut.value.push(0); u.lMapOn.value.push(0); u.lMat.value.push(new THREE.Matrix4()); u['m' + i] = { value: null }; }
     this.mat = new THREE.ShaderMaterial({ uniforms: u, vertexShader: QUAD_VS, fragmentShader: VOLUME_FS, depthTest: false });
@@ -416,7 +417,7 @@ export class Volume {
   }
   setup(fog, camera, rig, sampleIndex) {
     const u = this.mat.uniforms;
-    u.density.value = fog.density; u.g.value = Math.max(-0.95, Math.min(0.95, fog.anisotropy)); u.seed.value = (sampleIndex * 0.618034) % 1;
+    const k = fogCoeffs(fog); u.sigS.value.set(...k.sigS); u.sigT.value.set(...k.sigT); u.g.value = Math.max(-0.95, Math.min(0.95, fog.anisotropy)); u.seed.value = (sampleIndex * 0.618034) % 1;
     u.projInv.value.copy(camera.projectionMatrixInverse); u.camWorld.value.copy(camera.matrixWorld); u.camPos.value.setFromMatrixPosition(camera.matrixWorld);
     let n = 0;
     rig.items.forEach(it => {

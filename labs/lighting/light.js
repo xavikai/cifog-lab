@@ -271,7 +271,18 @@ export function cardAsLight(card, lights, fog = 0) {
   const refl = [E[0] * col[0], E[1] * col[1], E[2] * col[2]], y = luminance(refl), A = card.size * card.size;
   return { on: card.on && y > 0, type: 'AREA', shape: 'SQUARE', size: card.size, power: y * A, colorMode: 'rgb', color: y > 0 ? refl.map(v => v / y) : [1, 1, 1], az: card.az, el: card.el, dist: card.dist, target: 'head', shadow: true, card: true };
 }
-export const fogDensity = state => (state.fog?.on ? state.fog.density : 0);
+// The fog volume's shader, as Cycles does it. Volume Scatter: scattering = extinction = Density · Color.
+// Principled Volume: scattering = Density · Color, absorption = Density · (1 − Color) · (1 − Absorption Color),
+// extinction = scattering + absorption (per channel). A white Color never absorbs; a black one only absorbs.
+export function fogCoeffs(fog) {
+  if (!fog?.on) return { sigS: [0, 0, 0], sigT: [0, 0, 0] };
+  const d = fog.density, c = fog.color || [1, 1, 1];
+  if (fog.shader !== 'PRINCIPLED') { const s = c.map(v => d * v); return { sigS: s, sigT: s }; }
+  const a = fog.absorption || [0, 0, 0], sigS = c.map(v => d * v);
+  return { sigS, sigT: c.map((v, k) => d * (v + Math.max(0, 1 - v) * Math.max(0, 1 - a[k]))) };
+}
+// One number for the light meter: how fast the fog dims light (the luminance of the extinction).
+export const fogDensity = state => luminance(fogCoeffs(state.fog).sigT);
 export function allLights(state) {
   const ls = Object.values(state.lights);
   return state.card?.on ? [...ls, cardAsLight(state.card, ls, fogDensity(state))] : ls;
