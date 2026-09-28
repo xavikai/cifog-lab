@@ -110,7 +110,8 @@ function ctrlShape(bone) {
     const P = [], r = 0.84, a0 = Math.PI * 0.62, a1 = Math.PI * 2.38, n = 48;
     for (let i = 0; i < n; i++) { const a = a0 + (a1 - a0) * i / n, b = a0 + (a1 - a0) * (i + 1) / n; P.push(Math.cos(a) * r, Math.sin(a) * r, 0, Math.cos(b) * r, Math.sin(b) * r, 0); }
     const e = [Math.cos(a0) * r, Math.sin(a0) * r]; // the arrow head points clockwise (rolling forwards)
-    P.push(...e, 0, e[0] - 0.02, e[1] + 0.2, 0, ...e, 0, e[0] + 0.19, e[1] + 0.06, 0);
+    const dx = Math.sin(a0), dy = -Math.cos(a0); // clockwise tangent at the tip
+    for (const s of [0.5, -0.5]) { const bx = -(dx * Math.cos(s) - dy * Math.sin(s)) * 0.2, by = -(dx * Math.sin(s) + dy * Math.cos(s)) * 0.2; P.push(...e, 0, e[0] + bx, e[1] + by, 0); }
     g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
   } else {
     const s = new THREE.Shape(), d = bone === 'SS_Top' ? 1 : -1;
