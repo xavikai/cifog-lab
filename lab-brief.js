@@ -6,7 +6,41 @@ const TXT = {
   hide: { en: 'Fold the explanation', ca: "Plega l'explicació", es: 'Pliega la explicación' },
   show: { en: 'Show the explanation', ca: "Mostra l'explicació", es: 'Muestra la explicación' },
 };
+TXT.reset = { en: 'Restart the lab', ca: 'Reinicia el lab', es: 'Reinicia el lab' };
+TXT.sure = { en: 'Sure? Click again: all progress is erased', ca: 'Segur? Torna a clicar: s\'esborra tot el progrés', es: '¿Seguro? Vuelve a hacer clic: se borra todo el progreso' };
+TXT.resetTitle = { en: 'Erase the steps done and the work saved in this browser, and start the lab from the beginning', ca: 'Esborra els passos fets i la feina guardada en aquest navegador i torna a començar el lab', es: 'Borra los pasos hechos y el trabajo guardado en este navegador y vuelve a empezar el lab' };
 const say = k => TXT[k][getLang()] || TXT[k].en;
+// Where each lab keeps its progress in this browser.
+const PREFIX = { animation: 'cifog-anim:', baking: 'cifog-bake:', 'color-type': 'cifog-colortype:', csharp: 'cifog-csharp:', 'csharp-objects': 'cifog-csharp:objects:', editmode: 'cifog-editmode:', grading: 'cifog-grade:', lighting: 'cifog-light:', lightmaps: 'cifog-lm:', lod: 'cifog-lod:', materials: 'cifog-mat:', photo: 'cifog-photo:', rig: 'cifog-rig:', 'skin-weights': 'cifog-skin:', 'stage-lighting': 'cifog-stagelx:', stage: 'cifog-stage:', 'texel-density': 'cifog-td:', tileable: 'cifog-tile:', topology: 'cifog-topo:', 'trim-sheet': 'cifog-trim:', viewport: 'cifog-viewport:' };
+const labId = (location.pathname.match(/labs\/([^/]+)/) || [])[1];
+export function resetLab(id = labId) {
+  const p = PREFIX[id]; if (!p) return 0;
+  let n = 0;
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (!k.startsWith(p)) continue;
+      if (id === 'csharp' && k.startsWith(PREFIX['csharp-objects'])) continue; // Code Lab 02 keeps its own progress
+      localStorage.removeItem(k); n++;
+    }
+  } catch { /* storage unavailable */ }
+  return n;
+}
+// A "Restart the lab" button in the page header. The first click asks, the second one erases and reloads.
+function setupReset() {
+  if (!PREFIX[labId]) return;
+  const header = document.querySelector('.site-header') || document.querySelector('.header-actions'); if (!header || header.querySelector('.lab-reset')) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'lab-reset'; b.dataset.noI18n = '';
+  let armed = null;
+  const render = () => { b.classList.toggle('armed', !!armed); b.innerHTML = `<span aria-hidden="true">↺</span> ${say(armed ? 'sure' : 'reset')}`; b.title = say('resetTitle'); };
+  b.addEventListener('click', () => {
+    if (!armed) { armed = setTimeout(() => { armed = null; render(); }, 4000); render(); return; }
+    clearTimeout(armed); resetLab(); location.reload();
+  });
+  const home = header.querySelector('.home-link');
+  if (home) header.insertBefore(b, home); else header.prepend(b);
+  onLangChange(render); render();
+}
 const KEY = 'cifog-brief-folded';
 
 export function setupBrief() {
@@ -25,3 +59,4 @@ export function setupBrief() {
   render();
 }
 setupBrief();
+setupReset();
