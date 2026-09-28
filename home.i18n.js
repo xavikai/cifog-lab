@@ -127,4 +127,7 @@ export default {
   "OFFSET · REPEAT · UV": { ca: "OFFSET · REPETICIÓ · UV", es: "OFFSET · REPETICIÓN · UV" },
   "5 labs": { ca: "5 labs", es: "5 labs" },
   "Open Tileable Texture Lab": { ca: "Obre el Tileable Texture Lab", es: "Abre el Tileable Texture Lab" },
+  'C# for Unity: from the first loop to objects and an Update loop, and models that arrive in Unity ready to use.': { ca: 'C# per a Unity: del primer bucle als objectes i a un bucle Update, i models que arriben a Unity a punt per fer servir.', es: 'C# para Unity: del primer bucle a los objetos y a un bucle Update, y modelos que llegan a Unity listos para usar.' },
+  'Blender and Unity side by side: fix the FBX export options and Unity\'s import settings until a model arrives standing up, at real size, with its pivot in place, its textures, a clean skeleton, looping clips and custom colliders.': { ca: 'Blender i Unity de costat: arregla les opcions d\'exportació FBX i la configuració d\'importació d\'Unity fins que un model arribi dret, a mida real, amb el pivot al seu lloc, les textures, un esquelet net, clips en bucle i colliders personalitzats.', es: 'Blender y Unity lado a lado: arregla las opciones de exportación FBX y la configuración de importación de Unity hasta que un modelo llegue de pie, a tamaño real, con el pivote en su sitio, las texturas, un esqueleto limpio, clips en bucle y colliders personalizados.' },
+  'FBX · axes · pivot · rig · colliders': { ca: 'FBX · eixos · pivot · rig · colliders', es: 'FBX · ejes · pivote · rig · colliders' },
 };

@@ -22,3 +22,4 @@
 .below.brief.folded .step-actions{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-end;min-width:0}
 @media(max-width:900px){.below.brief.folded .step-card{grid-template-columns:1fr}.below.brief.folded .step-actions{justify-content:flex-start}}
 .header-actions .lab-reset{margin-left:0}
+@media(max-width:520px){.site-header{gap:10px}.site-header .home-link,.site-header .header-rule{display:none}.lab-reset{font-size:0;gap:0;padding:6px 9px}.lab-reset span{font-size:1rem}}
