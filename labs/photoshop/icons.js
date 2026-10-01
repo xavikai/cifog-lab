@@ -41,3 +41,34 @@ const paths = {
 export function icon(name, className = '') {
   return `<svg class="ps-icon ${className}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name] || paths.shape}</svg>`;
 }
+
+// The supplied classroom screenshots are used as the source for the actual
+// Photoshop toolbar glyphs. CSS crops each glyph in place without redrawing it.
+const toolbarRows = {
+  move: 38, selectionBrush: 100, object: 133, quick: 100,
+  crop: 165, frame: 198, eyedropper: 231, heal: 264, brush: 296,
+  stamp: 329, history: 361, eraser: 394, gradient: 427,
+  blur: 460, smudge: 493, dodge: 526, pen: 558, text: 591,
+  path: 624, shape: 656, hand: 688, zoom: 720, more: 752,
+};
+const marqueeRows = { rect: 32, ellipse: 57, row: 82, column: 107 };
+const lassoRows = { lasso: 124, polygon: 148, magnetic: 172 };
+const selectionRows = { object: 168, quick: 192, wand: 216 };
+export function toolbarIcon(name) {
+  let source = 'toolbar', x = 10, y = toolbarRows[name];
+  if (name in marqueeRows) { source = 'marquee'; x = 70; y = marqueeRows[name]; }
+  if (name in lassoRows) { source = 'lasso'; x = 70; y = lassoRows[name]; }
+  if (name in selectionRows) { source = 'selection'; x = 70; y = selectionRows[name]; }
+  if (y === undefined) return icon(name);
+  return `<span class="ps-tool-bitmap ps-tool-bitmap--${source}" style="background-position:-${x}px -${y}px" aria-hidden="true"></span>`;
+}
+const optionSlots = { home: [23, 39], new: [463, 40], add: [495, 40], subtract: [527, 40], intersect: [559, 40] };
+const layerSlots = { eye: [35, 171], lock: [402, 171], link: [204, 357], fx: [239, 357], mask: [272, 357], adjust: [306, 357], folder: [340, 357], layer: [373, 357], trash: [407, 357] };
+export function optionIcon(name) {
+  const [x, y] = optionSlots[name];
+  return `<span class="ps-tool-bitmap ps-tool-bitmap--options" style="background-position:-${x}px -${y}px" aria-hidden="true"></span>`;
+}
+export function layerIcon(name) {
+  const [x, y] = layerSlots[name];
+  return `<span class="ps-tool-bitmap ps-tool-bitmap--layers" style="background-position:-${x}px -${y}px" aria-hidden="true"></span>`;
+}

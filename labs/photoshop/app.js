@@ -1,7 +1,7 @@
 import { W, H, SHAPES, blank, brush, combine, polygonHas, raster, shapeMask, solved, startingState } from './core.js?v=2';
 import { addDictionary, onLangChange, t } from '../../i18n.js';
 import dictionary from './i18n.js?v=2';
-import { icon } from './icons.js?v=1';
+import { toolbarIcon, optionIcon, layerIcon } from './icons.js?v=4';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -22,17 +22,17 @@ const STAGES = [
 ];
 const ALL = STAGES.flatMap(s => s.steps);
 const stepById = id => ALL.find(s => s.id === id);
-const TOOL = { rect: 'Herramienta Marco rectangular', ellipse: 'Herramienta Marco elíptico', row: 'Herramienta Marco fila única', column: 'Herramienta Marco columna única', lasso: 'Herramienta Lazo', object: 'Herramienta Selección de objetos', quick: 'Herramienta Selección rápida', brush: 'Herramienta Pincel' };
-const GROUPS = { marquee: ['rect', 'ellipse', 'row', 'column'], selection: ['object', 'quick'] };
-const GHOSTS = { before: ['move'], middle: ['crop', 'frame', 'eyedropper', 'heal'], afterBrush: ['stamp', 'history', 'eraser', 'gradient', 'blur', 'dodge', 'pen', 'text', 'path', 'shape', 'hand', 'zoom', 'more'] };
+const TOOL = { rect: 'Herramienta Marco rectangular', ellipse: 'Herramienta Marco elíptico', row: 'Herramienta Marco fila única', column: 'Herramienta Marco columna única', selectionBrush: 'Pincel de selección', lasso: 'Herramienta Lazo', polygon: 'Herramienta Lazo poligonal', magnetic: 'Herramienta Lazo magnético', object: 'Herramienta Selección de objetos', quick: 'Herramienta Selección rápida', wand: 'Herramienta Varita mágica', brush: 'Herramienta Pincel' };
+const GROUPS = { marquee: ['rect', 'ellipse', 'row', 'column'], lasso: ['selectionBrush', 'lasso', 'polygon', 'magnetic'], selection: ['object', 'quick', 'wand'] };
+const GHOSTS = { before: ['move'], middle: ['crop', 'frame', 'eyedropper', 'heal'], afterBrush: ['stamp', 'history', 'eraser', 'gradient', 'blur', 'smudge', 'dodge', 'pen', 'text', 'path', 'shape', 'hand', 'zoom', 'more'] };
 const store = {
   get(k, fallback) { try { const v = localStorage.getItem('cifog-ps:' + k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
   set(k, v) { try { localStorage.setItem('cifog-ps:' + k, JSON.stringify(v)); } catch { /* unavailable */ } },
 };
 let done = store.get('done', {});
 let currentId = stepById(store.get('step', 's_rect')) ? store.get('step', 's_rect') : 's_rect';
-let state, undo = [], drag = null, theme = 'peach', feedback = '', feedbackGood = false, statusMessage = '', openGroup = null;
-const groupCurrent = { marquee: 'rect', selection: 'object' };
+let state, undo = [], drag = null, polygonPoints = null, polygonHover = null, theme = 'peach', feedback = '', feedbackGood = false, statusMessage = '', openGroup = null;
+const groupCurrent = { marquee: 'rect', lasso: 'selectionBrush', selection: 'object' };
 const scene = document.createElement('canvas'); scene.width = W; scene.height = H;
 const sceneCtx = scene.getContext('2d');
 const display = $('#canvas'), ctx = display.getContext('2d');
@@ -121,12 +121,15 @@ function draw() {
     ctx.drawImage(maskedScene, 0, 0);
   } else ctx.drawImage(scene, 0, 0);
   if (!state.viewMask) drawSelection(state.selection);
-  if (drag && ['rect', 'ellipse', 'lasso'].includes(drag.kind)) {
+  if (drag && ['rect', 'ellipse', 'lasso', 'magnetic'].includes(drag.kind)) {
     ctx.save(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
     if (drag.kind === 'rect') ctx.strokeRect(drag.x, drag.y, drag.to.x - drag.x, drag.to.y - drag.y);
     else if (drag.kind === 'ellipse') { ctx.beginPath(); ctx.ellipse((drag.x + drag.to.x) / 2, (drag.y + drag.to.y) / 2, Math.abs(drag.to.x - drag.x) / 2 || 1, Math.abs(drag.to.y - drag.y) / 2 || 1, 0, 0, Math.PI * 2); ctx.stroke(); }
     else { ctx.beginPath(); drag.points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); }
     ctx.restore();
+  }
+  if (polygonPoints?.length) {
+    ctx.save(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath(); polygonPoints.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); if (polygonHover) ctx.lineTo(polygonHover.x, polygonHover.y); ctx.stroke(); ctx.restore();
   }
 }
 
@@ -137,7 +140,7 @@ function setStep(id) {
   currentId = id; store.set('step', id); state = { ...startingState(id), maskCreated: false, maskPainted: false, maskViewed: false, viewMask: false, activeThumb: id.startsWith('m_') && id !== 'm_create' ? 'mask' : 'image', foreground: 0, brushRadius: 22 };
   for (const [group, members] of Object.entries(GROUPS)) if (members.includes(state.tool)) groupCurrent[group] = state.tool;
   openGroup = null;
-  undo = []; drag = null; feedback = ''; statusMessage = ''; render();
+  undo = []; drag = null; polygonPoints = null; polygonHover = null; feedback = ''; statusMessage = ''; render();
 }
 function snapshot() {
   undo.push({ ...state, selection: state.selection.slice(), mask: state.mask?.slice() || null });
@@ -145,7 +148,7 @@ function snapshot() {
 }
 function undoStep() { if (!undo.length) return say('Nothing to undo yet.'); state = undo.pop(); render(); say('Undone.'); }
 function makeSelection(part, mode = state.mode) { state.selection = combine(state.selection, part, mode); render(); }
-function toolChange(tool) { state.tool = tool; for (const [group, members] of Object.entries(GROUPS)) if (members.includes(tool)) groupCurrent[group] = tool; openGroup = null; if (tool === 'brush' && !state.mask) say('Add a layer mask before painting it.'); render(); }
+function toolChange(tool) { state.tool = tool; for (const [group, members] of Object.entries(GROUPS)) if (members.includes(tool)) groupCurrent[group] = tool; openGroup = null; polygonPoints = null; polygonHover = null; if (tool === 'brush' && !state.mask) say('Add a layer mask before painting it.'); render(); }
 function selectObjectAt(x, y, mode) {
   const shape = ['mug', 'plate', 'card', 'pennant'].find(k => SHAPES[k](x, y));
   if (!shape) return say('Click inside one of the visible objects.');
@@ -165,6 +168,16 @@ function paintAt(x, y) {
   if (state.activeThumb !== 'mask') return say('Click the mask thumbnail in Capas before painting.');
   state.mask = brush(state.mask, x, y, state.brushRadius, state.foreground); state.maskPainted = true; draw();
 }
+function selectionBrushAt(x, y) {
+  drag.stroke = brush(drag.stroke, x, y, Math.max(8, state.brushRadius / 2), 255);
+  state.selection = combine(drag.base, drag.stroke, drag.mode);
+  draw();
+}
+function finishPolygon() {
+  if (!polygonPoints || polygonPoints.length < 3) return;
+  const points = polygonPoints; polygonPoints = null; polygonHover = null;
+  snapshot(); makeSelection(raster((x, y) => polygonHas(points, x, y)));
+}
 function pos(e) {
   const r = display.getBoundingClientRect();
   return { x: Math.max(0, Math.min(W - 1, (e.clientX - r.left) * W / r.width)), y: Math.max(0, Math.min(H - 1, (e.clientY - r.top) * H / r.height)) };
@@ -172,14 +185,17 @@ function pos(e) {
 display.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   const p = pos(e); display.setPointerCapture(e.pointerId);
-  if (state.tool === 'object') { selectObjectAt(p.x, p.y, e.altKey ? 'subtract' : state.mode); return; }
+  if (state.tool === 'object' || state.tool === 'wand') { selectObjectAt(p.x, p.y, e.altKey ? 'subtract' : state.mode); return; }
   if (state.tool === 'row' || state.tool === 'column') { const line = state.tool === 'row' ? Math.floor(p.y) : Math.floor(p.x); snapshot(); makeSelection(raster((x, y) => state.tool === 'row' ? y === line : x === line), e.altKey ? 'subtract' : state.mode); return; }
+  if (state.tool === 'polygon') { if (!polygonPoints) polygonPoints = []; if (e.detail >= 2 && polygonPoints.length >= 2) finishPolygon(); else { polygonPoints.push(p); polygonHover = p; draw(); } return; }
+  if (state.tool === 'selectionBrush') { snapshot(); drag = { kind: 'selectionBrush', base: state.selection.slice(), stroke: blank(), mode: e.altKey ? 'subtract' : state.mode }; selectionBrushAt(p.x, p.y); return; }
   if (state.tool === 'quick') { drag = { kind: 'quick', seen: new Set(), mode: e.altKey ? 'subtract' : state.mode }; quickAt(p.x, p.y); return; }
   if (state.tool === 'brush') { if (!state.mask || state.activeThumb !== 'mask') { paintAt(p.x, p.y); return; } snapshot(); drag = { kind: 'brush', last: p }; paintAt(p.x, p.y); return; }
   drag = { kind: state.tool, x: p.x, y: p.y, to: p, points: [p] }; draw();
 });
 display.addEventListener('pointermove', e => {
-  if (!drag) return; const p = pos(e);
+  if (!drag) { if (polygonPoints) { polygonHover = pos(e); draw(); } return; } const p = pos(e);
+  if (drag.kind === 'selectionBrush') { selectionBrushAt(p.x, p.y); return; }
   if (drag.kind === 'quick') { quickAt(p.x, p.y); return; }
   if (drag.kind === 'brush') {
     const from = drag.last, n = Math.max(1, Math.ceil(Math.hypot(p.x - from.x, p.y - from.y) / Math.max(2, state.brushRadius / 3)));
@@ -187,12 +203,12 @@ display.addEventListener('pointermove', e => {
     drag.last = p; return;
   }
   drag.to = p;
-  if (drag.kind === 'lasso' && Math.hypot(p.x - drag.points.at(-1).x, p.y - drag.points.at(-1).y) > 3) drag.points.push(p);
+  if (['lasso', 'magnetic'].includes(drag.kind) && Math.hypot(p.x - drag.points.at(-1).x, p.y - drag.points.at(-1).y) > 3) drag.points.push(p);
   draw();
 });
 function endDrag(e) {
   if (!drag) return; const d = drag; drag = null;
-  if (d.kind === 'brush' || d.kind === 'quick') { render(); return; }
+  if (d.kind === 'brush' || d.kind === 'quick' || d.kind === 'selectionBrush') { render(); return; }
   const p = pos(e); let part;
   if (d.kind === 'rect') part = raster((x, y) => x >= Math.min(d.x, p.x) && x <= Math.max(d.x, p.x) && y >= Math.min(d.y, p.y) && y <= Math.max(d.y, p.y));
   else if (d.kind === 'ellipse') { const cx = (d.x + p.x) / 2, cy = (d.y + p.y) / 2, rx = Math.abs(d.x - p.x) / 2, ry = Math.abs(d.y - p.y) / 2; if (rx < 2 || ry < 2) return draw(); part = raster((x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1); }
@@ -240,16 +256,17 @@ function renderCard() {
   $('#step-card').innerHTML = `<div><span class="step-tag">${t(currentStage().name)} · ${currentStage().steps.indexOf(s) + 1}/${currentStage().steps.length}</span><h3>${t(s.title)}</h3><p>${t(s.aim)}</p><ol>${s.how.map(h => `<li>${t(h)}</li>`).join('')}</ol><p class="step-feedback ${feedbackGood ? 'good' : ''}" role="status">${feedback ? t(feedback) : ''}</p></div><div class="step-actions"><button type="button" data-act="prev" ${n === 0 ? 'disabled' : ''}>${t('Previous')}</button><button type="button" data-act="reset">${t('Reset step')}</button><button type="button" data-act="hint">${t('Hint')}</button><button type="button" data-act="solution">${t('Show a solution')}</button><button type="button" class="primary" data-act="check">${t('Check')}</button><button type="button" class="next" data-act="next" ${n === ALL.length - 1 ? 'disabled' : ''}>${t('Next step')} →</button></div>`;
 }
 function renderToolbar() {
-  const ghost = name => `<span class="ps-tool-ghost" aria-hidden="true">${icon(name)}</span>`;
-  const plain = name => `<button type="button" class="ps-tool" data-tool="${name}" title="${TOOL[name]}" aria-label="${TOOL[name]}" aria-pressed="${state.tool === name}">${icon(name)}<span class="ps-tool-corner" aria-hidden="true"></span></button>`;
+  const ghost = name => `<span class="ps-tool-ghost" aria-hidden="true">${toolbarIcon(name)}</span>`;
+  const plain = name => `<button type="button" class="ps-tool" data-tool="${name}" title="${TOOL[name]}" aria-label="${TOOL[name]}" aria-pressed="${state.tool === name}">${toolbarIcon(name)}<span class="ps-tool-corner" aria-hidden="true"></span></button>`;
   const group = name => {
     const selected = groupCurrent[name], members = GROUPS[name], active = members.includes(state.tool);
-    return `<div class="ps-tool-group"><button type="button" class="ps-tool" data-tool="${selected}" title="${TOOL[selected]}" aria-label="${TOOL[selected]}" aria-pressed="${active}">${icon(selected)}</button><button type="button" class="ps-group-caret" data-group-toggle="${name}" aria-label="Mostrar herramientas de ${name === 'marquee' ? 'Marco' : 'selección'}" aria-expanded="${openGroup === name}"></button>${openGroup === name ? `<div class="ps-tool-flyout" role="menu">${members.map(k => `<button type="button" data-tool="${k}" role="menuitemradio" aria-checked="${state.tool === k}">${icon(k)}<span>${TOOL[k]}</span>${['rect', 'ellipse'].includes(k) ? '<kbd>M</kbd>' : ''}</button>`).join('')}</div>` : ''}</div>`;
+    const title = name === 'marquee' ? 'Marco' : name === 'lasso' ? 'Lazo' : 'selección';
+    return `<div class="ps-tool-group"><button type="button" class="ps-tool" data-tool="${selected}" title="${TOOL[selected]}" aria-label="${TOOL[selected]}" aria-pressed="${active}">${toolbarIcon(selected)}</button><button type="button" class="ps-group-caret" data-group-toggle="${name}" aria-label="Mostrar herramientas de ${title}" aria-expanded="${openGroup === name}"></button>${openGroup === name ? `<div class="ps-tool-flyout" role="menu">${members.map(k => `<button type="button" data-tool="${k}" role="menuitemradio" aria-checked="${state.tool === k}">${toolbarIcon(k)}<span>${TOOL[k]}</span>${['rect', 'ellipse'].includes(k) ? '<kbd>M</kbd>' : name === 'lasso' ? '<kbd>L</kbd>' : name === 'selection' ? '<kbd>W</kbd>' : ''}</button>`).join('')}</div>` : ''}</div>`;
   };
-  $('#toolbar').innerHTML = GHOSTS.before.map(ghost).join('') + group('marquee') + plain('lasso') + group('selection') + GHOSTS.middle.map(ghost).join('') + plain('brush') + GHOSTS.afterBrush.map(ghost).join('') + `<button type="button" id="swap-color" class="ps-swatch-control" title="Intercambiar negro y blanco (X)" aria-label="Intercambiar negro y blanco"><span class="ps-swatch-back" style="background:${state.foreground ? '#111' : '#fff'}"></span><span class="ps-swatch-front" style="background:${state.foreground ? '#fff' : '#111'}"></span></button>`;
+  $('#toolbar').innerHTML = GHOSTS.before.map(ghost).join('') + group('marquee') + group('lasso') + group('selection') + GHOSTS.middle.map(ghost).join('') + plain('brush') + GHOSTS.afterBrush.map(ghost).join('') + `<button type="button" id="swap-color" class="ps-swatch-control" title="Intercambiar negro y blanco (X)" aria-label="Intercambiar negro y blanco"><span class="ps-swatch-back" style="background:${state.foreground ? '#111' : '#fff'}"></span><span class="ps-swatch-front" style="background:${state.foreground ? '#fff' : '#111'}"></span></button>`;
   $('#tool-name').textContent = TOOL[state.tool];
-  $('#current-tool-icon').innerHTML = icon(state.tool);
-  $('#selection-modes').innerHTML = [['new','Selección nueva'],['add','Añadir a la selección'],['subtract','Restar de la selección'],['intersect','Formar intersección con la selección']].map(([mode,label]) => `<button type="button" data-mode="${mode}" title="${label}" aria-label="${label}" aria-pressed="${state.mode === mode}">${icon(mode)}</button>`).join('');
+  $('#current-tool-icon').innerHTML = toolbarIcon(state.tool);
+  $('#selection-modes').innerHTML = [['new','Selección nueva'],['add','Añadir a la selección'],['subtract','Restar de la selección'],['intersect','Formar intersección con la selección']].map(([mode,label]) => `<button type="button" data-mode="${mode}" title="${label}" aria-label="${label}" aria-pressed="${state.mode === mode}">${optionIcon(mode)}</button>`).join('');
   $('#selection-modes').hidden = state.tool === 'brush';
   $('#feather-field').hidden = state.tool === 'brush'; $('#smooth-field').hidden = state.tool === 'brush'; $('#style-field').hidden = state.tool === 'brush';
   $('#brush-size-field').hidden = state.tool !== 'brush'; $('#brush-size').value = state.brushRadius; $('#brush-size-value').textContent = `${state.brushRadius} px`;
@@ -284,7 +301,7 @@ $('#step-card').addEventListener('click', e => {
 });
 $('#toolbar').addEventListener('click', e => { const toggle = e.target.closest('[data-group-toggle]'); if (toggle) { openGroup = openGroup === toggle.dataset.groupToggle ? null : toggle.dataset.groupToggle; renderToolbar(); return; } const b = e.target.closest('[data-tool]'); if (b) toolChange(b.dataset.tool); else if (e.target.closest('#swap-color')) { state.foreground = state.foreground ? 0 : 255; render(); } });
 $('#toolbar').addEventListener('contextmenu', e => { const button = e.target.closest('.ps-tool-group'); if (!button) return; e.preventDefault(); openGroup = button.querySelector('[data-group-toggle]').dataset.groupToggle; renderToolbar(); });
-$('#tool-options-button').addEventListener('click', () => { const group = GROUPS.marquee.includes(state.tool) ? 'marquee' : GROUPS.selection.includes(state.tool) ? 'selection' : null; if (group) { openGroup = openGroup === group ? null : group; renderToolbar(); } });
+$('#tool-options-button').addEventListener('click', () => { const group = Object.keys(GROUPS).find(k => GROUPS[k].includes(state.tool)); if (group) { openGroup = openGroup === group ? null : group; renderToolbar(); } });
 document.addEventListener('click', e => { if (openGroup && !e.target.closest('.ps-tool-group, #tool-options-button')) { openGroup = null; renderToolbar(); } });
 $('#selection-modes').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) { state.mode = b.dataset.mode; render(); } });
 $('#brush-size').addEventListener('input', e => { state.brushRadius = Number(e.target.value); $('#brush-size-value').textContent = `${state.brushRadius} px`; });
@@ -298,16 +315,20 @@ $('#background-button').addEventListener('click', () => { theme = theme === 'pea
 window.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
   const key = e.key.toLowerCase();
+  if (polygonPoints && key === 'enter') { e.preventDefault(); finishPolygon(); return; }
+  if (polygonPoints && key === 'escape') { polygonPoints = null; polygonHover = null; draw(); return; }
   if (e.ctrlKey && key === 'd') { e.preventDefault(); snapshot(); state.selection = blank(); render(); }
   else if (e.ctrlKey && key === 'z') { e.preventDefault(); undoStep(); }
   else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-    if (key === 'm') toolChange(state.tool === 'rect' ? 'ellipse' : 'rect');
-    else if (key === 'l') toolChange('lasso');
-    else if (key === 'w') toolChange(state.tool === 'object' ? 'quick' : 'object');
+    if (key === 'm') toolChange(e.shiftKey ? GROUPS.marquee[(GROUPS.marquee.indexOf(groupCurrent.marquee) + 1) % GROUPS.marquee.length] : 'rect');
+    else if (key === 'l') toolChange(e.shiftKey ? GROUPS.lasso[(GROUPS.lasso.indexOf(groupCurrent.lasso) + 1) % GROUPS.lasso.length] : 'lasso');
+    else if (key === 'w') toolChange(e.shiftKey ? GROUPS.selection[(GROUPS.selection.indexOf(groupCurrent.selection) + 1) % GROUPS.selection.length] : 'object');
     else if (key === 'b') toolChange('brush');
     else if (key === 'x') { state.foreground = state.foreground ? 0 : 255; render(); }
   }
 });
 onLangChange(render);
-document.querySelectorAll('[data-panel-icon]').forEach(el => { el.innerHTML = icon(el.dataset.panelIcon); });
+document.querySelectorAll('[data-panel-icon]').forEach(el => { el.innerHTML = layerIcon(el.dataset.panelIcon); });
+$('#add-mask-button').innerHTML = layerIcon('mask');
+$('.ps-home').innerHTML = optionIcon('home');
 drawSource(); setStep(currentId);

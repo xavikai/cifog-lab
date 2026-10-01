@@ -126,3 +126,26 @@ button{font:inherit}
 .ps-panel-actions>span{display:grid;place-items:center}.ps-panel-actions .ps-icon{width:16px;height:16px}.ps-panel-actions .ps-fx{font-size:14px;font-style:italic}.layer-eye .ps-icon{width:15px;height:15px;margin:auto}.layer-lock-icon .ps-icon{width:14px;height:14px}
 @media(max-width:980px){.ps-body{grid-template-columns:43px minmax(0,1fr)}.ps-panels{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr}.ps-canvas-host{min-height:450px}}
 @media(max-width:620px){.ps-panels{grid-template-columns:1fr}.ps-canvas-host{min-height:300px}.ps-sim{display:none}}
+
+/* Exact glyph silhouettes sampled from the Photoshop screenshots supplied for this class. */
+.ps-icon-defs{position:absolute;pointer-events:none}
+.ps-tool-bitmap{display:block;width:24px;height:24px;flex:none;background-repeat:no-repeat;filter:url('#ps-icon-alpha')}
+.ps-tool-bitmap--toolbar{background-image:url('./assets/photoshop-toolbar-reference.png')}
+.ps-tool-bitmap--marquee{background-image:url('./assets/photoshop-marquee-reference.png')}
+.ps-tool-bitmap--lasso{background-image:url('./assets/photoshop-lasso-reference.png')}
+.ps-tool-bitmap--selection{background-image:url('./assets/photoshop-selection-reference.png')}
+.ps-tool-bitmap--options{background-image:url('./assets/photoshop-options-reference.png')}
+.ps-tool-bitmap--layers{background-image:url('./assets/photoshop-layers-reference.png')}
+.ps-body{grid-template-columns:50px minmax(0,1fr) 275px}
+.ps-toolbar{padding:3px 6px;width:50px}
+.ps-tool,.ps-tool-ghost,.ps-tool-group,.ps-toolbar .ps-tool,.ps-tool-group .ps-tool{width:36px;height:32px}
+.ps-tool-flyout{left:44px;width:245px;padding:2px 0}
+.ps-tool-flyout button{height:24px;padding:0 5px;gap:5px;font-size:11px}
+.ps-tool-flyout .ps-tool-bitmap{margin-left:7px;width:24px;height:24px}
+.ps-tool-options .ps-tool-bitmap{width:24px;height:24px}
+.ps-home{display:grid;place-items:center}.ps-home .ps-tool-bitmap{width:24px;height:24px}
+.ps-modes .ps-tool-bitmap{width:24px;height:24px}
+.ps-panel-actions .ps-tool-bitmap{width:24px;height:24px}
+.layer-eye .ps-tool-bitmap,.layer-lock-icon .ps-tool-bitmap{width:24px;height:24px}
+#add-mask-button{display:grid;place-items:center}#add-mask-button .ps-tool-bitmap{width:24px;height:24px}
+@media(max-width:980px){.ps-body{grid-template-columns:50px minmax(0,1fr)}}

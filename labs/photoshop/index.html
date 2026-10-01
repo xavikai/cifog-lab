@@ -8,7 +8,7 @@
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../../blender-ui.css?v=2">
   <link rel="stylesheet" href="../../lab-brief.css?v=3">
-  <link rel="stylesheet" href="./style.css?v=3">
+  <link rel="stylesheet" href="./style.css?v=6">
   <script type="module" src="../../lab-brief.js?v=3"></script>
 </head>
 <body>
@@ -21,6 +21,7 @@
     <ol class="guide" id="guide" aria-label="Steps"></ol>
     <section class="below"><div class="step-card" id="step-card"></div></section>
     <section class="blender ps-work" id="workspace" aria-label="Photoshop-style workspace">
+      <svg class="ps-icon-defs" width="0" height="0" aria-hidden="true"><filter id="ps-icon-alpha" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  2 2 2 0 -2.4"/></filter></svg>
       <div class="ps-menubar" data-no-i18n><span class="ps-logo">Ps</span><span>Archivo</span><span>Edición</span><span>Imagen</span><span>Capa</span><span>Texto</span><span>Selección</span><span>Filtro</span><span>Vista</span><span>Plugins</span><span>Ventana</span><span>Ayuda</span><span class="ps-sim">SIMULACIÓN DIDÁCTICA</span></div>
       <div class="ps-options" data-no-i18n>
         <span class="ps-home" aria-hidden="true">⌂</span><span class="ps-workspace-pill">✦&nbsp; Asistido por IA</span><span class="ps-workspace-pill active">▣&nbsp; Editor profesional</span>
@@ -51,7 +52,7 @@
     <section class="shortcuts" aria-label="Shortcuts used in this lab"><div><span class="eyebrow">FROM THE LAB TO PHOTOSHOP</span><h2>What to do in the real app</h2><p>The names on the workspace match the Spanish menus in your screenshot. This is a focused practice space; try the same sequence in Photoshop with your own photo.</p></div><dl><div><dt><kbd>M</kbd></dt><dd>Marco rectangular / elíptico</dd></div><div><dt><kbd>L</kbd></dt><dd>Lazo</dd></div><div><dt><kbd>W</kbd></dt><dd>Selección de objetos / Selección rápida</dd></div><div><dt><kbd>B</kbd> · <kbd>X</kbd></dt><dd>Pincel · swap black and white</dd></div><div><dt><kbd>Ctrl</kbd><kbd>D</kbd> · <kbd>Ctrl</kbd><kbd>Z</kbd></dt><dd>Deselect · undo</dd></div><div><dt><kbd>Alt</kbd> + click</dt><dd>Inspect the black and white mask thumbnail</dd></div></dl></section>
   </main>
   <footer><span>CIFOG · Photoshop Selection &amp; Mask Lab</span><span>Practice image drawn for this lab.</span><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=6"></script>
+  <script type="module" src="./app.js?v=9"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>
