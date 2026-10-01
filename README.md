@@ -27,8 +27,11 @@ A home for small interactive activities that support CIFOG classroom presentatio
 - Tileable Texture Lab: https://xavikai.github.io/cifog-lab/labs/tileable/
 - Export Lab: https://xavikai.github.io/cifog-lab/labs/export/
 - Outliner Lab: https://xavikai.github.io/cifog-lab/labs/outliner/
+- Photoshop Selection & Mask Lab: https://xavikai.github.io/cifog-lab/labs/photoshop/
 
 ## Available labs
+
+**Photoshop Selection & Mask Lab** (`labs/photoshop/`) uses a focused Photoshop-style workspace with the Spanish menu and tool names shown in the classroom screenshot. Two blocks share one image. Five short selection exercises cover rectangular and elliptical marquees, freehand lasso, object selection and subtracting with quick selection. Four mask exercises convert a selection to a layer mask, paint black to hide an unwanted patch, paint white to restore a missing area, and inspect the black-and-white mask. Students can check each result, request a hint or example, reset a step, and navigate freely; completed steps are saved in the browser. The image and selection masks are generated locally, with no external assets or Photoshop installation needed.
 
 **Material Lab** (`labs/materials/`) is a Blender-style Shader Editor in English with the full Principled BSDF (Subsurface, Specular, Transmission, Coat, Sheen, Emission, Thin Film), a live PBR preview and a Properties editor (Render Engine EEVEE/Cycles, Raytracing, the Compositor Glare node, Subdivision Surface with Adaptive Subdivision, the Displace modifier, Material Settings › Displacement and Raytraced Transmission). Seven stages: nodes and mapping; metal or not; maps and colour spaces (with alpha cut-outs); relief (Bump, the Displacement setting, enough vertices, the Displace modifier); light and glass (Emission, Glare in the Compositor, emission lighting, glass in Cycles and in EEVEE); layers of the Principled (car paint, velvet, skin and wax, soap bubble, brushed metal); and a Studio with presets. The preview can use the Lighting Lab's HDRIs.
 
