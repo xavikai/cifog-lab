@@ -145,4 +145,12 @@ export default {
   'Selections · layer masks · black and white': { ca: 'Seleccions · màscares de capa · blanc i negre', es: 'Selecciones · máscaras de capa · blanco y negro' },
   'Open Photoshop Selection & Mask Lab': { ca: 'Obre el lab de seleccions i màscares de Photoshop', es: 'Abre el lab de selecciones y máscaras de Photoshop' },
   'SELECT · MASK · BRUSH': { ca: 'SELECCIÓ · MÀSCARA · PINZELL', es: 'SELECCIÓN · MÁSCARA · PINCEL' },
+  'Stage & live production': { ca: 'Escenari i realització en directe', es: 'Escenario y realización en directo' },
+  'Build and light the stage, then direct what the audience sees on screen.': { ca: 'Construeix i il·lumina l’escenari i després decideix què veu el públic a la pantalla.', es: 'Construye e ilumina el escenario y después decide qué ve el público en la pantalla.' },
+  '26 / LIVE VIDEO': { ca: '26 / VÍDEO EN DIRECTE', es: '26 / VÍDEO EN DIRECTO' },
+  'Runway Live Lab': { ca: 'Lab de realització de passarel·la', es: 'Lab de realización de pasarela' },
+  'Direct a five-camera fashion show on a T-shaped runway. Assign the cameras, keep one on the presenter, prepare each shot in preview, cut it to program and make a feet-to-head vertical tilt.': { ca: 'Realitza una desfilada amb cinc càmeres i una passarel·la en T. Assigna les càmeres, mantén-ne una amb el presentador, prepara cada pla en previ, passa’l a programa i fes un moviment vertical dels peus al cap.', es: 'Realiza un desfile con cinco cámaras y una pasarela en T. Asigna las cámaras, mantén una con el presentador, prepara cada plano en previo, pásalo a programa y haz un movimiento vertical de los pies a la cabeza.' },
+  'Five cameras · T route · preview/program · tilt': { ca: 'Cinc càmeres · recorregut en T · previ/programa · moviment vertical', es: 'Cinco cámaras · recorrido en T · previo/programa · movimiento vertical' },
+  'Open Runway Live Lab': { ca: 'Obre el lab de realització de passarel·la', es: 'Abre el lab de realización de pasarela' },
+  'PREVIEW · CUT · LIVE': { ca: 'PREVI · TALL · DIRECTE', es: 'PREVIO · CORTE · DIRECTO' },
 };
