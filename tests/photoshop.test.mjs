@@ -37,6 +37,13 @@ test('quick selection can subtract the plate without losing the mug', () => {
   assert.equal(solved('s_quick', s), true);
 });
 
+test('selection intersection retains only shared pixels', () => {
+  const both = combine(shapeMask('mug'), shapeMask('plate'), 'add');
+  const shared = combine(both, shapeMask('plate'), 'intersect');
+  assert.ok(score(shared, shapeMask('plate')) > .99);
+  assert.ok(covered(shared, 330, 210) < .05);
+});
+
 test('mask brush changes only the intended region', () => {
   const original = shapeMask('mug');
   const cut = brush(original, 334, 224, 25, 0);

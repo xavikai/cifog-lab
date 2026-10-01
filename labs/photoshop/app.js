@@ -1,6 +1,7 @@
 import { W, H, SHAPES, blank, brush, combine, polygonHas, raster, shapeMask, solved, startingState } from './core.js?v=2';
 import { addDictionary, onLangChange, t } from '../../i18n.js';
 import dictionary from './i18n.js?v=2';
+import { icon } from './icons.js?v=1';
 addDictionary(dictionary);
 
 const $ = s => document.querySelector(s);
@@ -21,14 +22,17 @@ const STAGES = [
 ];
 const ALL = STAGES.flatMap(s => s.steps);
 const stepById = id => ALL.find(s => s.id === id);
-const TOOL = { rect: ['▧', 'Marco rectangular'], ellipse: ['◌', 'Marco elíptico'], lasso: ['⌁', 'Lazo'], object: ['⬡', 'Selección de objetos'], quick: ['◍', 'Selección rápida'], brush: ['╱', 'Pincel'] };
+const TOOL = { rect: 'Herramienta Marco rectangular', ellipse: 'Herramienta Marco elíptico', row: 'Herramienta Marco fila única', column: 'Herramienta Marco columna única', lasso: 'Herramienta Lazo', object: 'Herramienta Selección de objetos', quick: 'Herramienta Selección rápida', brush: 'Herramienta Pincel' };
+const GROUPS = { marquee: ['rect', 'ellipse', 'row', 'column'], selection: ['object', 'quick'] };
+const GHOSTS = { before: ['move'], middle: ['crop', 'frame', 'eyedropper', 'heal'], afterBrush: ['stamp', 'history', 'eraser', 'gradient', 'blur', 'dodge', 'pen', 'text', 'path', 'shape', 'hand', 'zoom', 'more'] };
 const store = {
   get(k, fallback) { try { const v = localStorage.getItem('cifog-ps:' + k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
   set(k, v) { try { localStorage.setItem('cifog-ps:' + k, JSON.stringify(v)); } catch { /* unavailable */ } },
 };
 let done = store.get('done', {});
 let currentId = stepById(store.get('step', 's_rect')) ? store.get('step', 's_rect') : 's_rect';
-let state, undo = [], drag = null, theme = 'peach', feedback = '', feedbackGood = false, statusMessage = '';
+let state, undo = [], drag = null, theme = 'peach', feedback = '', feedbackGood = false, statusMessage = '', openGroup = null;
+const groupCurrent = { marquee: 'rect', selection: 'object' };
 const scene = document.createElement('canvas'); scene.width = W; scene.height = H;
 const sceneCtx = scene.getContext('2d');
 const display = $('#canvas'), ctx = display.getContext('2d');
@@ -131,6 +135,8 @@ function currentStage() { return STAGES.find(s => s.steps.some(p => p.id === cur
 function say(message, good = false) { feedback = message; statusMessage = message; feedbackGood = good; $('#status-msg').textContent = t(message); renderCard(); }
 function setStep(id) {
   currentId = id; store.set('step', id); state = { ...startingState(id), maskCreated: false, maskPainted: false, maskViewed: false, viewMask: false, activeThumb: id.startsWith('m_') && id !== 'm_create' ? 'mask' : 'image', foreground: 0, brushRadius: 22 };
+  for (const [group, members] of Object.entries(GROUPS)) if (members.includes(state.tool)) groupCurrent[group] = state.tool;
+  openGroup = null;
   undo = []; drag = null; feedback = ''; statusMessage = ''; render();
 }
 function snapshot() {
@@ -139,7 +145,7 @@ function snapshot() {
 }
 function undoStep() { if (!undo.length) return say('Nothing to undo yet.'); state = undo.pop(); render(); say('Undone.'); }
 function makeSelection(part, mode = state.mode) { state.selection = combine(state.selection, part, mode); render(); }
-function toolChange(tool) { state.tool = tool; if (tool === 'brush' && !state.mask) say('Add a layer mask before painting it.'); render(); }
+function toolChange(tool) { state.tool = tool; for (const [group, members] of Object.entries(GROUPS)) if (members.includes(tool)) groupCurrent[group] = tool; openGroup = null; if (tool === 'brush' && !state.mask) say('Add a layer mask before painting it.'); render(); }
 function selectObjectAt(x, y, mode) {
   const shape = ['mug', 'plate', 'card', 'pennant'].find(k => SHAPES[k](x, y));
   if (!shape) return say('Click inside one of the visible objects.');
@@ -167,6 +173,7 @@ display.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   const p = pos(e); display.setPointerCapture(e.pointerId);
   if (state.tool === 'object') { selectObjectAt(p.x, p.y, e.altKey ? 'subtract' : state.mode); return; }
+  if (state.tool === 'row' || state.tool === 'column') { const line = state.tool === 'row' ? Math.floor(p.y) : Math.floor(p.x); snapshot(); makeSelection(raster((x, y) => state.tool === 'row' ? y === line : x === line), e.altKey ? 'subtract' : state.mode); return; }
   if (state.tool === 'quick') { drag = { kind: 'quick', seen: new Set(), mode: e.altKey ? 'subtract' : state.mode }; quickAt(p.x, p.y); return; }
   if (state.tool === 'brush') { if (!state.mask || state.activeThumb !== 'mask') { paintAt(p.x, p.y); return; } snapshot(); drag = { kind: 'brush', last: p }; paintAt(p.x, p.y); return; }
   drag = { kind: state.tool, x: p.x, y: p.y, to: p, points: [p] }; draw();
@@ -233,10 +240,18 @@ function renderCard() {
   $('#step-card').innerHTML = `<div><span class="step-tag">${t(currentStage().name)} · ${currentStage().steps.indexOf(s) + 1}/${currentStage().steps.length}</span><h3>${t(s.title)}</h3><p>${t(s.aim)}</p><ol>${s.how.map(h => `<li>${t(h)}</li>`).join('')}</ol><p class="step-feedback ${feedbackGood ? 'good' : ''}" role="status">${feedback ? t(feedback) : ''}</p></div><div class="step-actions"><button type="button" data-act="prev" ${n === 0 ? 'disabled' : ''}>${t('Previous')}</button><button type="button" data-act="reset">${t('Reset step')}</button><button type="button" data-act="hint">${t('Hint')}</button><button type="button" data-act="solution">${t('Show a solution')}</button><button type="button" class="primary" data-act="check">${t('Check')}</button><button type="button" class="next" data-act="next" ${n === ALL.length - 1 ? 'disabled' : ''}>${t('Next step')} →</button></div>`;
 }
 function renderToolbar() {
-  $('#toolbar').innerHTML = Object.entries(TOOL).map(([k, [icon, label]]) => `<button type="button" data-tool="${k}" title="${label}" aria-label="${label}" aria-pressed="${state.tool === k}">${icon}</button>`).join('') + `<button type="button" id="swap-color" title="Intercambiar negro y blanco" aria-label="Swap black and white" style="margin-top:12px;font-size:14px">${state.foreground ? '□' : '■'}</button>`;
-  $('#tool-name').textContent = TOOL[state.tool][1];
+  const ghost = name => `<span class="ps-tool-ghost" aria-hidden="true">${icon(name)}</span>`;
+  const plain = name => `<button type="button" class="ps-tool" data-tool="${name}" title="${TOOL[name]}" aria-label="${TOOL[name]}" aria-pressed="${state.tool === name}">${icon(name)}<span class="ps-tool-corner" aria-hidden="true"></span></button>`;
+  const group = name => {
+    const selected = groupCurrent[name], members = GROUPS[name], active = members.includes(state.tool);
+    return `<div class="ps-tool-group"><button type="button" class="ps-tool" data-tool="${selected}" title="${TOOL[selected]}" aria-label="${TOOL[selected]}" aria-pressed="${active}">${icon(selected)}</button><button type="button" class="ps-group-caret" data-group-toggle="${name}" aria-label="Mostrar herramientas de ${name === 'marquee' ? 'Marco' : 'selección'}" aria-expanded="${openGroup === name}"></button>${openGroup === name ? `<div class="ps-tool-flyout" role="menu">${members.map(k => `<button type="button" data-tool="${k}" role="menuitemradio" aria-checked="${state.tool === k}">${icon(k)}<span>${TOOL[k]}</span>${['rect', 'ellipse'].includes(k) ? '<kbd>M</kbd>' : ''}</button>`).join('')}</div>` : ''}</div>`;
+  };
+  $('#toolbar').innerHTML = GHOSTS.before.map(ghost).join('') + group('marquee') + plain('lasso') + group('selection') + GHOSTS.middle.map(ghost).join('') + plain('brush') + GHOSTS.afterBrush.map(ghost).join('') + `<button type="button" id="swap-color" class="ps-swatch-control" title="Intercambiar negro y blanco (X)" aria-label="Intercambiar negro y blanco"><span class="ps-swatch-back" style="background:${state.foreground ? '#111' : '#fff'}"></span><span class="ps-swatch-front" style="background:${state.foreground ? '#fff' : '#111'}"></span></button>`;
+  $('#tool-name').textContent = TOOL[state.tool];
+  $('#current-tool-icon').innerHTML = icon(state.tool);
+  $('#selection-modes').innerHTML = [['new','Selección nueva'],['add','Añadir a la selección'],['subtract','Restar de la selección'],['intersect','Formar intersección con la selección']].map(([mode,label]) => `<button type="button" data-mode="${mode}" title="${label}" aria-label="${label}" aria-pressed="${state.mode === mode}">${icon(mode)}</button>`).join('');
   $('#selection-modes').hidden = state.tool === 'brush';
-  $('#selection-modes').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(state.mode === b.dataset.mode)));
+  $('#feather-field').hidden = state.tool === 'brush'; $('#smooth-field').hidden = state.tool === 'brush'; $('#style-field').hidden = state.tool === 'brush';
   $('#brush-size-field').hidden = state.tool !== 'brush'; $('#brush-size').value = state.brushRadius; $('#brush-size-value').textContent = `${state.brushRadius} px`;
   $('#tool-note').textContent = state.tool === 'brush' ? (state.foreground ? t('White reveals on a mask.') : t('Black hides on a mask.')) : t('Alt subtracts · Ctrl+D deselects');
 }
@@ -267,7 +282,10 @@ $('#step-card').addEventListener('click', e => {
   else if (act === 'solution') solution();
   else if (act === 'check') check();
 });
-$('#toolbar').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) toolChange(b.dataset.tool); else if (e.target.closest('#swap-color')) { state.foreground = state.foreground ? 0 : 255; render(); } });
+$('#toolbar').addEventListener('click', e => { const toggle = e.target.closest('[data-group-toggle]'); if (toggle) { openGroup = openGroup === toggle.dataset.groupToggle ? null : toggle.dataset.groupToggle; renderToolbar(); return; } const b = e.target.closest('[data-tool]'); if (b) toolChange(b.dataset.tool); else if (e.target.closest('#swap-color')) { state.foreground = state.foreground ? 0 : 255; render(); } });
+$('#toolbar').addEventListener('contextmenu', e => { const button = e.target.closest('.ps-tool-group'); if (!button) return; e.preventDefault(); openGroup = button.querySelector('[data-group-toggle]').dataset.groupToggle; renderToolbar(); });
+$('#tool-options-button').addEventListener('click', () => { const group = GROUPS.marquee.includes(state.tool) ? 'marquee' : GROUPS.selection.includes(state.tool) ? 'selection' : null; if (group) { openGroup = openGroup === group ? null : group; renderToolbar(); } });
+document.addEventListener('click', e => { if (openGroup && !e.target.closest('.ps-tool-group, #tool-options-button')) { openGroup = null; renderToolbar(); } });
 $('#selection-modes').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) { state.mode = b.dataset.mode; render(); } });
 $('#brush-size').addEventListener('input', e => { state.brushRadius = Number(e.target.value); $('#brush-size-value').textContent = `${state.brushRadius} px`; });
 $('#add-mask-button').addEventListener('click', addMask);
@@ -291,4 +309,5 @@ window.addEventListener('keydown', e => {
   }
 });
 onLangChange(render);
+document.querySelectorAll('[data-panel-icon]').forEach(el => { el.innerHTML = icon(el.dataset.panelIcon); });
 drawSource(); setStep(currentId);

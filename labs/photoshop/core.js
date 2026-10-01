@@ -43,6 +43,7 @@ export function combine(base, added, mode = 'new') {
   const out = mode === 'new' ? blank() : base.slice();
   for (let i = 0; i < size; i++) {
     if (mode === 'subtract') { if (added[i]) out[i] = 0; }
+    else if (mode === 'intersect') out[i] = base[i] && added[i] ? 255 : 0;
     else if (added[i]) out[i] = 255;
   }
   return out;
