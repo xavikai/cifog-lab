@@ -1,6 +1,7 @@
 import { CAMERAS, CUES, PLAN_ROLES, planIsCorrect, cueResult, cameraHasSubject } from './core.js?v=1';
 import { addDictionary, onLangChange, t } from '../../i18n.js';
-import dictionary from './i18n.js?v=2';
+import dictionary from './i18n.js?v=4';
+import { createRunway3D } from './scene3d.js?v=2';
 addDictionary(dictionary);
 
 const $ = selector => document.querySelector(selector);
@@ -13,13 +14,16 @@ const state = {
   roles: Array.isArray(saved.roles) && saved.roles.length === 5 ? saved.roles : Array(5).fill(''),
   program: CAMERAS.some(c => c.id === saved.program) ? saved.program : 1,
   preview: CAMERAS.some(c => c.id === saved.preview) ? saved.preview : 2,
+  view: saved.view === 'map' ? 'map' : '3d',
   sweep: 0,
   feedback: '',
   feedbackKind: '',
 };
 if (state.step > 0 && !state.done[0]) state.step = 0;
 let sweepTimer = null;
-function save() { try { localStorage.setItem(key, JSON.stringify({ step: state.step, done: state.done, roles: state.roles, program: state.program, preview: state.preview })); } catch { /* private mode */ } }
+let scene3D = null, feedImages = [];
+try { scene3D = createRunway3D($('#stage-3d')); } catch (error) { console.warn('3D view unavailable', error); state.view = 'map'; $('#view-3d').disabled = true; }
+function save() { try { localStorage.setItem(key, JSON.stringify({ step: state.step, done: state.done, roles: state.roles, program: state.program, preview: state.preview, view: state.view })); } catch { /* private mode */ } }
 function say(message, kind = '') { state.feedback = message; state.feedbackKind = kind; renderFeedback(); }
 function renderFeedback() { const p = $(state.step === 0 ? '#plan-feedback' : '#live-feedback'); p.textContent = t(state.feedback); p.className = `feedback ${state.feedbackKind}`; }
 function stepTo(index) {
@@ -45,18 +49,30 @@ function renderPlan() {
   if (state.step !== 0) return;
   $('#role-list').innerHTML = CAMERAS.map((c, i) => `<label class="role-row"><span class="camera-tag">C${c.id}</span><span class="role-place">${t(c.place)}</span><select data-camera="${i}" aria-label="${t('Role for camera')} ${c.id}"><option value="">${t('Choose role…')}</option>${PLAN_ROLES.map(role => `<option value="${role}" ${state.roles[i] === role ? 'selected' : ''}>${t(role)}</option>`).join('')}</select></label>`).join('');
 }
+function renderView() {
+  const three = state.view === '3d' && !!scene3D;
+  $('#stage-3d').toggleAttribute('hidden', !three); $('#stage-map').toggleAttribute('hidden', three);
+  $('#view-3d').setAttribute('aria-pressed', String(three));
+  $('#view-map').setAttribute('aria-pressed', String(!three));
+  document.querySelector('.view-switch').setAttribute('aria-label', t('Stage view'));
+  $('#view-help').textContent = t(scene3D ? three ? 'Drag to rotate · Wheel to zoom · C1–C5 mark the cameras.' : 'The yellow line shows the model route.' : '3D is unavailable here. Use the top view.');
+  scene3D?.setVisible(three);
+}
 function feed(cam, compact = false) {
   const cueIndex = Math.max(0, state.step - 1), cue = CUES[cueIndex];
   const subject = cameraHasSubject(cam, cueIndex);
   const type = cam === 1 ? 'presenter' : cam === 2 ? 'wide' : cam === 4 || cam === 5 ? 'side' : 'front';
   const scale = cam === 2 ? '.63' : cam === 3 ? '1.38' : cam === 4 ? '1.05' : cam === 5 ? '1.22' : '1';
   const label = cam === 1 ? 'PRESENTER' : cam === 2 ? 'WIDE' : cam === 3 ? 'FRONT' : cam === 4 ? 'LEFT' : 'SIDE';
-  const person = subject ? `<span class="feed-person" style="--person-scale:${scale}"></span>` : `<span class="feed-empty">${t('Model out of frame')}</span>`;
+  const image = feedImages[cam - 1] ? `<img class="feed-image" src="${feedImages[cam - 1]}" alt="" aria-hidden="true">` : '';
+  const person = image ? '' : subject ? `<span class="feed-person" style="--person-scale:${scale}"></span>` : '';
+  const empty = !subject ? `<span class="feed-empty">${t('Model out of frame')}</span>` : '';
   const tilt = cam === 3 && cue.id === 'tilt' ? `<span class="tilt-line" style="bottom:${12 + state.sweep * 68}%"></span><span class="tilt-badge">${t(state.sweep < .5 ? 'FEET' : 'HEAD')}</span>` : '';
-  return `<div class="feed ${type} ${subject ? '' : 'no-subject'}"><span class="feed-runway"></span>${person}${tilt}<span class="feed-caption">C${cam} · ${t(label)}${compact ? '' : ` · ${t('SIMULATED')}`}</span></div>`;
+  return `<div class="feed ${type} ${subject ? '' : 'no-subject'} ${image ? 'has-3d' : ''}"><span class="feed-runway"></span>${image}${person}${empty}${tilt}<span class="feed-caption">C${cam} · ${t(label)}${compact ? '' : ` · ${t('SIMULATED')}`}</span></div>`;
 }
 function renderLive() {
   if (state.step === 0) return;
+  feedImages = scene3D?.update(CUES[state.step - 1], state.sweep, state.program, state.preview) || [];
   $('#program-screen').innerHTML = feed(state.program);
   $('#preview-screen').innerHTML = feed(state.preview);
   $('#program-name').textContent = `C${state.program} · ${t(CAMERAS[state.program - 1].role)}`;
@@ -71,19 +87,21 @@ function renderLive() {
 function renderMap() {
   const marker = $('#model-marker');
   const cue = CUES[state.step - 1];
-  marker.hidden = !cue?.position;
+  marker.toggleAttribute('hidden', !cue?.position);
   if (cue?.position) marker.setAttribute('transform', `translate(${cue.position[0] * 3.04 + 48} ${cue.position[1] * 3.1 + 2.4})`);
   const mapLabels = ['STAGE LEFT / ENTRANCE', 'STAGE RIGHT', 'AUDIENCE'];
   document.querySelectorAll('.stage-label').forEach((label, i) => { label.textContent = t(mapLabels[i]); });
   document.querySelector('.presenter-marker text').textContent = t('PRESENTER');
   $('#stage-map').setAttribute('aria-label', t('T-shaped runway with the model route and five camera positions'));
   $('#workspace').setAttribute('aria-label', t('Live production simulator'));
+  $('#stage-3d').setAttribute('aria-label', t('Interactive 3D view of the T-shaped runway, presenter, model and five cameras'));
+  feedImages = scene3D?.update(cue, state.sweep, state.program, state.preview) || [];
 }
-function render() { renderNav(); renderBrief(); renderPlan(); renderMap(); renderLive(); renderFeedback(); }
+function render() { renderNav(); renderBrief(); renderPlan(); renderView(); renderMap(); renderLive(); renderFeedback(); }
 function checkPlan() {
   const firstEmpty = state.roles.findIndex(role => !role);
   if (firstEmpty >= 0) { say('Choose a role for every camera.', 'warn'); return; }
-  if (!planIsCorrect(state.roles)) { const mismatch = state.roles.findIndex((role, i) => role !== PLAN_ROLES[i]); say(`Recheck C${mismatch + 1}: look at its position on the map.`, 'warn'); return; }
+  if (!planIsCorrect(state.roles)) { const mismatch = state.roles.findIndex((role, i) => role !== PLAN_ROLES[i]); say(`Recheck C${mismatch + 1}: look at its position on the stage.`, 'warn'); return; }
   state.done[0] = true; save(); say('Good plan. C1 remains on the presenter; C2 gives you a wide safety shot.', 'good'); renderNav(); renderBrief();
 }
 function checkCue() {
@@ -98,7 +116,7 @@ function checkCue() {
   renderNav(); renderBrief(); renderLive();
 }
 function showHint() {
-  if (state.step === 0) { say('Read the map: C1 presenter, C2 wide, C3 front tilt, C4 stage left, C5 runway side.', 'warn'); return; }
+  if (state.step === 0) { say('Read the camera positions: C1 presenter, C2 wide, C3 front tilt, C4 stage left, C5 runway side.', 'warn'); return; }
   const cue = CUES[state.step - 1];
   say(`Suggested shot: C${cue.preferred}${cue.needsSweep ? ' with a complete feet-to-head tilt' : ''}.`, 'warn');
 }
@@ -113,6 +131,7 @@ function startTilt() {
 }
 $('#role-list').addEventListener('change', e => { if (!e.target.matches('select[data-camera]')) return; state.roles[Number(e.target.dataset.camera)] = e.target.value; save(); });
 $('#check-plan').addEventListener('click', checkPlan);
+document.querySelector('.view-switch').addEventListener('click', e => { const view = e.target.closest('[data-view]')?.dataset.view; if (view && (view === 'map' || scene3D)) { state.view = view; save(); renderView(); } });
 $('#stage-switch').addEventListener('click', e => { const b = e.target.closest('[data-part]'); if (b) stepTo(b.dataset.part === 'plan' ? 0 : Math.max(1, state.step)); });
 $('#step-card').addEventListener('click', e => {
   const action = e.target.closest('[data-action]')?.dataset.action;

@@ -7,7 +7,8 @@
   <title>Runway Live Lab · CIFOG</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../../lab-brief.css?v=3">
-  <link rel="stylesheet" href="./style.css?v=2">
+  <link rel="stylesheet" href="./style.css?v=3">
+  <script type="importmap">{"imports":{"three":"../../vendor/three.module.js"}}</script>
   <script type="module" src="../../lab-brief.js?v=4"></script>
 </head>
 <body>
@@ -19,8 +20,9 @@
     <section class="work" id="workspace" aria-label="Live production simulator">
       <div class="desk-bar"><div><b class="desk-live">● LIVE CONTROL</b><span id="cue-location">Camera plan</span></div><div class="desk-progress" id="desk-progress">1 / 10</div></div>
       <div class="desk-grid">
-        <div class="stage-panel"><div class="panel-heading"><h2>Stage plan</h2><span>TOP VIEW · NOT TO SCALE</span></div><div class="stage-figure">
-          <svg id="stage-map" viewBox="0 0 400 330" role="img" aria-label="T-shaped runway with the model route and five camera positions">
+        <div class="stage-panel"><div class="panel-heading"><h2>Runway stage</h2><div class="view-switch" role="group" aria-label="Stage view"><button type="button" id="view-3d" data-view="3d" aria-pressed="true">3D view</button><button type="button" id="view-map" data-view="map" aria-pressed="false">Top view</button></div></div><div class="stage-figure">
+          <canvas id="stage-3d" aria-label="Interactive 3D view of the T-shaped runway, presenter, model and five cameras"></canvas>
+          <svg id="stage-map" viewBox="0 0 400 330" role="img" aria-label="T-shaped runway with the model route and five camera positions" hidden>
             <defs><marker id="route-arrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0 0L7 3.5 0 7" fill="#ffbf00"/></marker></defs>
             <path class="stage-runway" d="M48 52H352V112H224V282H176V112H48Z"/>
             <path class="stage-center" d="M200 72V260"/>
@@ -30,9 +32,9 @@
             <g id="model-marker" class="model-marker" transform="translate(0 0)" hidden><circle r="11"/><text y="4">M</text></g>
             <g class="presenter-marker" transform="translate(53 201)"><circle r="8"/><text x="13" y="4">PRESENTER</text></g>
           </svg>
-        </div><div class="route-note"><b>Route:</b> left → center → runway end → turn → center → left. <b>C1</b> stays on the presenter.</div></div>
+        </div><div class="view-help" id="view-help">Drag to rotate · Wheel to zoom · C1–C5 mark the cameras.</div><div class="route-note"><b>Route:</b> left → center → runway end → turn → center → left. <b>C1</b> stays on the presenter.</div></div>
         <div class="control-panel">
-          <div id="plan-panel" class="plan-panel"><div class="panel-heading"><h2>Assign the cameras</h2><span>ONE ROLE EACH</span></div><p class="panel-intro">The circles on the map show the proposed camera positions. Choose a job for each position.</p><div id="role-list" class="role-list"></div><button type="button" class="action primary" id="check-plan">Check camera plan</button><p id="plan-feedback" class="feedback" role="status" aria-live="polite"></p></div>
+          <div id="plan-panel" class="plan-panel"><div class="panel-heading"><h2>Assign the cameras</h2><span>ONE ROLE EACH</span></div><p class="panel-intro">The numbered cameras show the proposed positions. Choose a job for each one.</p><div id="role-list" class="role-list"></div><button type="button" class="action primary" id="check-plan">Check camera plan</button><p id="plan-feedback" class="feedback" role="status" aria-live="polite"></p></div>
           <div id="live-panel" class="live-panel" hidden><div class="monitors"><div class="monitor"><div class="monitor-label program-label">● PROGRAM <small>ON AIR</small></div><div class="monitor-screen" id="program-screen"></div><div class="monitor-foot" id="program-name"></div></div><div class="monitor"><div class="monitor-label preview-label">● PREVIEW <small>NEXT SHOT</small></div><div class="monitor-screen" id="preview-screen"></div><div class="monitor-foot" id="preview-name"></div></div></div><div class="switch-actions"><button type="button" class="action cut" id="cut-button">CUT → PROGRAM</button><span class="switch-hint">Select a camera below, inspect preview, then cut.</span></div><div id="camera-bank" class="camera-bank" aria-label="Camera feeds"></div><div class="tilt-control" id="tilt-control" hidden><div><b>C3 · vertical tilt</b><span>At the runway end: feet → head</span></div><button type="button" class="action" id="tilt-button">Start feet-to-head tilt</button><div class="tilt-track"><div id="tilt-progress"></div></div></div><div class="take-row"><button type="button" class="action primary" id="take-cue">Check this moment</button><button type="button" class="action" id="next-cue" hidden>Next moment →</button></div><p id="live-feedback" class="feedback" role="status" aria-live="polite"></p></div>
         </div>
       </div>
@@ -41,7 +43,7 @@
     <aside class="bridge"><div><span class="eyebrow">FROM THE LAB TO THE LIVE DESK</span><h2>What carries over</h2><p>In a real production, the director calls shots and the technical director switches them. The preview monitor lets them inspect the next camera before it goes on air. This exercise pauses each moment so you can practise that decision.</p></div><ol><li><strong>Before the show:</strong> agree on the route, camera positions, shot sizes and cues with the camera operators.</li><li><strong>During the walk:</strong> keep a wide safety shot ready. Use entrance and side cameras to vary the view without losing the model.</li><li><strong>At the end:</strong> C3 performs a vertical tilt from feet to head while the model holds position. After the turn, return to a safe view.</li><li><strong>Presenter:</strong> C1 remains framed on the presenter for introductions and handoffs; it does not need to be on air continuously.</li></ol><p class="bridge-assumption">Teaching setup: the presenter stands beside the runway on stage left. C2–C5 positions are a practical proposal for this exercise; a real venue needs a site visit and camera rehearsal.</p></aside>
   </main>
   <footer><span>CIFOG · Runway Live Lab</span><a href="https://www.blackmagicdesign.com/ca/products/atemtelevisionstudio/software" target="_blank" rel="noopener">ATEM preview/program ↗</a><a href="https://support.cyanview.com/docs/Workflows/FashionShow" target="_blank" rel="noopener">Fashion show workflow ↗</a><a href="../../">All labs ↑</a></footer>
-  <script type="module" src="./app.js?v=2"></script>
+  <script type="module" src="./app.js?v=5"></script>
   <script type="module">import { initI18n } from '../../i18n.js'; initI18n({ mount: '.site-header', append: true });</script>
 </body>
 </html>
