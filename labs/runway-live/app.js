@@ -1,6 +1,6 @@
 import { CAMERAS, CUES, PLAN_ROLES, planIsCorrect, cueResult, cameraHasSubject } from './core.js?v=1';
 import { addDictionary, onLangChange, t } from '../../i18n.js';
-import dictionary from './i18n.js?v=4';
+import dictionary from './i18n.js?v=5';
 import { createRunway3D } from './scene3d.js?v=2';
 addDictionary(dictionary);
 
@@ -20,6 +20,7 @@ const state = {
   feedbackKind: '',
 };
 if (state.step > 0 && !state.done[0]) state.step = 0;
+if (CUES[state.step - 1]?.needsSweep && state.done[state.step]) state.sweep = 1;
 let sweepTimer = null;
 let scene3D = null, feedImages = [];
 try { scene3D = createRunway3D($('#stage-3d')); } catch (error) { console.warn('3D view unavailable', error); state.view = 'map'; $('#view-3d').disabled = true; }
@@ -29,7 +30,7 @@ function renderFeedback() { const p = $(state.step === 0 ? '#plan-feedback' : '#
 function stepTo(index) {
   if (index > 0 && !state.done[0]) return;
   if (index < 0 || index > CUES.length) return;
-  clearInterval(sweepTimer); sweepTimer = null; state.sweep = 0; state.step = index; state.feedback = ''; state.feedbackKind = ''; save(); render();
+  clearInterval(sweepTimer); sweepTimer = null; state.step = index; state.sweep = CUES[index - 1]?.needsSweep && state.done[index] ? 1 : 0; state.feedback = ''; state.feedbackKind = ''; save(); render();
 }
 function renderNav() {
   $('#stage-switch').innerHTML = `<button type="button" data-part="plan" class="${state.step === 0 ? 'active' : ''}">${t('Camera plan')}<small>${t('Five jobs')}</small></button><button type="button" data-part="live" class="${state.step > 0 ? 'active' : ''}" ${!state.done[0] ? 'disabled' : ''}>${t('Live rehearsal')}<small>${t('Nine moments')}</small></button>`;
@@ -40,8 +41,11 @@ function renderNav() {
 function renderBrief() {
   const plan = state.step === 0;
   const cue = CUES[state.step - 1];
+  const done = state.done[state.step];
   const hint = plan ? ['Read the T route on the left.', 'Give each of the five camera positions one role.', 'Check the plan. C1 must stay on the presenter.'] : [cue.needsSweep ? 'Select C3 in preview, cut it to program, then start the feet-to-head tilt.' : cue.preferred === 1 ? 'Keep C1 framed on the presenter. Cut to it if another camera is live.' : 'Choose a camera that can see the model. Inspect it in preview, then cut to program.', 'Check this moment before advancing.'];
-  $('#step-card').innerHTML = `<div><span class="step-tag">${t(plan ? 'CAMERA PLAN' : 'LIVE REHEARSAL')} · ${state.step + 1}/${CUES.length + 1}</span><h3>${t(plan ? 'Give each camera a job' : cue.place)}</h3><p>${t(plan ? 'The model follows the yellow route. Assign the roles before going live.' : cue.action)}</p><ol>${hint.map(h => `<li>${t(h)}</li>`).join('')}</ol></div><div class="step-actions"><button type="button" data-action="previous" ${state.step === 0 ? 'disabled' : ''}>${t('Previous')}</button><button type="button" data-action="hint">${t('Hint')}</button><button type="button" class="primary" data-action="check">${t('Check')}</button><button type="button" class="next" data-action="next" ${!state.done[state.step] || state.step === CUES.length ? 'disabled' : ''}>${t('Next step')} →</button></div>`;
+  const card = $('#step-card');
+  card.classList.toggle('done', done);
+  card.innerHTML = `<div class="step-intro"><span class="step-tag">${t(plan ? 'CAMERA PLAN' : 'LIVE REHEARSAL')} · ${state.step + 1}/${CUES.length + 1}</span><h3>${t(plan ? 'Give each camera a job' : cue.place)}</h3><p>${t(plan ? 'The model follows the yellow route. Assign the roles before going live.' : cue.action)}</p></div><div class="step-how"><span class="step-tag">${t('HOW')}</span><ol>${hint.map(h => `<li>${t(h)}</li>`).join('')}</ol><div class="step-tools">${state.step > 0 ? `<button type="button" data-action="previous">${t('Previous')}</button>` : ''}<button type="button" data-action="hint">${t('Hint')}</button><button type="button" data-action="check">${t('Check')}</button></div></div><div class="step-actions"><span class="step-state">${t(done ? '✓ Done' : 'Not yet')}</span>${done && state.step < CUES.length ? `<button type="button" class="next" data-action="next">${t('Next step')} →</button>` : ''}<button type="button" data-action="solution">${t('Show a solution')}</button><button type="button" data-action="reset">${t('Reset this step')}</button></div>`;
 }
 function renderPlan() {
   $('#plan-panel').hidden = state.step !== 0;
@@ -120,16 +124,51 @@ function showHint() {
   const cue = CUES[state.step - 1];
   say(`Suggested shot: C${cue.preferred}${cue.needsSweep ? ' with a complete feet-to-head tilt' : ''}.`, 'warn');
 }
-function startTilt() {
+function showSolution() {
+  clearInterval(sweepTimer); sweepTimer = null;
+  if (state.step === 0) {
+    state.roles = [...PLAN_ROLES];
+    state.done[0] = true;
+    save(); render(); say('One possible solution is shown. Compare it with your attempt.', 'good');
+    return;
+  }
+  const cue = CUES[state.step - 1];
+  const previousProgram = state.program;
+  state.program = cue.preferred;
+  state.preview = previousProgram !== state.program ? previousProgram : state.program === 2 ? 1 : 2;
+  state.sweep = 0;
+  if (cue.needsSweep) {
+    save(); render();
+    startTilt(() => {
+      state.done[state.step] = true;
+      save(); render(); say('One possible solution is shown. Compare it with your attempt.', 'good');
+    });
+    return;
+  }
+  state.done[state.step] = true;
+  save(); render(); say('One possible solution is shown. Compare it with your attempt.', 'good');
+}
+function resetStep() {
+  clearInterval(sweepTimer); sweepTimer = null;
+  state.done[state.step] = false;
+  state.sweep = 0;
+  if (state.step === 0) state.roles = Array(5).fill('');
+  else {
+    state.program = CUES[state.step - 2]?.preferred ?? 1;
+    state.preview = state.program === 2 ? 1 : 2;
+  }
+  save(); render(); say('This step is ready to try again.', '');
+}
+function startTilt(onComplete = null) {
   if (state.program !== 3) { say('First preview C3 and cut it to program.', 'warn'); return; }
-  clearInterval(sweepTimer); state.sweep = 0; renderLive();
+  clearInterval(sweepTimer); state.sweep = 0; state.done[state.step] = false; save(); renderNav(); renderBrief(); renderLive();
   let ticks = 0;
   sweepTimer = setInterval(() => {
     ticks += 1; state.sweep = Math.min(1, ticks / 32); renderLive();
-    if (state.sweep === 1) { clearInterval(sweepTimer); sweepTimer = null; say('Vertical tilt complete: feet to head. Check this moment.', 'good'); }
+    if (state.sweep === 1) { clearInterval(sweepTimer); sweepTimer = null; if (onComplete) onComplete(); else say('Vertical tilt complete: feet to head. Check this moment.', 'good'); }
   }, 85);
 }
-$('#role-list').addEventListener('change', e => { if (!e.target.matches('select[data-camera]')) return; state.roles[Number(e.target.dataset.camera)] = e.target.value; save(); });
+$('#role-list').addEventListener('change', e => { if (!e.target.matches('select[data-camera]')) return; state.roles[Number(e.target.dataset.camera)] = e.target.value; state.done[0] = false; save(); renderNav(); renderBrief(); });
 $('#check-plan').addEventListener('click', checkPlan);
 document.querySelector('.view-switch').addEventListener('click', e => { const view = e.target.closest('[data-view]')?.dataset.view; if (view && (view === 'map' || scene3D)) { state.view = view; save(); renderView(); } });
 $('#stage-switch').addEventListener('click', e => { const b = e.target.closest('[data-part]'); if (b) stepTo(b.dataset.part === 'plan' ? 0 : Math.max(1, state.step)); });
@@ -139,10 +178,12 @@ $('#step-card').addEventListener('click', e => {
   if (action === 'next' && state.done[state.step]) stepTo(state.step + 1);
   if (action === 'hint') showHint();
   if (action === 'check') state.step === 0 ? checkPlan() : checkCue();
+  if (action === 'solution') showSolution();
+  if (action === 'reset') resetStep();
 });
 $('#camera-bank').addEventListener('click', e => { const b = e.target.closest('[data-preview]'); if (!b) return; state.preview = Number(b.dataset.preview); save(); renderLive(); });
-$('#cut-button').addEventListener('click', () => { const old = state.program; state.program = state.preview; state.preview = old; state.sweep = 0; clearInterval(sweepTimer); sweepTimer = null; save(); renderLive(); say(`C${state.program} is now on program.`, ''); });
-$('#tilt-button').addEventListener('click', startTilt);
+$('#cut-button').addEventListener('click', () => { const old = state.program; state.program = state.preview; state.preview = old; state.sweep = 0; state.done[state.step] = false; clearInterval(sweepTimer); sweepTimer = null; save(); renderNav(); renderBrief(); renderLive(); say(`C${state.program} is now on program.`, ''); });
+$('#tilt-button').addEventListener('click', () => startTilt());
 $('#take-cue').addEventListener('click', checkCue);
 $('#next-cue').addEventListener('click', () => { if (state.done[state.step]) stepTo(state.step + 1); });
 onLangChange(render);
