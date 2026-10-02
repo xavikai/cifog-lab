@@ -57,3 +57,24 @@
 .ps-visual{background:radial-gradient(circle at 50% 40%,#394856,#24282e 72%)}.ps-visual svg{position:absolute;inset:7% 4% 10%;width:92%;height:83%}.ps-scene{fill:#202328;stroke:#9ca5ad;stroke-width:2}.ps-back{fill:#edc6aa}.ps-mug{fill:#e88c55;stroke:#743a3c;stroke-width:2}.ps-handle{fill:none;stroke:#e88c55;stroke-width:14;stroke-linecap:round}.ps-hole{fill:none;stroke:#ffd7a3;stroke-width:4}.ps-select{fill:none;stroke:#f7faff;stroke-width:2;stroke-dasharray:5 4}.ps-mask{fill:#151515;stroke:#e2e2e2;stroke-width:2}.ps-mask-mark{stroke:#fff;stroke-width:9;stroke-linecap:round}
 .rw-visual{background:radial-gradient(circle at 50% 45%,#34434a,#1b2429 72%)}.rw-visual svg{position:absolute;inset:5% 5% 10%;width:90%;height:85%}.rw-runway{fill:#64747a;stroke:#a3b6bb;stroke-width:1.5}.rw-route{fill:none;stroke:#ffbf00;stroke-width:2.5;stroke-dasharray:6 4}.rw-cams circle{fill:#193c4c;stroke:#96d8ee;stroke-width:1.5}.rw-cam-labels text{fill:#fff;font:800 10px Inter,Arial,sans-serif;text-anchor:middle}.rw-model{fill:#ffbf00;stroke:#fff;stroke-width:1.5}.rw-pgm{fill:#162127;stroke:#ec7070;stroke-width:2}.rw-pgm-text{fill:#ef9292;font:800 6.5px Inter,Arial,sans-serif;letter-spacing:.5px}.rw-sweep{stroke:#ffbf00;stroke-width:2}
 .gn-visual{background:radial-gradient(circle at 50% 45%,#324347,#1c272b 72%)}.gn-visual svg{position:absolute;inset:8% 5% 15%;width:90%;height:77%}.gn-visual svg path{fill:none;stroke:#ffca58;stroke-width:3;stroke-linecap:round}.gn-visual svg rect{fill:#344c52;stroke:#84b7ad;stroke-width:2}.gn-visual svg text{font:700 11px Inter,Segoe UI,sans-serif;text-anchor:middle;fill:#eaf7f5}.gn-card:nth-child(2) .gn-visual svg rect{fill:#494365;stroke:#b3a5e9}.gn-card:nth-child(3) .gn-visual svg rect{fill:#435941;stroke:#99c784}.gn-card:nth-child(4) .gn-visual svg rect{fill:#5a493a;stroke:#d7b17f}
+/* Learning areas group the existing labs before the Blender topic path. */
+.area-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:35px 0 14px}
+.area-card{min-height:230px;display:flex;flex-direction:column;padding:24px;border:1px solid #444b54;border-radius:12px;background:linear-gradient(150deg,#282d33,#20252b);transition:border-color .18s,transform .18s,background .18s}
+.area-card:hover{border-color:var(--yellow);transform:translateY(-3px);background:linear-gradient(150deg,#30343b,#22262c)}
+.area-card-featured{background:radial-gradient(circle at 87% 14%,#ffbf002a,transparent 48%),linear-gradient(145deg,#2c2a26,#20252b)}
+.area-card-top{display:flex;justify-content:space-between;gap:10px;color:#c3cbd5;font-size:.66rem;font-weight:750;letter-spacing:.13em}
+.area-card-top span{color:var(--yellow);font-size:1.05rem;line-height:.7}
+.area-card-icon{display:flex;align-items:center;justify-content:center;width:43px;height:43px;margin-top:22px;border:1px solid #ffbf0080;border-radius:9px;color:var(--yellow);font-size:1.05rem;font-weight:800;letter-spacing:-.04em}
+.area-card h3{margin-top:16px;font-size:1.55rem;letter-spacing:-.035em}
+.area-card p{margin-top:8px;color:#bbc4cf;font-size:.85rem;line-height:1.5}
+.area-card-count{margin-top:auto;padding-top:20px;color:#ffce4f;font-size:.7rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
+.area-section{scroll-margin-top:25px;margin-top:76px;padding-top:26px;border-top:1px solid #414850}
+.anchor-alias{display:block;height:0;scroll-margin-top:25px}
+.area-heading{display:flex;align-items:end;justify-content:space-between;gap:32px;margin-bottom:22px}
+.area-heading h2{font-size:clamp(2.6rem,5vw,4.7rem);font-weight:650;letter-spacing:-.055em;margin-top:9px}
+.area-heading>p{max-width:58ch;color:#afb8c3;font-size:.9rem;line-height:1.6}
+.area-section .topic-nav{margin-top:8px}
+.area-section .topic:first-of-type{margin-top:18px}
+@media(max-width:1050px){.area-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.area-heading{display:block}.area-heading>p{margin-top:10px}.area-section{margin-top:58px}.area-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.area-grid{grid-template-columns:1fr}.area-card{min-height:215px}}
