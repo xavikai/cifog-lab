@@ -113,7 +113,7 @@ export const TAGS = {
   order: { label: 'Order of operations', tip: '* / % go before + -, then < > <= >=, then == !=, then &&, and || last. Brackets go first.', review: 'k-2' },
   intdiv: { label: 'Integer division and %', tip: 'int / int gives a whole number: the decimals are cut off, not rounded. % gives what is left over.', review: 'k-5' },
   decimals: { label: 'Decimal numbers', tip: 'With double and float the decimals stay: 0.5 * 2.0 is 1.0. A float is written with f: 4.5f.', review: 'k-7' },
-  compare: { label: 'Comparisons', tip: 'A comparison gives a bool: true or false. == compares, = stores.', review: 'l-2' },
+  compare: { label: 'Comparisons', tip: 'A comparison gives a bool: true or false. == means equal, != means different, = stores.', review: 'l-2' },
   logic: { label: 'Logic: && || !', tip: '&& is true only when both sides are true · || when at least one is · ! flips the value. Solve the brackets first.', review: 'l-4' },
   text: { label: 'Text with +', tip: 'With strings, + joins the texts: "1" + "2" is "12", not 3. Spaces and commas count.', review: 'k-7' },
   update: { label: '++ -- and -=', tip: 'b++ adds 1 and b-- takes 1 away. result -= 2 means result = result - 2. In a++ == b, the old value of a is compared, then a goes up.', review: '2-p1' },

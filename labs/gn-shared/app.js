@@ -14,11 +14,22 @@ const ui = {
   preview: L('3D preview', 'Vista 3D', 'Vista 3D'),
   sheet: L('Spreadsheet', 'Spreadsheet', 'Spreadsheet'),
   modifier: L('Modifier inputs', 'Entrades del modificador', 'Entradas del modificador'),
+  modifierContext: L('Modifier', 'Modificador', 'Modificador'),
   add: L('Add a node', 'Afegeix un node', 'Añade un nodo'),
   search: L('Search nodes…', 'Cerca nodes…', 'Busca nodos…'),
   fit: L('Frame all', 'Enquadra-ho tot', 'Encuadra todo'),
   undo: L('Undo', 'Desfés', 'Deshacer'),
   redo: L('Redo', 'Refés', 'Rehacer'),
+  viewMenu: L('View', 'Vista', 'Vista'),
+  selectMenu: L('Select', 'Selecciona', 'Seleccionar'),
+  addMenu: L('Add', 'Afegeix', 'Añadir'),
+  nodeMenu: L('Node', 'Node', 'Nodo'),
+  nodeSidebar: L('Node properties', 'Propietats del node', 'Propiedades del nodo'),
+  noSelection: L('Select a node to inspect its sockets.', 'Selecciona un node per consultar-ne els sockets.', 'Selecciona un nodo para consultar sus sockets.'),
+  closeSidebar: L('Close node properties', 'Tanca les propietats del node', 'Cierra las propiedades del nodo'),
+  inputSockets: L('Inputs', 'Entrades', 'Entradas'),
+  outputSockets: L('Outputs', 'Sortides', 'Salidas'),
+  toolSelect: L('Select nodes', 'Selecciona nodes', 'Selecciona nodos'),
   how: L('HOW TO', 'COM FER-HO', 'CÓMO HACERLO'),
   why: L('Why:', 'Per què:', 'Por qué:'),
   notYet: L('Not yet', 'Encara no', 'Todavía no'),
@@ -69,7 +80,7 @@ function shell() {
   document.title = `${T(lesson.title)} · CIFOG Lab`;
   $('#app').innerHTML = `<header class="site-header"><a class="brand" href="../../" aria-label="CIFOG Lab"><span class="brand-mark">cifog<span>LAB</span></span></a><span class="header-rule"></span><div class="header-title"><span class="header-label">INTERACTIVE STUDIES / GN 0${lab}</span><strong>${esc(T(lesson.title))}</strong></div><a class="home-link" href="../../">${esc(U('all'))}</a></header>
     <main><section class="lab-top"><div><span class="eyebrow">${esc(U('series'))}</span><h1>${esc(T(lesson.title))}</h1><p>${esc(T(lesson.lead))}</p></div><nav class="series" id="series" aria-label="Geometry Nodes labs"></nav></section><ol class="guide" id="guide"></ol><section class="below"><div class="step-card" id="step-card"></div></section>
-    <section class="workspace" id="workspace"><div class="workspace-head"><div><b>${esc(U('editor'))}</b><span>${esc(U('connectHelp'))}</span></div><span class="blender-tag">Blender 5.x · Geometry Nodes</span></div><div class="workspace-grid"><div class="editor-column"><div class="editor-toolbar"><button type="button" data-toolbar="undo" aria-label="${esc(U('undo'))}">↶ ${esc(U('undo'))}</button><button type="button" data-toolbar="redo" aria-label="${esc(U('redo'))}">↷ ${esc(U('redo'))}</button><button type="button" data-toolbar="fit">${esc(U('fit'))}</button><button type="button" data-toolbar="zoom-out" aria-label="Zoom out">−</button><span id="zoom-label">100%</span><button type="button" data-toolbar="zoom-in" aria-label="Zoom in">+</button></div><div class="editor-body"><aside class="palette"><label for="node-search">${esc(U('add'))}</label><input id="node-search" type="search" placeholder="${esc(U('search'))}" autocomplete="off"><div id="palette-list"></div></aside><div class="graph-viewport" id="graph-viewport" aria-label="${esc(U('editor'))}"><div class="graph-world" id="graph-world"><svg id="wire-layer" viewBox="0 0 3200 2200" aria-hidden="true"></svg><div id="node-layer"></div></div></div></div><div class="editor-status"><span id="editor-status" role="status" aria-live="polite"></span><span id="link-count"></span></div></div><aside class="preview-column"><div class="preview-tabs" id="preview-tabs"><button type="button" data-tab="preview">${esc(U('preview'))}</button><button type="button" data-tab="sheet">${esc(U('sheet'))}</button></div><div id="preview-pane"><div class="preview-canvas" id="preview-canvas"></div><div class="preview-summary" id="preview-summary"></div></div><div id="sheet-pane" hidden><div class="sheet-wrap" id="sheet-wrap"></div></div><div class="modifier"><h2>${esc(U('modifier'))}</h2><div id="modifier-list"></div></div><p id="extra-note" class="extra-note"></p></aside></div></section>
+    <section class="workspace" id="workspace"><div class="workspace-head"><div><b>${esc(U('editor'))}</b><span>${esc(U('connectHelp'))}</span></div><span class="blender-tag">Blender 5.x · Geometry Nodes</span></div><div class="workspace-grid"><div class="editor-column"><div class="node-editor-header"><span class="editor-type-icon" aria-hidden="true">✣</span><b>Geometry Nodes</b><span class="header-sep"></span><button type="button" data-editor-action="view">${esc(U('viewMenu'))}</button><button type="button" data-editor-action="select">${esc(U('selectMenu'))}</button><button type="button" data-editor-action="add">${esc(U('addMenu'))}</button><button type="button" data-editor-action="node">${esc(U('nodeMenu'))}</button><span class="node-tree-name">▧ &nbsp;Geometry Nodes</span><span class="node-tree-context">${esc(U('modifierContext'))}</span><button type="button" class="sidebar-toggle" data-editor-action="node" aria-label="${esc(U('nodeSidebar'))}" aria-pressed="false">N</button></div><div class="editor-toolbar"><button type="button" data-toolbar="undo" aria-label="${esc(U('undo'))}">↶ ${esc(U('undo'))}</button><button type="button" data-toolbar="redo" aria-label="${esc(U('redo'))}">↷ ${esc(U('redo'))}</button><button type="button" data-toolbar="fit">${esc(U('fit'))}</button><button type="button" data-toolbar="zoom-out" aria-label="Zoom out">−</button><span id="zoom-label">100%</span><button type="button" data-toolbar="zoom-in" aria-label="Zoom in">+</button></div><div class="editor-body"><aside class="palette"><label for="node-search">${esc(U('add'))}</label><input id="node-search" type="search" placeholder="${esc(U('search'))}" autocomplete="off"><div id="palette-list"></div></aside><div class="graph-viewport" id="graph-viewport" aria-label="${esc(U('editor'))}"><div class="node-tools" aria-label="${esc(U('editor'))}"><button type="button" data-node-tool="select" aria-label="${esc(U('toolSelect'))}" title="${esc(U('toolSelect'))}">↖</button><button type="button" data-node-tool="fit" aria-label="${esc(U('fit'))}" title="${esc(U('fit'))}">□</button><button type="button" data-node-tool="add" aria-label="${esc(U('add'))}" title="${esc(U('add'))}">＋</button></div><div class="graph-world" id="graph-world"><svg id="wire-layer" viewBox="0 0 3200 2200" aria-hidden="true"></svg><div id="node-layer"></div></div><aside class="node-sidebar" id="node-sidebar" hidden><div class="node-sidebar-head"><b>${esc(U('nodeSidebar'))}</b><button type="button" data-close-sidebar aria-label="${esc(U('closeSidebar'))}">×</button></div><div id="node-sidebar-content"></div></aside></div></div><div class="editor-status"><span id="editor-status" role="status" aria-live="polite"></span><span id="link-count"></span></div></div><aside class="preview-column"><div class="preview-tabs" id="preview-tabs"><button type="button" data-tab="preview">${esc(U('preview'))}</button><button type="button" data-tab="sheet">${esc(U('sheet'))}</button></div><div id="preview-pane"><div class="preview-canvas" id="preview-canvas"></div><div class="preview-summary" id="preview-summary"></div></div><div id="sheet-pane" hidden><div class="sheet-wrap" id="sheet-wrap"></div></div><div class="modifier"><h2>${esc(U('modifier'))}</h2><div id="modifier-list"></div></div><p id="extra-note" class="extra-note"></p></aside></div></section>
     <footer><span>CIFOG · ${esc(T(lesson.title))}</span><a href="https://docs.blender.org/manual/en/5.0/modeling/geometry_nodes/" target="_blank" rel="noopener">${esc(U('sources'))}</a><a href="../../">${esc(U('all'))}</a></footer></main>`;
 }
 function renderSeries() { $('#series').innerHTML = Object.values(LABS).map((l, i) => `<a class="${i + 1 === lab ? 'active' : ''}" href="../${slugs[i]}/"><b>GN 0${i + 1}</b><span>${esc(T(l.title).split(' · ')[1])}</span></a>`).join(''); }
@@ -102,9 +113,16 @@ function socketButton(n, spec, dir) {
 function nodeHtml(n) {
   const def = NODES[n.type], outputs = [...(def.outputs || [])];
   if (n.type === 'GroupInput') (graph().exposed || []).forEach(e => outputs.push({ key: e.id, label: e.label, type: e.type }));
-  return `<article class="node ${S.selected === n.id ? 'selected' : ''}" data-node="${esc(n.id)}" style="left:${n.x}px;top:${n.y}px"><div class="node-header" data-drag="${esc(n.id)}"><span>${esc(def.name)}</span>${['GroupInput', 'GroupOutput'].includes(n.type) ? '' : `<button type="button" class="delete-node" data-delete="${esc(n.id)}" aria-label="Delete ${esc(def.name)}">×</button>`}</div><div class="node-content">${def.modes ? `<label class="mode-row"><span>Operation</span><select data-mode="${esc(n.id)}">${def.modes.map(m => `<option ${n.params.mode === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}${def.collections ? `<label class="mode-row"><span>Collection</span><select data-collection="${esc(n.id)}">${def.collections.map(m => `<option ${n.params.collection === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}${outputs.map(s => `<div class="socket-row output-row"><span>${esc(s.label)}</span>${socketButton(n, s, 'out')}</div>`).join('')}${(def.inputs || []).map(s => `<div class="input-group"><div class="socket-row input-row">${socketButton(n, s, 'in')}<span>${esc(s.label)}</span></div>${inputValue(n, s)}</div>`).join('')}</div></article>`;
+  return `<article class="node category-${esc(def.category.toLowerCase())} ${S.selected === n.id ? 'selected' : ''}" data-node="${esc(n.id)}" style="left:${n.x}px;top:${n.y}px"><div class="node-header" data-drag="${esc(n.id)}"><span>${esc(def.name)}</span>${['GroupInput', 'GroupOutput'].includes(n.type) ? '' : `<button type="button" class="delete-node" data-delete="${esc(n.id)}" aria-label="Delete ${esc(def.name)}">×</button>`}</div><div class="node-content">${def.modes ? `<label class="mode-row"><span>Operation</span><select data-mode="${esc(n.id)}">${def.modes.map(m => `<option ${n.params.mode === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}${def.collections ? `<label class="mode-row"><span>Collection</span><select data-collection="${esc(n.id)}">${def.collections.map(m => `<option ${n.params.collection === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}${outputs.map(s => `<div class="socket-row output-row"><span>${esc(s.label)}</span>${socketButton(n, s, 'out')}</div>`).join('')}${(def.inputs || []).map(s => `<div class="input-group"><div class="socket-row input-row">${socketButton(n, s, 'in')}<span>${esc(s.label)}</span></div>${inputValue(n, s)}</div>`).join('')}</div></article>`;
 }
-function renderNodes() { $('#node-layer').innerHTML = graph().nodes.map(nodeHtml).join(''); requestAnimationFrame(drawWires); }
+function renderSidebar() {
+  const n = graph().nodes.find(item => item.id === S.selected);
+  if (!n) { $('#node-sidebar-content').innerHTML = `<p>${esc(U('noSelection'))}</p>`; return; }
+  const def = NODES[n.type];
+  const outputs = [...(def.outputs || []), ...(n.type === 'GroupInput' ? (graph().exposed || []).map(e => ({ type: e.type, label: e.label })) : [])];
+  $('#node-sidebar-content').innerHTML = `<strong>${esc(def.name)}</strong><small>${esc(n.id)} · ${esc(def.category)}</small><h4>${esc(U('inputSockets'))}</h4><ul>${(def.inputs || []).map(s => `<li><i class="socket-key ${esc(s.type)}"></i>${esc(s.label)}</li>`).join('')}</ul><h4>${esc(U('outputSockets'))}</h4><ul>${outputs.map(s => `<li><i class="socket-key ${esc(s.type)}"></i>${esc(s.label)}</li>`).join('')}</ul>`;
+}
+function renderNodes() { $('#node-layer').innerHTML = graph().nodes.map(nodeHtml).join(''); renderSidebar(); requestAnimationFrame(drawWires); }
 const socketPoint = (id, key, dir) => {
   const el = [...document.querySelectorAll(`.node[data-node="${CSS.escape(id)}"] .socket.${dir}`)].find(s => s.dataset.socket === `${id}|${key}`); if (!el) return null;
   const r = el.getBoundingClientRect(), w = $('#graph-world').getBoundingClientRect(); return { x: (r.left + r.width / 2 - w.left) / scale, y: (r.top + r.height / 2 - w.top) / scale };
@@ -182,6 +200,11 @@ function updateModifier(target) {
   snapshot(); const value = Number(target.value); if (target.dataset.axis != null) { const v = [...e.value]; v[Number(target.dataset.axis)] = value; e.value = v; } else e.value = value; changed();
 }
 function pointerInWorld(clientX, clientY) { const r = $('#graph-world').getBoundingClientRect(); return { x: (clientX - r.left) / scale, y: (clientY - r.top) / scale }; }
+function toggleSidebar(force) {
+  const sidebar = $('#node-sidebar');
+  sidebar.hidden = typeof force === 'boolean' ? !force : !sidebar.hidden;
+  $('.sidebar-toggle').setAttribute('aria-pressed', String(!sidebar.hidden));
+}
 function setupEvents() {
   $('#series').addEventListener('click', () => {});
   $('#guide').addEventListener('click', e => { const b = e.target.closest('[data-step]'); if (b) stepTo(Number(b.dataset.step)); });
@@ -189,6 +212,20 @@ function setupEvents() {
   $('#node-search').addEventListener('input', renderPalette);
   $('#palette-list').addEventListener('click', e => { const type = e.target.closest('[data-add]')?.dataset.add; if (type) addNode(type); });
   $('#preview-tabs').addEventListener('click', e => { const tab = e.target.closest('[data-tab]')?.dataset.tab; if (tab) setTab(tab); });
+  $('.node-editor-header').addEventListener('click', e => {
+    const action = e.target.closest('[data-editor-action]')?.dataset.editorAction;
+    if (action === 'view') fitGraph();
+    if (action === 'select') status(U('toolSelect'));
+    if (action === 'add') $('#node-search').focus();
+    if (action === 'node') toggleSidebar();
+  });
+  $('.node-tools').addEventListener('click', e => {
+    const action = e.target.closest('[data-node-tool]')?.dataset.nodeTool;
+    if (action === 'select') status(U('toolSelect'));
+    if (action === 'fit') fitGraph();
+    if (action === 'add') $('#node-search').focus();
+  });
+  $('#node-sidebar').addEventListener('click', e => { if (e.target.closest('[data-close-sidebar]')) toggleSidebar(false); });
   $('.editor-toolbar').addEventListener('click', e => { const a = e.target.closest('[data-toolbar]')?.dataset.toolbar; if (a === 'fit') fitGraph(); if (a === 'zoom-in') zoom(1.2); if (a === 'zoom-out') zoom(1 / 1.2); if (a === 'undo') restore(S.undo, S.redo); if (a === 'redo') restore(S.redo, S.undo); });
   $('#modifier-list').addEventListener('input', e => { if (e.target.matches('[data-mod]')) updateModifier(e.target); });
   $('#node-layer').addEventListener('input', e => { if (e.target.matches('[data-param]')) updateParameter(e.target); });
@@ -198,11 +235,12 @@ function setupEvents() {
     const del = e.target.closest('[data-delete]'); if (del) { deleteNode(del.dataset.delete); return; }
     const exp = e.target.closest('[data-expose]'); if (exp) { const [id, key] = exp.dataset.expose.split('|'); snapshot(); expose(graph(), id, key, key); changed(true); return; }
     const sock = e.target.closest('[data-socket]'); if (sock) { if (sock.dataset.dir === 'out') startWire(sock); else joinWire(sock); return; }
-    const node = e.target.closest('[data-node]'); if (node) { S.selected = node.dataset.node; document.querySelectorAll('.node').forEach(n => n.classList.toggle('selected', n.dataset.node === S.selected)); }
+    const node = e.target.closest('[data-node]'); if (node) { S.selected = node.dataset.node; document.querySelectorAll('.node').forEach(n => n.classList.toggle('selected', n.dataset.node === S.selected)); renderSidebar(); }
   });
   $('#graph-viewport').addEventListener('pointerdown', e => {
+    if (e.target.closest('.node-tools, .node-sidebar')) return;
     const socket = e.target.closest('.socket'); if (socket?.dataset.dir === 'out') { e.preventDefault(); startWire(socket); wirePointer = pointerInWorld(e.clientX, e.clientY); return; }
-    const head = e.target.closest('[data-drag]'); if (head && !e.target.closest('button')) { e.preventDefault(); const n = graph().nodes.find(x => x.id === head.dataset.drag); snapshot(); S.selected = n.id; drag = { id: e.pointerId, node: n, x: e.clientX, y: e.clientY, ox: n.x, oy: n.y }; document.querySelectorAll('.node').forEach(el => el.classList.toggle('selected', el.dataset.node === n.id)); return; }
+    const head = e.target.closest('[data-drag]'); if (head && !e.target.closest('button')) { e.preventDefault(); const n = graph().nodes.find(x => x.id === head.dataset.drag); snapshot(); S.selected = n.id; drag = { id: e.pointerId, node: n, x: e.clientX, y: e.clientY, ox: n.x, oy: n.y }; document.querySelectorAll('.node').forEach(el => el.classList.toggle('selected', el.dataset.node === n.id)); renderSidebar(); return; }
     if (!e.target.closest('.node')) { panDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, px: panX, py: panY }; $('#graph-viewport').classList.add('panning'); }
   });
   window.addEventListener('pointermove', e => {
@@ -216,7 +254,7 @@ function setupEvents() {
     if (pending) { const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.socket.in'); if (target) { joinWire(target); suppressClick = Date.now() + 350; } else { wirePointer = null; drawWires(); } }
   });
   $('#graph-viewport').addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY); }, { passive: false });
-  window.addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return; if (e.key === 'Escape') clearWire(); if ((e.key === 'Delete' || e.key === 'Backspace') && S.selected) deleteNode(S.selected); if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); restore(S.undo, S.redo); } if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); restore(S.redo, S.undo); } });
+  window.addEventListener('keydown', e => { if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return; if (e.key === 'Escape') clearWire(); if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.altKey) toggleSidebar(); if ((e.key === 'Delete' || e.key === 'Backspace') && S.selected) deleteNode(S.selected); if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); restore(S.undo, S.redo); } if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); restore(S.redo, S.undo); } });
   new ResizeObserver(() => requestAnimationFrame(drawWires)).observe($('#graph-viewport'));
 }
 shell();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { compile, Runner, formatValue } from '../labs/csharp/interpreter.js';
 import { World } from '../labs/csharp/world.js';
 import { CHALLENGES, assembleParsons, judge } from '../labs/csharp/levels.js';
+import { TAGS } from '../labs/csharp/quiz.js';
 import { runHeadless, verifySeeds } from '../labs/csharp/evaluate.js';
 
 function run(code, world = new World()) {
@@ -77,6 +78,14 @@ test('the sandbox pyramid runs without errors', () => {
 
 test('integer division truncates, double division does not', () => {
   assert.deepEqual(out('int a = 7; Console.WriteLine(a / 2); double b = 7; Console.WriteLine(b / 2); Console.WriteLine(-7 / 2); Console.WriteLine(7 % 3);'), ['3', '3.5', '-3', '1']);
+});
+
+test('C# teaches not-equal with the != operator', () => {
+  assert.deepEqual(out('Console.WriteLine(4 != 8); Console.WriteLine(4 != 4);'), ['True', 'False']);
+  assert.match(TAGS.compare.tip, /!= means different/);
+  assert.doesNotMatch(TAGS.compare.tip, /≠/);
+  const guide = CHALLENGES.find(ch => ch.id === 'l-1');
+  assert.match(guide.brief, /<code>!=<\/code>/);
 });
 
 test('values print like C#', () => {

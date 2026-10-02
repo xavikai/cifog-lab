@@ -24,7 +24,7 @@ export const API = [
   { level: 2, code: '"Hello".Length      "Hello"[0]', text: 'A string is a row of characters. <code>Length</code> counts them; <code>[0]</code> reads one (a <code>char</code>, in single quotes). Positions start at 0.' },
   { level: 2, code: 'text.ToUpper()   text.Substring(0, 3)', text: 'Methods of text: <code>ToUpper()</code>, <code>ToLower()</code>, <code>Substring(start, length)</code>, <code>IndexOf("x")</code>, <code>Contains("x")</code>, <code>Replace("a", "b")</code>.' },
   { level: 2, code: '$"{name} is {age}"', text: 'Interpolation: a <code>$</code> before the quotes lets you put values inside <code>{ }</code>.' },
-  { level: 3, code: '5 > 3    2 + 2 == 4    x != 0', text: 'Comparisons give a <code>bool</code> (true or false): <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>=</code> stores, <code>==</code> compares.' },
+  { level: 3, code: '5 > 3    2 + 2 == 4    x != 0', text: 'Comparisons give a <code>bool</code> (true or false): <code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>. <code>=</code> stores, <code>==</code> compares equal, <code>!=</code> compares different.' },
   { level: 3, code: 'a && b    a || b    !a', text: '<code>&amp;&amp;</code> and: both must be true · <code>||</code> or: at least one · <code>!</code> not: flips true and false.' },
   { level: 1, code: 'int age = 16', text: 'A variable: type, name, value. Names use <b>camelCase</b>: <code>playerScore</code>. C# is case-sensitive.' },
   { level: 4, code: 'Console.WriteLine("Hello!");', text: 'Prints text or a value in the Console. The drone also says it out loud.' },
