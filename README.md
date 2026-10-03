@@ -44,7 +44,7 @@ A home for small interactive activities that support CIFOG classroom presentatio
 
 **Code Lab 02** (`labs/csharp-objects/`) continues the Code Lab towards Unity with the same app and interpreter (the page sets `data-course="objects"` and loads `labs/csharp/levels-objects.js`). The interpreter adds classes and structs (fields, public/private/protected, constructors with `: base(…)`, instance methods, `this`, virtual/override with real dispatch rules), `new`, `null`, reference semantics, `List<T>` (Add, Remove, RemoveAt, Insert, Contains, IndexOf, Count, indexer, collection initializers, modification during foreach), and a Unity-like layer: `Vector3` as a struct (operators, `normalized`, `magnitude`, `Vector3.up`…), `MonoBehaviour` with `transform.position`, `Time.deltaTime`, `Mathf`, `Debug.Log` and `Scene.Add`, after which the lab calls `Start()` once and `Update()` every frame and draws each object (with a dot per frame). Real compiler errors teach the classic mistakes: CS0122 (private fields), CS1612 (changing `transform.position.y`), CS0037, CS1729, CS0506/CS0115, CS0108/CS0114 warnings, CS8803 (classes must come after the main program), plus NullReferenceException and InvalidOperationException at runtime. The Memory panel shows variables of a class as arrows (→ #3) to objects in a **heap**, structs inline, and objects nothing points to any more faded out. 30 challenges in 7 levels: classes and objects, references and null, lists, structs and Vector3, Update and time (from moving objects to the bouncing ball simulated in code), inheritance, and ready for Unity.
 
-**Animation Lab** (`labs/animation/`) teaches the bouncing ball in four stages with a Blender-style workspace.
+**Animation Lab** (`labs/animation/`) follows the same classroom sequence as Carrot Revolt in a Blender-style workspace: block keys every 10 frames, timing, travel, rotation, squash & stretch, weight as an extra, and free animation. The scene runs from frame 0 to 100.
 
 The workspace has three editors:
 - **3D Viewport** (Three.js, Pose Mode) with a rigged ball. The rig follows the one used in class: a **Root** control at the base, two squash & stretch controls and a **Rotation** control. **SS_Top** moves the top of the ball (pivot at the base, for the contacts) and **SS_Bottom** moves the bottom (pivot at the top, to stretch towards the floor). The rig keeps the volume. Controls are selected with LMB and moved with G (only up and down, with typed values). I inserts a keyframe and Alt G clears. As in Blender, an unkeyed pose is discarded when the frame changes. The viewport also shows Motion Path dots, optional ghosts and a 1 m grid wall.
@@ -53,11 +53,14 @@ The workspace has three editors:
 
 Keys go to the editor under the mouse.
 
-The four stages:
-- **Timing**: ease in and out, sharp contacts with Vector handles, lower bounces, shorter bounces.
-- **Squash & Stretch**: squash with SS_Top at the contacts, stretch down with SS_Bottom before the contact and up with SS_Top after it, round at the tops, and never through the floor.
-- **Weight**: a bowling ball, a beach ball with hang time, and a match with a physically simulated bounce.
-- **Rotation**: a Rotation control (R to turn it, typed degrees, Alt R) turns the ball inside its squash, so the squash stays vertical. Roll the right way and the right amount (360° every π × diameter of travel), make the rotation follow a constant travel (Linear), and slow it down with an eased travel.
+The stages follow the classroom order:
+- **Keys**: block the bounce with keys every 10 frames.
+- **Timing**: bring the bounces closer together and sharpen contacts with Vector handles.
+- **Travel**: move the ball in X until its last contact and ease it to a stop.
+- **Rotation**: turn the ball with its travel, then bring the spin to a stop.
+- **Squash & Stretch**: briefly squash at contact, stretch after it, stay round at the tops and above the floor.
+- **Weight** (extra): compare a bowling ball, a beach ball and a physically simulated bounce.
+- **Your animation**: practise freely with all six curves.
 
 The **Controls** switch in the 3D Viewport header hides the rig controls (as Overlays › Bones in Blender) to judge the motion on the ball alone.
 
