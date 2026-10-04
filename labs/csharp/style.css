@@ -6,6 +6,7 @@ button,input,select,textarea{font:inherit}button{color:inherit;cursor:pointer;bo
 button:hover{background:#444a53}button:disabled{cursor:not-allowed;opacity:.42}
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--yellow);outline-offset:3px}
 a{color:var(--yellow)}h1,h2,h3,p{margin:0}code{font-family:var(--mono);font-size:.86em;background:#2d3137;border:1px solid #3c4148;border-radius:4px;padding:1px 5px;color:#e8e2c8;white-space:nowrap}
+code,pre,.qz-code{font-variant-ligatures:none}
 .small-label{font-size:.625rem;font-weight:650;letter-spacing:1.6px;color:#9fa6ae}
 .eyebrow{font-size:.6875rem;font-weight:650;letter-spacing:1.7px;color:var(--muted)}
 
