@@ -125,6 +125,19 @@
 .color-row{display:flex;justify-content:space-between;align-items:center;margin:4px 0 6px;font-size:14px;color:#edf0f4}
 @media(max-width:1300px){.workspace{grid-template-columns:320px minmax(0,1fr) 236px}}
 @media(max-width:1000px){.workspace{grid-template-columns:1fr;height:auto}.props-panel{border-left:0;border-top:1px solid var(--line)}.editor-panel{min-height:520px}}
+
+/* An embedded desktop lab fills its frame below the actual header and stage bar.
+   Fixed viewport offsets made the whole page overflow when the stage buttons wrapped. */
+@media(min-width:1001px) and (min-height:480px){
+  .lab-embedded body{height:100dvh;display:flex;flex-direction:column}
+  .lab-embedded .app-header,.lab-embedded .stage-bar{flex:none}
+  .lab-embedded .workspace{flex:1 1 0;height:auto;min-height:0;grid-template-rows:minmax(0,1fr)}
+  .lab-embedded .preview-panel,.lab-embedded .editor-panel,.lab-embedded .props-panel{min-height:0}
+  .lab-embedded .viewer{min-height:0}
+  .lab-embedded .step-card{min-height:0}
+  .lab-embedded .graph-viewport{min-height:0}
+  .lab-embedded .props-body{min-height:0}
+}
 .guide.n1{grid-template-columns:minmax(0,1fr)}.guide.n2{grid-template-columns:repeat(2,minmax(0,1fr))}.stage-switch{flex-wrap:wrap}
 #preset-field[hidden]{display:none!important}
 .view-top{gap:8px}.view-top #rotate{white-space:nowrap}
