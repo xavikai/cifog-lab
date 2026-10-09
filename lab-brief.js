@@ -1,6 +1,7 @@
 // CIFOG Lab · the step explanation goes above the workspace: read first, then try it below.
 // It can be folded to a single line (remembered in this browser) once you know what to do.
 import { getLang, onLangChange } from './i18n.js';
+import { setupEmbed } from './lab-embed.js';
 
 const TXT = {
   hide: { en: 'Fold the explanation', ca: "Plega l'explicació", es: 'Pliega la explicación' },
@@ -74,3 +75,4 @@ function setupChallengeFold() {
 setupBrief();
 setupReset();
 setupChallengeFold();
+setupEmbed();

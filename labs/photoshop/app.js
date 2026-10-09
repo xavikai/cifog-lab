@@ -1,5 +1,6 @@
 import { W, H, SHAPES, blank, brush, combine, polygonHas, raster, shapeMask, solved, startingState } from './core.js?v=2';
 import { addDictionary, onLangChange, t } from '../../i18n.js';
+import { isEmbeddedLab } from '../../lab-embed-core.js';
 import dictionary from './i18n.js?v=2';
 import { toolbarIcon, optionIcon, layerIcon } from './icons.js?v=4';
 addDictionary(dictionary);
@@ -72,7 +73,7 @@ function drawSource() {
   m.fillStyle = '#ffffff48'; m.beginPath(); m.ellipse(309, 218, 12, 82, -.08, 0, Math.PI * 2); m.fill();
   m.strokeStyle = '#ffe0ab80'; m.lineWidth = 8; m.beginPath(); m.ellipse(410, 205, 42, 53, 0, -.9, 1.1); m.stroke();
   m.fillStyle = '#ffe2a5'; m.font = '800 30px system-ui'; m.fillText('06', 319, 236);
-  m.fillStyle = '#f6d5a6'; m.font = '700 10px system-ui'; m.fillText('CIFOG', 317, 252);
+  m.fillStyle = '#f6d5a6'; m.font = '700 10px system-ui'; m.fillText(isEmbeddedLab(location.href, window.self !== window.top) ? 'LAB' : 'CIFOG', 317, 252);
   m.globalCompositeOperation = 'destination-in'; m.drawImage(maskToCanvas(sourceMask), 0, 0); m.globalCompositeOperation = 'source-over';
   c.drawImage(mug, 0, 0);
   c.fillStyle = '#ffffff88'; c.font = '600 9px system-ui'; c.fillText('A STUDY IN FORM', 26, 383);

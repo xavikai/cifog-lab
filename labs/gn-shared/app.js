@@ -261,6 +261,6 @@ shell();
 try { preview = createPreview($('#preview-canvas')); } catch (error) { $('#preview-canvas').textContent = '3D preview unavailable in this browser'; console.warn(error); }
 renderSeries(); renderGuide(); renderCard(); renderPalette(); renderNodes(); renderModifier(); renderResult(true); setTab('preview'); setupEvents();
 requestAnimationFrame(fitGraph); status(U('connectHelp'));
-await import('../../lab-brief.js');
+await import('../../lab-brief.js?v=7');
 initI18n({ mount: '.site-header', append: true });
 onLangChange(() => location.reload());
